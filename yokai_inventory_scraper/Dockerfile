@@ -26,5 +26,5 @@ COPY . .
 EXPOSE 5001
 
 # Define the command to run the application
-# Use gunicorn for production, as it's more robust than Flask's built-in server
-CMD ["gunicorn", "--bind", "0.0.0.0:5001", "--workers", "1", "--threads", "8", "--timeout", "300", "server:app"] 
+# Use gunicorn for production, and bind to the port specified by Render's $PORT env var
+CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "--workers", "1", "--threads", "8", "--timeout", "300", "server:app"] 

@@ -325,6 +325,12 @@ def run_scraper(headless=True):
 
     service = Service(ChromeDriverManager().install())
     options = webdriver.ChromeOptions()
+    
+    # --- IMPORTANT FOR DOCKER/LINUX ENVIRONMENTS ---
+    # Explicitly specify the path to the Chrome binary.
+    # This is necessary because in a container, Selenium might not find it automatically.
+    options.binary_location = "/usr/bin/google-chrome"
+    
     if headless:
         options.add_argument("--headless")
         options.add_argument("--no-sandbox") # A standard requirement for running as root/in a container
