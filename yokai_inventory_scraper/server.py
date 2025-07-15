@@ -10,6 +10,10 @@ import time
 import threading
 from dotenv import load_dotenv
 
+# --- Custom Imports ---
+# Import the function to set up the database from our scraper script
+from scraper import setup_database
+
 # --- Pre-startup Configuration ---
 # Get the directory where the script is located
 # This is crucial for making file paths work correctly in any environment
@@ -34,6 +38,13 @@ CORS(app) # 允許所有來源的跨域請求，方便本地開發
 DB_PATH = os.path.join(script_dir, 'inventory.db')
 SCRAPER_SCRIPT_PATH = os.path.join(script_dir, 'scraper.py')
 PYTHON_EXECUTABLE = sys.executable
+
+# --- Database Initialization ---
+# Ensure the database and table exist before the app starts serving requests.
+# This is crucial for the first run on a new server deployment.
+print(f"Initializing database at: {DB_PATH}")
+setup_database(DB_PATH)
+print("Database initialization complete.")
 
 
 # --- API Endpoints ---
@@ -76,17 +87,16 @@ def get_data():
     """
     try:
         db = sqlite3.connect(DB_PATH)
+        db.row_factory = sqlite3.Row # This allows accessing columns by name
         cursor = db.cursor()
         cursor.execute("""
             SELECT 
-                store, machineId, productName, quantity, 
-                lastUpdated, lastCleaned, processTime 
+                store, machine_id, product_name, quantity, 
+                last_updated, process_time
             FROM inventory
         """)
-        rows = cursor.fetchall()
-        
         # Convert rows to a list of dictionaries
-        data = [dict(zip([column[0] for column in cursor.description], row)) for row in rows]
+        data = [dict(row) for row in cursor.fetchall()]
         
         db.close()
         return jsonify({"success": True, "data": data})
