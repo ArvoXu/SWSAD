@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M21 17H3V5H21V17M21 3H3C1.9 3 1 3.9 1 5V17C1 18.1 1.9 19 3 19H21C22.1 19 23 18.1 23 17V5C23 3.9 22.1 3 21 3M12 16H14V14H16V12H14V10H12V12H10V14H12V16M7 11.5C7 12.3 6.3 13 5.5 13S4 12.3 4 11.5 4.7 10 5.5 10S7 10.7 7 11.5M19 11.5C19 12.3 18.3 13 17.5 13S16 12.3 16 11.5 16.7 10 17.5 10S19 10.7 19 11.5Z' fill='gray'/%3E%3C/svg%3E">
+    <title>庫存資料整理工具</title>
+    <!-- 添加Font Awesome圖標 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- 添加Chart.js庫 - 使用多個來源確保加載 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script>
+        // 檢查Chart.js是否已加載，如果沒有則嘗試其他來源
+        window.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() {
+                if (typeof Chart === 'undefined') {
+                    console.log('從CDN加載Chart.js失敗，嘗試其他來源...');
+                    var script = document.createElement('script');
+                    script.src = 'https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js';
+                    document.head.appendChild(script);
+                    
+                    script.onload = function() {
+                        console.log('成功從備用來源加載Chart.js');
+                        if (window.chartLoadedCallback) {
+                            window.chartLoadedCallback();
+                        }
+                    };
+                } else {
+                    console.log('Chart.js已成功加載');
+                    if (window.chartLoadedCallback) {
+                        window.chartLoadedCallback();
+                    }
+                }
+            }, 500);
+        });
+    </script>
+    <style>
+        :root {
+            /* Tech Dark Theme Color Palette */
+            --primary-color: #0d6efd;
+            --secondary-color: #6c757d;
+            --success-color: #198754;
+            --danger-color: #dc3545;
+            --warning-color: #ffc107;
+            --info-color: #0dcaf0;
+            
+            --background-color: #1a1a1a;
+            --card-background: #242424;
+            --border-color: #444;
+            --header-background: #333;
+            
+            --text-primary: #e9ecef;
+            --text-secondary: #adb5bd;
+            
+            --border-radius: 0; /* 全局無圓角 */
+            --spacing-unit: 8px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: var(--background-color);
+            color: var(--text-primary);
+            line-height: 1.5;
+            width: 100%;
+            height: 100vh;
+            overflow-x: hidden;
+        }
+
+        h1 {
+            color: var(--text-primary);
+            text-align: center;
+            margin-bottom: calc(var(--spacing-unit) * 3);
+            font-weight: 500;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        h2 {
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-align: center;
+            margin-bottom: calc(var(--spacing-unit) * 2);
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 20px;
+            margin-top: 20px;
+            max-width: 100%;
+            height: calc(100vh - 120px);
+        }
+
+        .input-section, .output-section {
+            background-color: var(--card-background);
+            padding: 20px;
+            border-radius: var(--border-radius);
+            border: 1px solid var(--border-color);
+            overflow: auto;
+        }
+
+        textarea {
+            width: 100%;
+            height: 200px;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            resize: vertical;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            transition: all 0.2s ease;
+            margin-bottom: 15px;
+            background-color: #1a1a1a;
+            color: var(--text-primary);
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 8px rgba(13, 110, 253, 0.5);
+        }
+
+        button {
+            padding: 10px 15px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            color: var(--text-primary);
+            background-color: transparent;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin: 0;
+        }
+
+        button:hover {
+            filter: brightness(120%);
+        }
+
+        .actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: calc(var(--spacing-unit) * 2);
+        }
+
+        th, td {
+            padding: calc(var(--spacing-unit) * 0.75) calc(var(--spacing-unit));
+            text-align: left;
+            border: 1px solid var(--border-color);
+        }
+
+        th {
+            background-color: var(--header-background);
+            font-weight: 500;
+        }
+
+        .store-header td {
+            background-color: var(--header-background);
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .store-container {
+            background-color: var(--card-background);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--border-color);
+            padding: calc(var(--spacing-unit) * 1.5);
+            margin-bottom: calc(var(--spacing-unit) * 2);
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.7);
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-content {
+            background-color: var(--card-background);
+            margin: 10% auto;
+            padding: calc(var(--spacing-unit) * 4);
+            border-radius: var(--border-radius);
+            width: 90%;
+            max-width: 600px;
+            border: 1px solid var(--border-color);
+            position: relative;
+        }
+
+        .modal-content h2 {
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .close {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 28px;
+            font-weight: 500;
+            color: var(--text-primary);
+            cursor: pointer;
+        }
+
+        .close:hover {
+            color: var(--text-secondary);
+        }
+
+        .form-group input, .form-group textarea, .form-control {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            font-size: 14px;
+            transition: all 0.2s ease;
+            background-color: #333;
+            color: var(--text-primary);
+        }
+
+        .form-group textarea {
+            height: 100px;
+            resize: vertical;
+        }
+
+        .form-group input:focus, .form-group textarea:focus, .form-control:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 8px rgba(13, 110, 253, 0.5);
+        }
+
+        #debugInfo {
+            background-color: #1a1a1a;
+            border-radius: var(--border-radius);
+            border: 1px solid var(--border-color);
+            padding: calc(var(--spacing-unit) * 2);
+            margin-top: calc(var(--spacing-unit) * 2);
+            font-family: 'Consolas', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            max-height: 300px;
+            overflow: auto;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                height: auto;
+                padding: 15px;
+            }
+            .container {
+                grid-template-columns: 1fr;
+                height: auto;
+            }
+            .input-section, .output-section {
+                height: auto;
+                max-height: none;
+            }
+            .multi-column-container {
+                column-count: 1 !important;
+            }
+        }
+
+    </style>
+    
+    <!-- 新增更緊湊的表格樣式 -->
+    <style>
+        .compact-table { font-size: 12px; width: 100%; }
+        .compact-table th, .compact-table td { padding: 2px 6px; vertical-align: middle; }
+        .compact-table .store-header td {
+            position: relative;
+            padding: 4px 50px 4px 6px; /* 右側留出按鈕空間 */
+            font-size: 13px;
+        }
+        .compact-container { padding: 8px; margin-bottom: 12px; border-radius: var(--border-radius); }
+        .compact-info { font-size: 12px; color: var(--text-secondary); margin-bottom: 5px; text-align: center; }
+        
+        .info-box {
+            background-color: #333;
+            border-left: 2px solid var(--primary-color);
+            border-radius: var(--border-radius);
+            padding: 6px;
+            margin-top: 6px;
+        }
+        .info-line {
+            font-size: 12px;
+            color: var(--text-secondary);
+            height: 18px; 
+            line-height: 18px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .edit-button {
+            position: absolute;
+            right: 6px;
+            top: 50%;
+            transform: translateY(-50%);
+            padding: 3px 6px;
+            font-size: 11px;
+            background-color: transparent;
+            border: 1px solid var(--warning-color);
+            color: var(--warning-color);
+            transition: all 0.2s ease;
+        }
+        .edit-button:hover {
+            background-color: var(--warning-color);
+            color: #1a1a1a;
+        }
+        
+        .delete-button {
+            position: absolute;
+            right: 6px;
+            top: 50%;
+            transform: translateY(-50%);
+            padding: 3px 6px;
+            font-size: 11px;
+            background-color: transparent;
+            border: 1px solid var(--danger-color);
+            color: var(--danger-color);
+            transition: all 0.2s ease;
+        }
+
+        .delete-button:hover {
+            background-color: var(--danger-color);
+            color: #fff;
+        }
+
+        .hide-button {
+            position: absolute;
+            right: 98px; /* Position adjusted for the new button */
+            top: 50%;
+            transform: translateY(-50%);
+            padding: 3px 6px;
+            font-size: 11px;
+            background-color: transparent;
+            border: 1px solid var(--secondary-color);
+            color: var(--secondary-color);
+            transition: all 0.2s ease;
+            min-width: 40px; /* To prevent layout shift */
+            text-align: center;
+        }
+        .hide-button:hover {
+            background-color: var(--secondary-color);
+            color: #fff;
+        }
+        .hide-button.is-hidden {
+            border-color: var(--info-color);
+            color: var(--info-color);
+        }
+        .hide-button.is-hidden:hover {
+            background-color: var(--info-color);
+            color: #fff;
+        }
+
+        .edit-button {
+            right: 52px; /* Position moved to the left */
+        }
+        
+        .total-row {
+            background-color: var(--header-background);
+            font-weight: bold;
+        }
+        
+        /* 表格列寬控制 */
+        .col-num { width: 40px; }
+        .col-qty { width: 50px; text-align: center; }
+        
+        /* 多欄佈局 */
+        .multi-column-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
+            width: 100%;
+        }
+        @media (min-width: 768px) { .multi-column-container { grid-template-columns: repeat(2, 1fr); } }
+        @media (min-width: 1200px) { .multi-column-container { grid-template-columns: repeat(3, 1fr); } }
+        @media (min-width: 1600px) { .multi-column-container { grid-template-columns: repeat(4, 1fr); } }
+        @media (min-width: 2000px) { .multi-column-container { grid-template-columns: repeat(5, 1fr); } }
+        .store-container { break-inside: avoid; page-break-inside: avoid; }
+
+        /* 按鈕樣式系統 */
+        #processButton {
+            grid-column: 1 / -1;
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+            padding: 12px 20px;
+            font-weight: bold;
+            font-size: 16px;
+            margin-bottom: 0;
+        }
+        #processButton:hover {
+            box-shadow: 0 0 12px rgba(13, 110, 253, 0.7);
+        }
+
+        .btn-view { border-color: var(--secondary-color); color: var(--secondary-color); }
+        .btn-view:hover { background-color: var(--secondary-color); color: var(--text-primary); }
+
+        .btn-save { border-color: var(--success-color); color: var(--success-color); }
+        .btn-save:hover { background-color: var(--success-color); color: var(--text-primary); }
+        
+        .btn-clear { border-color: var(--danger-color); color: var(--danger-color); }
+        .btn-clear:hover { background-color: var(--danger-color); color: var(--text-primary); }
+        
+        .btn-info { border-color: var(--info-color); color: var(--info-color); }
+        .btn-info:hover { background-color: var(--info-color); color: var(--text-primary); }
+        
+        .btn-primary {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+            color: #fff;
+        }
+        .btn-primary:hover {
+            color: #fff;
+        }
+        
+        /* 視圖切換按鈕 */
+        .view-toggle-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .view-toggle-buttons button {
+            flex: 1;
+            padding: 8px 10px;
+            background-color: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+        }
+        .view-toggle-buttons button.active {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+            color: #fff;
+        }
+        
+        /* 列表視圖樣式 */
+        .list-view-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .list-item {
+            background-color: var(--card-background);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            transition: background-color 0.2s ease;
+        }
+        .list-item-header {
+            display: grid;
+            grid-template-columns: 1.5fr 1fr 1fr 1.5fr 1.2fr;
+            align-items: center;
+            padding: 12px 15px;
+            cursor: pointer;
+            gap: 15px;
+        }
+        .list-item-header:hover {
+            background-color: #333;
+        }
+        .list-item-title {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .list-item-info {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        .list-item-actions {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 10px;
+        }
+        .list-item-actions .edit-button,
+        .list-item-actions .delete-button {
+            position: static;
+            transform: none;
+        }
+        .list-item-actions .hide-button {
+            position: static;
+            transform: none;
+        }
+        .list-item-caret {
+            font-size: 12px;
+            color: var(--text-secondary);
+            width: 20px;
+            text-align: center;
+            transition: transform 0.2s ease;
+        }
+        .list-item.is-hidden,
+        .store-container.is-hidden {
+            opacity: 0.6;
+            border-left: 3px solid var(--info-color);
+        }
+        .list-item-caret.open {
+             transform: rotate(180deg);
+        }
+        .list-item-content {
+            padding: 0 15px 15px 15px;
+            border-top: 1px solid var(--border-color);
+            background-color: #1c1c1c;
+        }
+        .list-item-content .compact-table {
+            margin-top: 10px;
+        }
+
+        .controls-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .right-side-controls {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .search-input {
+            width: 180px;
+            padding: 6px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background-color: #333;
+            color: var(--text-primary);
+            height: 34px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            margin-right: 10px;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        .view-toggle-buttons {
+            display: flex;
+            gap: 5px;
+        }
+
+        .view-icon-btn {
+            width: 34px;
+            height: 34px;
+            padding: 0;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--border-color);
+            background-color: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .view-icon-btn.active {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+            color: #fff;
+        }
+
+        .view-icon-btn:hover:not(.active) {
+            background-color: var(--secondary-color);
+            color: var(--text-primary);
+        }
+
+        /* 排序控制按鈕 */
+        .sort-controls {
+            display: flex;
+            gap: 8px; /* 稍微縮小間距 */
+            margin-bottom: 0;
+            flex-wrap: wrap;
+        }
+        .sort-controls button {
+            padding: 6px 12px;
+            border: 1px solid var(--border-color);
+            background-color: transparent;
+            color: var(--text-secondary);
+        }
+        .sort-controls button.active {
+            background-color: var(--secondary-color);
+            border-color: var(--secondary-color);
+            color: var(--text-primary);
+        }
+        .sort-controls button .sort-icon {
+            margin-left: 8px;
+            font-size: 12px;
+            display: inline-block;
+            width: 10px; /* prevent layout shift */
+        }
+
+    </style>
+</head>
+<body>
+    <h1>庫存資料整理工具</h1>
+    
+    <div class="container">
+        <div class="input-section">
+            <h2>輸入區域</h2>
+            <p>請將複製的庫存資料貼上至下方文本框：</p>
+            <p style="color: #f44336; font-size: 13px; margin-bottom: 10px;"><i class="fas fa-exclamation-circle"></i> 注意：新數據將完全替換相同店鋪-機台的舊數據，已售罄的產品將不會保留。</p>
+            <textarea id="rawData" placeholder="在此粘貼原始庫存數據..."></textarea>
+            
+            <div class="form-group" style="margin-top: 10px; margin-bottom: 15px;">
+                <label for="updateTimeInput">數據更新時間</label>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <input type="text" id="updateTimeInput" placeholder="例如：2025/07/03 上午11:30" style="width: auto; flex-grow: 1;">
+                    <button id="saveUpdateTimeButton" class="btn-save" style="flex-shrink: 0;">確認</button>
+                </div>
+            </div>
+
+            <input type="file" id="salesFileInput" accept=".xlsx, .xls" style="display: none;">
+            <div class="actions">
+                <button id="processButton">處理資料</button>
+                <button id="autoUpdateButton" class="btn-primary" style="grid-column: 1 / -1;">一鍵更新 (自動抓取)</button>
+                <button id="importSalesButton" class="btn-view">匯入銷售訂單</button>
+                <button id="openChartWindowButton" class="btn-view">進入展示階段</button>
+                <button id="saveDataButton" class="btn-save">保存到本地</button>
+                <button id="downloadExcelButton" class="btn-save">下載Excel</button>
+                <button id="downloadCSVButton" class="btn-save">下載CSV</button>
+                <button id="clearButton" class="btn-clear">清除輸入</button>
+                <button id="clearStorageButton" class="btn-clear">清除所有數據</button>
+                <button id="toggleDebugButton" class="btn-info">顯示除錯信息</button>
+                <button id="checkStorageButton" class="btn-info">存儲空間使用</button>
+            </div>
+            <div id="debugInfo" style="display:none; margin-top: 10px; padding: 10px; background-color: #f8f8f8; border: 1px solid #ddd; max-height: 200px; overflow: auto; font-family: monospace; font-size: 12px;"></div>
+        </div>
+        
+        <div class="output-section">
+            <h2>結果顯示</h2>
+            <div class="controls-header">
+                <div class="sort-controls">
+                    <button id="sortByName" data-sort-key="store">機台名稱<span class="sort-icon"></span></button>
+                    <button id="sortById" data-sort-key="machineId">機台編號<span class="sort-icon"></span></button>
+                    <button id="sortByInventory" data-sort-key="totalQuantity">庫存總量<span class="sort-icon"></span></button>
+                    <button id="sortByTime" data-sort-key="processTime">更新時間<span class="sort-icon"></span></button>
+                </div>
+                <div class="right-side-controls">
+                    <input type="text" id="searchInput" class="search-input" placeholder="搜尋機台...">
+                    <button id="viewAsCardButton" class="view-icon-btn active" title="卡片視圖"><i class="fas fa-th-large"></i></button>
+                    <button id="viewAsListButton" class="view-icon-btn" title="列表視圖"><i class="fas fa-bars"></i></button>
+                </div>
+            </div>
+            <div id="outputTable"></div>
+            <div id="outputList" style="display: none;"></div>
+        </div>
+    </div>
+    
+    <!-- 備註與地址編輯對話框 -->
+    <div id="editDialog" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>編輯備註和地址</h2>
+            <div class="form-group">
+                <label for="storeAddress">店鋪地址：</label>
+                <input type="text" id="storeAddress" placeholder="輸入店鋪地址">
+            </div>
+            <div class="form-group">
+                <label for="storeSales">上月銷售額：</label>
+                <input type="number" id="storeSales" placeholder="輸入銷售金額" min="0" step="1">
+            </div>
+            <div class="form-group">
+                <label for="storeNote">備註：</label>
+                <textarea id="storeNote" placeholder="輸入備註信息..."></textarea>
+            </div>
+            <button id="saveNoteButton" class="btn-primary">保存</button>
+        </div>
+    </div>
+    
+    <!-- 月份選擇對話框 -->
+    <div id="monthSelectionDialog" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>選擇銷售數據月份</h2>
+            <div class="form-group">
+                <label for="monthSelect">請選擇要分析的月份：</label>
+                <select id="monthSelect" class="form-control"></select>
+            </div>
+            <button id="confirmMonthButton" class="btn-primary">確認</button>
+            <button id="cancelMonthButton" class="btn-clear">取消</button>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html> 

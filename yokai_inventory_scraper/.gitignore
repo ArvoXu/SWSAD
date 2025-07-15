@@ -1,0 +1,22 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+
+# Database file
+inventory.db
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Cache directories
+.wdm_cache/
+.pytest_cache/
+
+# Local secret management
+.env
+
+# Generated data files
+inventory.txt
+structured_inventory.json 

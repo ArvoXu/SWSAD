@@ -1,0 +1,7 @@
+Flask
+gunicorn
+requests
+schedule
+selenium
+webdriver-manager
+python-dotenv
