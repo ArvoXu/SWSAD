@@ -453,7 +453,7 @@ if __name__ == "__main__":
         run_scraper(headless=False) # 在本地測試時，通常會希望看到瀏覽器界面
         
         # 1. Execute the web scraper to get raw text
-        raw_inventory_text = run_scraper(headless=False) # 在本地測試時，通常會希望看到瀏覽器界面
+        raw_inventory_text = run_scraper(headless=True) # 在本地測試時，通常會希望看到瀏覽器界面
         
         if raw_inventory_text:
             # 2. Parse the raw text into structured data
