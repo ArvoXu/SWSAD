@@ -10,7 +10,7 @@ import re
 import json
 import sqlite3
 from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.options import Options
 
 # --- Configurable Variables ---
 URL = "https://manager.yokaiexpress.com/#/standStoreManager"
@@ -323,22 +323,20 @@ def run_scraper(headless=True):
         print(e, file=sys.stderr)
         sys.exit(1) # 終止腳本
 
-    service = Service(ChromeDriverManager().install())
-    options = webdriver.ChromeOptions()
-    
-    # --- IMPORTANT FOR DOCKER/LINUX ENVIRONMENTS ---
-    # Explicitly specify the path to the Chrome binary.
-    # This is necessary because in a container, Selenium might not find it automatically.
-    options.binary_location = "/usr/bin/google-chrome"
-    
+    # --- Modern Selenium Setup ---
+    options = Options()
     if headless:
+        # These are the crucial arguments for running Chrome in a containerized environment
         options.add_argument("--headless")
-        options.add_argument("--no-sandbox") # A standard requirement for running as root/in a container
-        options.add_argument("--disable-dev-shm-usage") # Overcomes limited resource problems
-        options.add_argument("--disable-gpu") # Applicable to windows os only
-        options.add_argument("window-size=1920,1080") # Set a window size to avoid issues with responsive layouts
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-gpu")
+        options.add_argument("window-size=1920,1080")
 
+    # Selenium's built-in manager will handle the chromedriver
+    service = Service() 
     driver = webdriver.Chrome(service=service, options=options)
+    
     all_scraped_text = ""
 
     try:
@@ -456,10 +454,9 @@ if __name__ == "__main__":
         except ImportError:
             print("警告: python-dotenv 未安裝。本地測試時請確保手動設置環境變數。")
 
-        run_scraper(headless=False) # 在本地測試時，通常會希望看到瀏覽器界面
-        
         # 1. Execute the web scraper to get raw text
-        raw_inventory_text = run_scraper(headless=True) # 在本地測試時，通常會希望看到瀏覽器界面
+        # We set headless=True for any automated run, local test or server.
+        raw_inventory_text = run_scraper(headless=True)
         
         if raw_inventory_text:
             # 2. Parse the raw text into structured data
