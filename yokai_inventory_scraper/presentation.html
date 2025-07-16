@@ -1645,14 +1645,20 @@
                 });
             });
 
-            // 預設顯示最近30天的數據
-            const endDate = new Date();
-            const startDate = new Date();
-            startDate.setDate(endDate.getDate() - 29);
-            datePickerInstance.setDateRange(startDate, endDate);
-            
-            // 首次加載時觸發數據處理與圖表渲染
-            processAndRenderCharts(fullSalesData, startDate, endDate);
+            // --- NEW: Set default date range based on the data, not current date ---
+            if (fullSalesData && fullSalesData.length > 0) {
+                const latestDate = new Date(Math.max.apply(null, fullSalesData.map(d => d.jsDate)));
+                
+                const endDate = new Date(latestDate);
+                const startDate = new Date(latestDate);
+                startDate.setDate(startDate.getDate() - 29);
+
+                datePickerInstance.setDateRange(startDate, endDate);
+                // Manually trigger the selection event to load the chart with the new default range
+                processAndRenderCharts(fullSalesData, startDate, endDate);
+            } else {
+                // If there's no data, we don't need to do anything, the initial message is already shown.
+            }
         }
         
         function processAndRenderCharts(fullSalesData, startDate, endDate) {
