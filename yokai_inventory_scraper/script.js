@@ -8,816 +8,173 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Chart.js庫已成功加載，版本：', Chart.version);
         }
     }, 1000);
-    const processButton = document.getElementById('processButton');
-    const clearButton = document.getElementById('clearButton');
-    const clearStorageButton = document.getElementById('clearStorageButton');
-    const rawDataTextarea = document.getElementById('rawData');
-    const outputTableDiv = document.getElementById('outputTable');
-    const downloadExcelButton = document.getElementById('downloadExcelButton');
-    const downloadCSVButton = document.getElementById('downloadCSVButton');
-    const saveDataButton = document.getElementById('saveDataButton');
-    const editDialog = document.getElementById('editDialog');
-    const closeDialogButton = document.querySelector('.close');
-    const saveNoteButton = document.getElementById('saveNoteButton');
-    const toggleDebugButton = document.getElementById('toggleDebugButton');
-    const debugInfoDiv = document.getElementById('debugInfo');
-    const checkStorageButton = document.getElementById('checkStorageButton');
-    const openChartWindowButton = document.getElementById('openChartWindowButton');
-    const saveUpdateTimeButton = document.getElementById('saveUpdateTimeButton');
-    const updateTimeInput = document.getElementById('updateTimeInput');
-    
-    // 一鍵更新按鈕
+
+    // --- 新版元素獲取 ---
     const autoUpdateButton = document.getElementById('autoUpdateButton');
-
-    // 搜尋相關元素
+    const statusDiv = document.getElementById('status'); // 假設您在index.html中有一個<div id="status"></div>來顯示狀態
     const searchInput = document.getElementById('searchInput');
-
-    // 視圖切換相關元素
     const viewAsCardButton = document.getElementById('viewAsCardButton');
     const viewAsListButton = document.getElementById('viewAsListButton');
+    const outputTableDiv = document.getElementById('outputTable');
     const outputListDiv = document.getElementById('outputList');
-    let currentView = 'card'; // 'card' or 'list'
     
-    // 排序相關
-    let storeGroupsArray = []; // 用於存儲可排序的數據
-    let currentSort = { key: 'store', order: 'asc' }; // 默認排序狀態
+    // --- 狀態變量 ---
+    let currentView = 'card';
+    let storeGroupsArray = [];
+    let currentSort = { key: 'store', order: 'asc' };
+    let scraperPollingInterval; // 用於儲存輪詢的計時器
 
-    // 銷售數據導入相關元素
-    const importSalesButton = document.getElementById('importSalesButton');
-    const salesFileInput = document.getElementById('salesFileInput');
-    const monthSelectionDialog = document.getElementById('monthSelectionDialog');
-    const monthSelect = document.getElementById('monthSelect');
-    const confirmMonthButton = document.getElementById('confirmMonthButton');
-    const cancelMonthButton = document.getElementById('cancelMonthButton');
-    const monthDialogCloseButton = monthSelectionDialog.querySelector('.close');
-    
-    let parsedSalesData = []; // 用於存儲從Excel解析的原始銷售數據
-    
-    // 重定向控制台輸出到除錯區域
-    if (debugInfoDiv) {
-        const originalConsoleLog = console.log;
-        const originalConsoleWarn = console.warn;
-        const originalConsoleError = console.error;
-        
-        console.log = function() {
-            // 原始控制台輸出
-            originalConsoleLog.apply(console, arguments);
-            
-            // 添加到除錯區域
-            const args = Array.from(arguments).map(arg => {
-                if (typeof arg === 'object') {
-                    return JSON.stringify(arg, null, 2);
-                }
-                return String(arg);
-            });
-            
-            const message = args.join(' ');
-            appendToDebugInfo('LOG: ' + message);
-        };
-        
-        console.warn = function() {
-            originalConsoleWarn.apply(console, arguments);
-            const args = Array.from(arguments).map(arg => {
-                if (typeof arg === 'object') {
-                    return JSON.stringify(arg, null, 2);
-                }
-                return String(arg);
-            });
-            
-            const message = args.join(' ');
-            appendToDebugInfo('WARN: ' + message, 'orange');
-        };
-        
-        console.error = function() {
-            originalConsoleError.apply(console, arguments);
-            const args = Array.from(arguments).map(arg => {
-                if (typeof arg === 'object') {
-                    return JSON.stringify(arg, null, 2);
-                }
-                return String(arg);
-            });
-            
-            const message = args.join(' ');
-            appendToDebugInfo('ERROR: ' + message, 'red');
-        };
-        
-        function appendToDebugInfo(message, color = 'black') {
-            const line = document.createElement('div');
-            line.style.color = color;
-            line.textContent = message;
-            debugInfoDiv.appendChild(line);
-            debugInfoDiv.scrollTop = debugInfoDiv.scrollHeight;
-        }
-    }
-    
+    // --- 初始化 ---
+    // 頁面載入後立即獲取數據
+    fetchData(); 
+
+    // --- 事件監聽 ---
+
     // "一鍵更新" 按鈕事件
     if(autoUpdateButton) {
-        autoUpdateButton.addEventListener('click', async function() {
-            const originalButtonText = this.innerHTML;
-            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 更新中...';
-            this.disabled = true;
-
-            try {
-                // Step 1: Run the scraper to update the database
-                const runResponse = await fetch('/run-scraper', { // 修正: 移除絕對路徑
-                    method: 'POST'
-                });
-
-                const runResult = await runResponse.json();
-
-                if (runResponse.ok && runResult.success) {
-                    alert('資料庫更新成功！正在獲取最新資料...');
-                    // Step 2: Fetch the new data from the database
-                    await fetchAndDisplayData(); 
-                    // 從資料庫獲取的資料已包含最新時間戳，無需手動更新
-                } else {
-                    console.error('後端腳本執行出錯:', runResult);
-                    alert(`錯誤: ${runResult.message}\n\n${runResult.error || ''}`);
-                }
-            } catch (error) {
-                console.error('無法連接到後端伺服器:', error);
-                alert('無法連接到本地伺服器。請確認 server.py 是否正在運行，並且 port 為 5001。');
-            } finally {
-                this.innerHTML = originalButtonText;
-                this.disabled = false;
-            }
-        });
+        autoUpdateButton.addEventListener('click', runScraper);
     }
-    
-    // 切換除錯信息顯示
-    toggleDebugButton.addEventListener('click', function() {
-        if (debugInfoDiv.style.display === 'none') {
-            debugInfoDiv.style.display = 'block';
-            toggleDebugButton.textContent = '隱藏除錯信息';
-        } else {
-            debugInfoDiv.style.display = 'none';
-            toggleDebugButton.textContent = '顯示除錯信息';
-        }
-    });
-    
-    // 視圖切換事件
-    viewAsCardButton.addEventListener('click', () => {
-        if (currentView !== 'card') {
-            currentView = 'card';
-            outputTableDiv.style.display = 'block';
-            outputListDiv.style.display = 'none';
-            viewAsCardButton.classList.add('active');
-            viewAsListButton.classList.remove('active');
-        }
-    });
 
-    viewAsListButton.addEventListener('click', () => {
-        if (currentView !== 'list') {
-            currentView = 'list';
-            outputTableDiv.style.display = 'none';
-            outputListDiv.style.display = 'block';
-            viewAsCardButton.classList.remove('active');
-            viewAsListButton.classList.add('active');
-        }
-    });
-    
-    // 新增：排序按鈕事件監聽
+    // 視圖切換事件
+    viewAsCardButton.addEventListener('click', () => switchView('card'));
+    viewAsListButton.addEventListener('click', () => switchView('list'));
+
+    // 排序按鈕事件
     document.querySelector('.sort-controls').addEventListener('click', (e) => {
         if (e.target.tagName === 'BUTTON') {
-            const sortKey = e.target.dataset.sortKey;
-            
-            if (currentSort.key === sortKey) {
-                currentSort.order = currentSort.order === 'asc' ? 'desc' : 'asc';
-            } else {
-                currentSort.key = sortKey;
-                currentSort.order = 'asc';
-            }
-            
-            applyFiltersAndRender();
+            handleSort(e.target.dataset.sortKey);
         }
     });
 
-    // 新增：搜尋事件監聽
-    searchInput.addEventListener('input', () => {
-        applyFiltersAndRender();
-    });
-    
-    // 檢查本地存儲空間使用情況
-    checkStorageButton.addEventListener('click', function() {
-        const storageInfo = getLocalStorageInfo();
-        
-        // 在除錯區域顯示信息
-        debugInfoDiv.innerHTML = '';
-        debugInfoDiv.style.display = 'block';
-        
-        const usedKB = Math.round(storageInfo.usedSpace / 1024);
-        const totalKB = Math.round(storageInfo.totalSpace / 1024);
-        const percentUsed = Math.round((storageInfo.usedSpace / storageInfo.totalSpace) * 100);
-        
-        appendToDebugInfo(`---- 本地存儲空間使用情況 ----`, 'blue');
-        appendToDebugInfo(`已使用: ${usedKB} KB / ${totalKB} KB (${percentUsed}%)`, 'black');
-        appendToDebugInfo(`剩餘空間: ${totalKB - usedKB} KB`, 'black');
-        appendToDebugInfo('', 'black');
-        appendToDebugInfo('---- 分片詳情 ----', 'blue');
-        
-        // 顯示inventoryData分片
-        const invChunks = localStorage.getItem('inventoryData_chunks');
-        if (invChunks) {
-            appendToDebugInfo(`庫存數據: ${invChunks} 個分片`, 'black');
-        } else {
-            appendToDebugInfo('庫存數據: 未使用分片儲存', 'black');
-        }
-        
-        // 顯示storeNotesAndAddresses分片
-        const notesChunks = localStorage.getItem('storeNotesAndAddresses_chunks');
-        if (notesChunks) {
-            appendToDebugInfo(`備註地址數據: ${notesChunks} 個分片`, 'black');
-        } else {
-            appendToDebugInfo('備註地址數據: 未使用分片儲存', 'black');
-        }
-        
-        // 顯示數據詳情
-        appendToDebugInfo('', 'black');
-        appendToDebugInfo('---- 數據統計 ----', 'blue');
-        
-        if (savedInventoryData && savedInventoryData.length > 0) {
-            // 計算店鋪數量
-            const stores = new Set();
-            savedInventoryData.forEach(item => {
-                stores.add(`${item.store}-${item.machineId}`);
+    // 搜尋事件
+    searchInput.addEventListener('input', applyFiltersAndRender);
+
+    // --- 核心功能函式 ---
+
+    function runScraper() {
+        statusDiv.innerHTML = '正在發送更新指令...';
+        statusDiv.className = 'status-running';
+        autoUpdateButton.disabled = true;
+
+        fetch('/run-scraper', { method: 'POST' })
+            .then(response => {
+                if (response.status === 409) { // Conflict
+                    return response.json().then(err => { throw new Error(err.message); });
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    statusDiv.innerHTML = '指令已收到，爬蟲在背景執行中... (請勿離開此頁面)';
+                    if (scraperPollingInterval) clearInterval(scraperPollingInterval);
+                    scraperPollingInterval = setInterval(pollScraperStatus, 5000);
+                } else {
+                    throw new Error(data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error starting scraper:', error);
+                statusDiv.innerHTML = `錯誤: ${error.message}`;
+                statusDiv.className = 'status-error';
+                autoUpdateButton.disabled = false;
             });
-            
-            appendToDebugInfo(`已儲存 ${savedInventoryData.length} 項產品數據，涵蓋 ${stores.size} 家店鋪`, 'black');
-        } else {
-            appendToDebugInfo('未發現已儲存的庫存數據', 'orange');
-        }
-    });
-    
-    // 從本地存儲加載更新時間
-    if (updateTimeInput) {
-        updateTimeInput.value = localStorage.getItem('updateTime') || '';
     }
 
-    // 保存更新時間
-    if (saveUpdateTimeButton) {
-        saveUpdateTimeButton.addEventListener('click', function() {
-            const updateTime = updateTimeInput.value.trim();
-            if (updateTime) {
-                localStorage.setItem('updateTime', updateTime);
-                alert('更新時間已保存！');
-            } else {
-                alert('請輸入更新時間。');
-            }
-        });
+    function pollScraperStatus() {
+        fetch('/scraper-status')
+            .then(response => response.json())
+            .then(data => {
+                const startTime = data.last_run_start_time ? new Date(data.last_run_start_time).toLocaleString() : 'N/A';
+                const endTime = data.last_run_end_time ? new Date(data.last_run_end_time).toLocaleString() : 'N/A';
+
+                switch (data.status) {
+                    case 'running':
+                        statusDiv.innerHTML = `爬蟲執行中... (開始時間: ${startTime})`;
+                        statusDiv.className = 'status-running';
+                        break;
+                    case 'success':
+                        statusDiv.innerHTML = `更新成功！(完成時間: ${endTime}) 正在為您刷新數據...`;
+                        statusDiv.className = 'status-success';
+                        clearInterval(scraperPollingInterval);
+                        autoUpdateButton.disabled = false;
+                        // 自動刷新頁面數據
+                        setTimeout(fetchData, 1000); // Delay a bit before fetching
+                        break;
+                    case 'error':
+                        statusDiv.innerHTML = `更新失敗 (時間: ${endTime}). 錯誤: ${data.last_run_output}`;
+                        statusDiv.className = 'status-error';
+                        clearInterval(scraperPollingInterval);
+                        autoUpdateButton.disabled = false;
+                        break;
+                    case 'idle':
+                        statusDiv.innerHTML = '爬蟲處於閒置狀態。';
+                        statusDiv.className = '';
+                        clearInterval(scraperPollingInterval);
+                        autoUpdateButton.disabled = false;
+                        break;
+                }
+            })
+            .catch(error => {
+                console.error('Error polling status:', error);
+                statusDiv.innerHTML = '無法獲取更新狀態，請檢查伺服器連接。';
+                statusDiv.className = 'status-error';
+                clearInterval(scraperPollingInterval);
+                autoUpdateButton.disabled = false;
+            });
     }
-    
-    // 獲取本地存儲空間使用情況
-    function getLocalStorageInfo() {
-        let usedSpace = 0;
-        const totalSpace = 5 * 1024 * 1024; // 5MB，這是大多數瀏覽器的上限
-        
-        for (let key in localStorage) {
-            if (localStorage.hasOwnProperty(key)) {
-                usedSpace += localStorage[key].length * 2; // UTF-16每個字符約2字節
-            }
-        }
-        
-        return {
-            usedSpace: usedSpace,
-            totalSpace: totalSpace
-        };
-    }
-    
-    // 添加信息到除錯區
-    function appendToDebugInfo(message, color = 'black') {
-        if (!debugInfoDiv) return;
-        
-        const line = document.createElement('div');
-        line.style.color = color;
-        line.textContent = message;
-        debugInfoDiv.appendChild(line);
-        debugInfoDiv.scrollTop = debugInfoDiv.scrollHeight;
-    }
-    
-    let processedData = null;
-    let currentEditingStore = null; // 當前編輯的店鋪ID
-    
-    // 從本地存儲加載備註和地址數據 (這些使用者自訂數據繼續保留在本地)
-    let storeNotesAndAddresses = loadFromLocalStorage('storeNotesAndAddresses') || {};
-    let hiddenStores = loadFromLocalStorage('hiddenStores') || {};
-    
-    // 全局庫存數據變量，將由 API 填充
-    let savedInventoryData = [];
-    
-    // 處理數據 (此按鈕現在的功能是基於文本框的手動操作，與資料庫無關)
-    processButton.addEventListener('click', function() {
-        const rawData = rawDataTextarea.value.trim();
-        if (!rawData) {
-            alert('請先輸入庫存數據');
-            return;
-        }
-        
+
+    async function fetchData() {
+        const statusDiv = document.getElementById('status');
+        statusDiv.innerHTML = '正在從伺服器獲取最新資料...';
+        statusDiv.className = 'status-running';
         try {
-            // 新增: 記錄處理時間
-            const processTimestamp = new Date();
-
-            // 解析新數據
-            const newData = parseInventoryData(rawData, processTimestamp);
-            
-            // 檢查是否有現有數據需要合併
-            if (savedInventoryData.length > 0) {
-                processedData = mergeInventoryData(savedInventoryData, newData);
-            } else {
-                processedData = newData;
+            const response = await fetch('/get-data');
+            if (!response.ok) {
+                throw new Error(`伺服器錯誤: ${response.statusText}`);
             }
-            
-            // 更新本地存儲 (手動模式下，暫存到LocalStorage)
-            saveToLocalStorage('inventoryData_manual_override', processedData);
-            savedInventoryData = processedData;
-            
-            // 顯示處理後數據
-            displayResults(processedData);
-            
-            console.log("處理後數據:", processedData); // 用於除錯
-            
-            // 顯示成功消息
-            alert(`數據處理成功！\n- 新增/更新了 ${newData.length} 項產品數據\n- 總共有 ${processedData.length} 項產品數據`);
-        } catch (error) {
-            console.error("解析錯誤:", error);
-            alert("解析數據時發生錯誤: " + error.message);
-        }
-    });
-    
-    // 清除輸入區域數據
-    clearButton.addEventListener('click', function() {
-        rawDataTextarea.value = '';
-        if (confirm('是否要清空顯示區域的數據？（已保存的數據不會被刪除）')) {
-            outputTableDiv.innerHTML = '';
-            processedData = null;
-        }
-    });
-    
-    // 清除所有本地存儲數據
-    clearStorageButton.addEventListener('click', function() {
-        if (confirm('確定要清除所有已保存的數據嗎？此操作不可恢復。這將清除本地的使用者備註、隱藏設定等，但不會刪除伺服器上的資料庫。')) {
-            // 使用分片方式清除
-            clearStorageChunks('inventoryData'); // 舊的，可能還存在
-            clearStorageChunks('inventoryData_manual_override'); // 手動覆蓋的
-            clearStorageChunks('storeNotesAndAddresses');
-            clearStorageChunks('hiddenStores');
-            
-            // 移除舊式存儲（兼容性）
-            localStorage.removeItem('inventoryData');
-            localStorage.removeItem('inventoryData_manual_override');
-            localStorage.removeItem('storeNotesAndAddresses');
-            localStorage.removeItem('hiddenStores');
-            
-            savedInventoryData = [];
-            storeNotesAndAddresses = {};
-            hiddenStores = {};
-            outputTableDiv.innerHTML = '';
-            processedData = null;
-            alert('所有數據已清除');
-        }
-    });
-    
-    // 保存數據到本地 (此按鈕的功能現已過時，可考慮移除或改造)
-    saveDataButton.addEventListener('click', function() {
-        alert('此功能已過時。數據現在從伺服器自動加載和更新。手動處理的數據會被下一次「一鍵更新」覆蓋。');
-    });
-    
-    // 下載為真正的Excel (.xlsx)
-    downloadExcelButton.addEventListener('click', function() {
-        if (!processedData || processedData.length === 0) {
-            if (savedInventoryData.length > 0) {
-                processedData = savedInventoryData;
-            } else {
-                alert('請先處理數據');
-                return;
-            }
-        }
-        
-        downloadXLSX(processedData);
-    });
-    
-    // 下載為CSV
-    downloadCSVButton.addEventListener('click', function() {
-        if (!processedData || processedData.length === 0) {
-            if (savedInventoryData.length > 0) {
-                processedData = savedInventoryData;
-            } else {
-                alert('請先處理數據');
-                return;
-            }
-        }
-        
-        downloadCSV(processedData);
-    });
-    
-    // 關閉編輯對話框
-    closeDialogButton.addEventListener('click', function() {
-        editDialog.style.display = 'none';
-    });
-    
-    // 點擊對話框外部區域關閉對話框
-    window.addEventListener('click', function(event) {
-        if (event.target === editDialog) {
-            editDialog.style.display = 'none';
-        }
-    });
-    
-    // 保存備註按鈕事件
-    saveNoteButton.addEventListener('click', function() {
-        if (!currentEditingStore) return;
-        
-        const address = document.getElementById('storeAddress').value;
-        const note = document.getElementById('storeNote').value;
-        const sales = document.getElementById('storeSales').value;
-        
-        // 保存備註、地址和銷售額
-        storeNotesAndAddresses[currentEditingStore] = {
-            address: address,
-            note: note,
-            sales: sales ? parseInt(sales) : 0
-        };
-        
-        // 保存到本地存儲
-        saveToLocalStorage('storeNotesAndAddresses', storeNotesAndAddresses);
-        
-        // 更新顯示
-        if (processedData && processedData.length > 0) {
-            displayResults(processedData);
-        } else if (savedInventoryData && savedInventoryData.length > 0) {
-            displayResults(savedInventoryData);
-        }
-        
-        // 關閉對話框
-        editDialog.style.display = 'none';
-    });
-    
-    // 全局化：切換隱藏狀態
-    window.toggleHideStore = function(storeKey) {
-        if (hiddenStores[storeKey]) {
-            delete hiddenStores[storeKey];
-        } else {
-            hiddenStores[storeKey] = true;
-        }
-        
-        saveToLocalStorage('hiddenStores', hiddenStores);
-        applyFiltersAndRender(); // 重新渲染以應用樣式
-    };
-    
-    // 進入展示階段按鈕事件
-    openChartWindowButton.addEventListener('click', function() {
-        if (!savedInventoryData || savedInventoryData.length === 0) {
-            alert('沒有可視化的數據。請先「一鍵更新」獲取數據。');
-            return;
-        }
-
-        const updateTime = document.getElementById('updateTimeInput').value;
-        let url = 'presentation.html';
-
-        if (updateTime) {
-            url += '?updateTime=' + encodeURIComponent(updateTime);
-        }
-
-        // 數據已通過LocalStorage共享，直接打開新窗口即可
-        const chartWindow = window.open(url, 'ChartWindow');
-        if (!chartWindow) {
-            alert('彈出窗口被阻止，請允許彈出窗口後重試。');
-        }
-    });
-    
-    // --- 新的數據獲取和頁面初始化流程 ---
-
-    // 新增：從後端 API 獲取數據並渲染頁面的核心函數
-    async function fetchAndDisplayData() {
-        try {
-            console.log("正在從伺服器獲取最新數據...");
-            const response = await fetch('/get-data'); // 修正: 移除絕對路徑
             const result = await response.json();
-
-            if (response.ok && result.success) {
-                savedInventoryData = result.data; // 更新全局數據變量
-                
-                // 從數據中找到最新的更新時間並顯示
-                if (savedInventoryData.length > 0) {
-                    const latestProcessTime = savedInventoryData.reduce((latest, item) => {
-                        return item.processTime > latest ? item.processTime : latest;
-                    }, savedInventoryData[0].processTime);
-                    updateTimeInput.value = new Date(latestProcessTime).toLocaleString();
-                }
-
-                displayResults(savedInventoryData);
-                console.log('成功從伺服器獲取並顯示數據。', savedInventoryData);
+            if (result.success) {
+                console.log(`成功獲取 ${result.data.length} 筆資料。`);
+                // 將獲取的數據保存到全局變量
+                savedInventoryData = result.data; 
+                // 使用新數據重新渲染頁面
+                applyFiltersAndRender(); 
+                statusDiv.innerHTML = `資料載入成功！(上次更新: ${savedInventoryData.length > 0 ? new Date(savedInventoryData[0].process_time).toLocaleString() : 'N/A'})`;
+                statusDiv.className = 'status-success';
             } else {
-                console.error('獲取數據失敗:', result);
-                outputTableDiv.innerHTML = `<p style="color: red;">無法從伺服器加載數據: ${result.message || '未知錯誤'}</p>`;
+                throw new Error(result.message);
             }
         } catch (error) {
-            console.error('獲取數據時發生網絡錯誤:', error);
-            outputTableDiv.innerHTML = `<p style="color: red;">無法連接到伺服器。請確認 server.py 正在運行。</p>`;
+            console.error('獲取數據失敗:', error);
+            statusDiv.innerHTML = `獲取數據失敗: ${error.message}`;
+            statusDiv.className = 'status-error';
         }
     }
 
-    // 頁面載入時，自動從伺服器獲取初始數據
-    fetchAndDisplayData();
-    
-    // 合併新舊庫存數據 (此函數在手動模式下仍然有用)
-    function mergeInventoryData(oldData, newData) {
-        // 創建一個映射，按店鋪-機台分組存儲舊數據
-        const oldStoreData = {};
-        oldData.forEach(item => {
-            const storeKey = `${item.store}-${item.machineId}`;
-            if (!oldStoreData[storeKey]) {
-                oldStoreData[storeKey] = [];
-            }
-            oldStoreData[storeKey].push(item);
-        });
-        
-        // 創建一個映射，按店鋪-機台分組存儲新數據
-        const newStoreData = {};
-        newData.forEach(item => {
-            const storeKey = `${item.store}-${item.machineId}`;
-            if (!newStoreData[storeKey]) {
-                newStoreData[storeKey] = [];
-            }
-            newStoreData[storeKey].push(item);
-        });
-        
-        // 合併結果
-        const mergedData = [];
-        
-        // 首先，處理新數據中的所有店鋪-機台
-        for (const storeKey in newStoreData) {
-            // 新數據直接添加到結果中
-            mergedData.push(...newStoreData[storeKey]);
-            
-            // 標記該店鋪-機台已處理
-            delete oldStoreData[storeKey];
-        }
-        
-        // 然後，處理舊數據中剩餘的店鋪-機台（這些在新數據中不存在）
-        for (const storeKey in oldStoreData) {
-            mergedData.push(...oldStoreData[storeKey]);
-        }
-        
-        console.log(`合併後數據: 總計 ${mergedData.length} 項，來自 ${Object.keys(newStoreData).length} 個新店鋪-機台和 ${Object.keys(oldStoreData).length} 個舊店鋪-機台`);
-        
-        return mergedData;
-    }
-    
-    // 保存到本地存儲 (使用分片存儲方式來避免容量限制)
-    function saveToLocalStorage(key, data) {
-        try {
-            // 將數據轉換為JSON字符串
-            const jsonData = JSON.stringify(data);
-            
-            // 計算需要多少分片來存儲數據
-            // localStorage通常限制約為5MB
-            const chunkSize = 500000; // 每個分片大約500KB
-            const chunks = Math.ceil(jsonData.length / chunkSize);
-            
-            console.log(`數據總大小: ${jsonData.length} 字節，分為 ${chunks} 個分片`);
-            
-            // 先清除舊的分片
-            clearStorageChunks(key);
-            
-            // 存儲分片數量
-            localStorage.setItem(`${key}_chunks`, chunks.toString());
-            
-            // 存儲每個分片
-            for (let i = 0; i < chunks; i++) {
-                const start = i * chunkSize;
-                const end = Math.min(start + chunkSize, jsonData.length);
-                const chunk = jsonData.substring(start, end);
-                localStorage.setItem(`${key}_${i}`, chunk);
-                console.log(`保存分片 ${i+1}/${chunks}, 大小: ${chunk.length} 字節`);
-            }
-            
-            return true;
-        } catch (e) {
-            console.error('保存到本地存儲失敗:', e);
-            alert('保存失敗: ' + e.message);
-            return false;
+    function switchView(view) {
+        if (currentView !== view) {
+            currentView = view;
+            outputTableDiv.style.display = view === 'card' ? 'block' : 'none';
+            outputListDiv.style.display = view === 'list' ? 'block' : 'none';
+            viewAsCardButton.classList.toggle('active', view === 'card');
+            viewAsListButton.classList.toggle('active', view === 'list');
         }
     }
     
-    // 清除特定鍵的所有分片
-    function clearStorageChunks(key) {
-        try {
-            // 獲取分片數量
-            const chunksStr = localStorage.getItem(`${key}_chunks`);
-            if (chunksStr) {
-                const chunks = parseInt(chunksStr, 10);
-                
-                // 刪除所有分片
-                for (let i = 0; i < chunks; i++) {
-                    localStorage.removeItem(`${key}_${i}`);
-                }
-            }
-            
-            // 刪除分片計數
-            localStorage.removeItem(`${key}_chunks`);
-        } catch (e) {
-            console.error('清除分片失敗:', e);
+    function handleSort(sortKey) {
+        if (currentSort.key === sortKey) {
+            currentSort.order = currentSort.order === 'asc' ? 'desc' : 'asc';
+        } else {
+            currentSort.key = sortKey;
+            currentSort.order = 'asc';
         }
+        applyFiltersAndRender();
     }
     
-    // 從本地存儲加載 (支持分片數據)
-    function loadFromLocalStorage(key) {
-        try {
-            // 檢查是否有分片數據
-            const chunksStr = localStorage.getItem(`${key}_chunks`);
-            
-            if (chunksStr) {
-                // 使用分片模式讀取
-                const chunks = parseInt(chunksStr, 10);
-                let jsonData = '';
-                
-                console.log(`從 ${chunks} 個分片讀取數據`);
-                
-                // 讀取所有分片並合併
-                for (let i = 0; i < chunks; i++) {
-                    const chunk = localStorage.getItem(`${key}_${i}`);
-                    if (chunk) {
-                        jsonData += chunk;
-                        console.log(`讀取分片 ${i+1}/${chunks}, 當前總大小: ${jsonData.length} 字節`);
-                    } else {
-                        console.warn(`找不到分片 ${i+1}/${chunks}`);
-                    }
-                }
-                
-                // 解析JSON數據
-                return jsonData ? JSON.parse(jsonData) : null;
-            } else {
-                // 嘗試使用舊式方法讀取（向後兼容）
-                const data = localStorage.getItem(key);
-                return data ? JSON.parse(data) : null;
-            }
-        } catch (e) {
-            console.error('從本地存儲加載失敗:', e);
-            return null;
-        }
-    }
-    
-    // 解析庫存數據
-    function parseInventoryData(rawData, processTimestamp) {
-        console.log("開始解析數據");
-        
-        const result = [];
-        // 將\r\n和\r轉換為\n以確保跨平台兼容，並過濾空行
-        const normalizedData = rawData.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-        const lines = normalizedData.split('\n').map(l => l.trim()).filter(l => l);
-        
-        console.log("數據行數:", lines.length);
-        
-        // 為時間設定預設值
-        let lastUpdated = formatDate(new Date()) + " 00:00:00";
-        let lastCleaned = formatDate(new Date()) + " 00:00:00";
-        
-        // 遍歷所有行
-        for (let i = 0; i < lines.length; ) {
-            const line = lines[i];
-            
-            // 優先處理時間訊息行
-            if (line.includes('上次補貨時間')) {
-                try {
-                    const replenishMatch = line.match(/上次補貨時間\s*:\s*(\d{4}-\d{2}-\d{2}\s*\d{2}:\d{2}:\d{2})/);
-                    if (replenishMatch && replenishMatch[1]) lastUpdated = replenishMatch[1];
-                    
-                    const cleanMatch = line.match(/上次現場清潔時間\s*:\s*(\d{4}-\d{2}-\d{2}\s*\d{2}:\d{2}:\d{2})/);
-                    if (cleanMatch && cleanMatch[1]) lastCleaned = cleanMatch[1];
-                    
-                    console.log(`解析到時間: 補貨=${lastUpdated}, 清潔=${lastCleaned}`);
-                } catch (e) {
-                    console.error("解析時間信息失敗:", e);
-                }
-                i++; // 處理完畢，移至下一行
-                continue;
-            }
-            
-            // --- 使用「預讀」邏輯來識別產品條目 ---
-            // 一個產品條目被定義為：一個非數字的店名，後跟一個以數字開頭的機台編號。
-            const nextLine = (i + 1 < lines.length) ? lines[i+1] : '';
-            if (!/^\d/.test(line) && /^\d/.test(nextLine)) {
-                const currentStore = line;
-                const currentMachineId = nextLine;
-                const productName = (i + 2 < lines.length) ? lines[i+2] : '';
-                const quantityStr = (i + 3 < lines.length) ? lines[i+3] : '';
+    // 將 applyFiltersAndRender 放在這裡，因為後續的函式會依賴它
+    // 注意：您需要確保 savedInventoryData 和其他的全局變量在您原始的 script.js 中有定義
+    let savedInventoryData = []; 
 
-                // 檢查後兩行是否看起來像產品名稱和有效的數量
-                if (productName && /^\d+$/.test(quantityStr)) {
-                    const quantity = parseInt(quantityStr, 10);
-                    
-                    console.log(`找到產品: ${currentStore} - ${currentMachineId} - ${productName}: ${quantity}`);
-
-                        result.push({
-                            store: currentStore,
-                            machineId: currentMachineId,
-                            productName: productName,
-                            quantity: quantity,
-                            lastUpdated: lastUpdated,
-                        lastCleaned: lastCleaned,
-                        processTime: processTimestamp
-                    });
-                    
-                    i += 4; // 已消耗4行，直接跳到下一個可能的條目
-                    continue;
-                }
-            }
-            
-            // 如果當前行不符合任何已知模式，則忽略它以避免解析錯誤
-            console.warn(`忽略無法解析的行: "${line}"`);
-            i++;
-            }
-
-        if (result.length === 0) {
-            console.error("未能解析出任何數據");
-            throw new Error("無法解析數據，請確認數據格式是否正確。");
-        }
-        
-        // 檢查並合併同一次匯入中的重複項目，以最新一筆為準
-        const uniqueItems = {};
-        result.forEach(item => {
-            const key = `${item.store}-${item.machineId}-${item.productName}`;
-            uniqueItems[key] = item;
-        });
-        
-        const finalResult = Object.values(uniqueItems);
-        console.log(`解析完成，共 ${finalResult.length} 項唯一產品數據`);
-        
-        return finalResult;
-    }
-    
-    // 顯示結果 - 現在作為數據準備和初始化的入口
-    function displayResults(data) {
-        if (!data || data.length === 0) {
-            outputTableDiv.innerHTML = '<p>沒有數據可顯示</p>';
-            outputListDiv.innerHTML = '';
-            storeGroupsArray = [];
-            return;
-        }
-        
-        const cleanedData = data.filter(item => item.productName !== item.store);
-        
-        const storeGroups = {};
-        cleanedData.forEach(item => {
-            const storeKey = `${item.store}-${item.machineId}`;
-            if (!storeGroups[storeKey]) {
-                storeGroups[storeKey] = {
-                    store: item.store,
-                    machineId: item.machineId,
-                    lastUpdated: item.lastUpdated,
-                    lastCleaned: item.lastCleaned,
-                    processTime: item.processTime ? new Date(item.processTime) : null,
-                    products: []
-                };
-            }
-            
-            const existingProduct = storeGroups[storeKey].products.find(p => p.name === item.productName);
-            if (!existingProduct) {
-                storeGroups[storeKey].products.push({
-                    name: item.productName,
-                    quantity: item.quantity
-                });
-            }
-        });
-        
-        // 轉換為可排序的數組並計算總量
-        storeGroupsArray = Object.values(storeGroups).map(group => {
-            const totalQuantity = group.products.reduce((sum, p) => sum + p.quantity, 0);
-            return { ...group, totalQuantity };
-        });
-        
-        // 初始排序和渲染
-        sortAndRender();
-    }
-    
-    // 新增：排序和渲染的函數
-    function sortAndRender() {
-        // 排序邏輯
-        storeGroupsArray.sort((a, b) => {
-            const valA = a[currentSort.key];
-            const valB = b[currentSort.key];
-
-            let comparison = 0;
-            if (valA === null || valA === undefined) return 1;
-            if (valB === null || valB === undefined) return -1;
-            
-            if (typeof valA === 'string') {
-                comparison = valA.localeCompare(valB, 'zh-Hans-CN');
-            } else if (typeof valA === 'number') {
-                comparison = valA - valB;
-            } else if (valA instanceof Date) {
-                comparison = valA.getTime() - valB.getTime();
-            }
-
-            return currentSort.order === 'asc' ? comparison : -comparison;
-        });
-        
-        // 渲染視圖
-        renderViews(storeGroupsArray);
-        // 更新排序按鈕的UI
-        updateSortButtonsUI();
-        }
-
-    // 新增: 整合篩選、排序與渲染
     function applyFiltersAndRender() {
         let dataToRender = [...storeGroupsArray];
 
