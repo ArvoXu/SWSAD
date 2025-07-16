@@ -9,9 +9,11 @@ from datetime import datetime
 import pytz
 import re
 import json
-import sqlite3
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
+from sqlalchemy.orm import Session
+from dateutil.parser import parse as parse_date
+
+# --- Custom Imports from our project ---
+from database import SessionLocal, Inventory, Store, init_db
 
 # --- Configurable Variables ---
 URL = "https://manager.yokaiexpress.com/#/standStoreManager"
@@ -207,13 +209,16 @@ def parse_inventory_from_text(raw_text):
                 print(f"Warning: Expected a number for quantity but got '{quantity_str}'. Skipping entry.")
                 continue
 
+            # Parse process_time string back to a datetime object
+            process_time_dt = parse_date(datetime.now(taipei_tz).isoformat())
+
             final_result.append({
                 'store': store_name,
                 'machine_id': machine_id,
                 'product_name': product_name,
                 'quantity': int(quantity_str),
                 'last_updated': last_updated,
-                'process_time': datetime.now(taipei_tz).isoformat() # Use timezone-aware timestamp
+                'process_time': process_time_dt
             })
 
     if not final_result:
@@ -224,83 +229,38 @@ def parse_inventory_from_text(raw_text):
     return final_result
 
 
-def setup_database(db_path):
+def save_to_database(data: list):
     """
-    Sets up the database connection and creates the inventory table if it doesn't exist.
-    """
-    try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        # The schema is designed based on the parsed data structure.
-        # A composite PRIMARY KEY ensures each product in each machine is unique.
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS inventory (
-                store TEXT NOT NULL,
-                machine_id TEXT NOT NULL,
-                product_name TEXT NOT NULL,
-                quantity INTEGER NOT NULL,
-                last_updated TEXT,
-                process_time TEXT NOT NULL,
-                PRIMARY KEY (store, machine_id, product_name)
-            )
-        ''')
-        conn.commit()
-        print(f"Database setup complete. Table 'inventory' is ready at {db_path}")
-    except Exception as e:
-        print(f"Database setup error: {e}")
-    finally:
-        if conn:
-            conn.close()
-
-
-def save_to_database(db_path, data):
-    """
-    Saves the structured data to the SQLite database, completely replacing old data.
+    Saves the structured data to the database using SQLAlchemy, completely replacing old inventory data.
     """
     if not data:
         print("No data to save to database.")
         return
 
-    conn = None
+    db: Session = SessionLocal()
     try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-
-        # Use a transaction to ensure atomicity (all or nothing)
-        cursor.execute("BEGIN TRANSACTION")
+        # Begin a transaction
+        db.begin()
 
         # Clear the table to ensure a fresh snapshot of the inventory
-        cursor.execute("DELETE FROM inventory")
+        num_deleted = db.query(Inventory).delete()
+        print(f"Cleared {num_deleted} old records from the inventory table.")
 
         # Prepare data for insertion
-        to_insert = [
-            (
-                item['store'],
-                item['machine_id'],
-                item['product_name'],
-                item['quantity'],
-                item['last_updated'],
-                item['process_time']
-            ) for item in data
-        ]
-
-        # Use executemany for efficient bulk insertion
-        cursor.executemany('''
-            INSERT INTO inventory (store, machine_id, product_name, quantity, last_updated, process_time)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', to_insert)
-
+        inventory_objects = [Inventory(**item) for item in data]
+        
+        # Use bulk_save_objects for efficient bulk insertion
+        db.bulk_save_objects(inventory_objects)
+        
         # Commit the transaction to make the changes permanent
-        conn.commit()
-        print(f"Successfully saved {len(to_insert)} records to the database.")
+        db.commit()
+        print(f"Successfully saved {len(inventory_objects)} new records to the database.")
 
-    except sqlite3.Error as e:
+    except Exception as e:
         print(f"Database error during save: {e}")
-        if conn:
-            conn.rollback() # Roll back changes on error
+        db.rollback() # Roll back changes on error
     finally:
-        if conn:
-            conn.close()
+        db.close()
 
 
 def save_to_json(data, filename):
@@ -331,7 +291,7 @@ def run_scraper(headless=True):
         sys.exit(1) # 終止腳本
 
     # --- Modern Selenium Setup ---
-    options = Options()
+    options = webdriver.ChromeOptions()
     if headless:
         # These are the crucial arguments for running Chrome in a containerized environment
         options.add_argument("--headless")
@@ -341,7 +301,7 @@ def run_scraper(headless=True):
         options.add_argument("window-size=1920,1080")
 
     # Selenium's built-in manager will handle the chromedriver
-    service = Service() 
+    service = webdriver.ChromeService() 
     driver = webdriver.Chrome(service=service, options=options)
     
     all_scraped_text = ""
@@ -473,14 +433,23 @@ if __name__ == "__main__":
             # --- Define output paths ---
             script_dir = os.path.dirname(os.path.abspath(__file__))
             output_json_path = os.path.join(script_dir, 'structured_inventory.json')
-            db_path = os.path.join(script_dir, 'inventory.db')
+            
+            # Convert datetime objects to string for JSON serialization
+            for item in structured_data:
+                if 'process_time' in item and hasattr(item['process_time'], 'isoformat'):
+                    item['process_time'] = item['process_time'].isoformat()
 
             # 3. Save to JSON for verification
             save_to_json(structured_data, output_json_path)
             
-            # 4. Setup and save to SQLite database
-            setup_database(db_path)
-            save_to_database(db_path, structured_data)
+            # 4. Initialize and save to the database (PostgreSQL or SQLite)
+            init_db()
+            # Re-parse dates before saving to DB
+            for item in structured_data:
+                if 'process_time' in item and isinstance(item['process_time'], str):
+                    item['process_time'] = parse_date(item['process_time'])
+
+            save_to_database(structured_data)
             
     except Exception as e:
         print(f"An error occurred in the main execution block: {e}")

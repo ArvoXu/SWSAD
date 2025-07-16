@@ -1,18 +1,19 @@
 import sys
 import os
-from flask import Flask, jsonify, send_from_directory
-from flask_cors import CORS
-import subprocess
-import sqlite3
 from datetime import datetime
+from flask import Flask, jsonify, send_from_directory, request
+from flask_cors import CORS
 import schedule
 import time
 import threading
 from dotenv import load_dotenv
+from sqlalchemy.orm import Session
+from dateutil.parser import parse as parse_date
+
 
 # --- Custom Imports ---
-# Import the function to set up the database from our scraper script
-from scraper import setup_database, run_scraper as run_scraper_function
+from database import init_db, get_db, Inventory, Store
+from scraper import run_scraper as run_scraper_function, parse_inventory_from_text, save_to_database, save_to_json
 
 # --- Pre-startup Configuration ---
 # Get the directory where the script is located
@@ -44,21 +45,22 @@ state_lock = threading.Lock()
 
 # --- Global Variables & Constants ---
 # Use the script's directory to build absolute paths
-DB_PATH = os.path.join(script_dir, 'inventory.db')
-SCRAPER_SCRIPT_PATH = os.path.join(script_dir, 'scraper.py')
-PYTHON_EXECUTABLE = sys.executable
+# DB_PATH = os.path.join(script_dir, 'inventory.db') # This line is no longer needed
+# SCRAPER_SCRIPT_PATH = os.path.join(script_dir, 'scraper.py') # This line is no longer needed
+# PYTHON_EXECUTABLE = sys.executable # This line is no longer needed
 
 # --- Database Initialization ---
 # Ensure the database and table exist before the app starts serving requests.
 # This is crucial for the first run on a new server deployment.
-print(f"Initializing database at: {DB_PATH}")
-setup_database(DB_PATH)
+print(f"Initializing database at: {script_dir}")
+init_db() # This command creates the tables in our PostgreSQL or SQLite database if they don't exist.
 print("Database initialization complete.")
 
 
 def run_scraper_background():
     """
     This function runs the scraper in a background thread and updates the global state.
+    It now uses the new database functions.
     """
     global scraper_state
     
@@ -77,16 +79,24 @@ def run_scraper_background():
         
         if raw_inventory_text:
             # 2. Parse the raw text into structured data
-            from scraper import parse_inventory_from_text, save_to_json, save_to_database
             structured_data = parse_inventory_from_text(raw_inventory_text)
             
             # --- Define output paths ---
             output_json_path = os.path.join(script_dir, 'structured_inventory.json')
             
             # 3. Save to JSON and Database
-            save_to_json(structured_data, output_json_path)
-            setup_database(DB_PATH) # Ensure table exists
-            save_to_database(DB_PATH, structured_data)
+            # Convert datetime objects for JSON serialization
+            json_serializable_data = []
+            for item in structured_data:
+                item_copy = item.copy()
+                if 'process_time' in item_copy and hasattr(item_copy['process_time'], 'isoformat'):
+                    item_copy['process_time'] = item_copy['process_time'].isoformat()
+                json_serializable_data.append(item_copy)
+            
+            save_to_json(json_serializable_data, output_json_path)
+            
+            # The data is already parsed with datetime objects, so we can save it directly
+            save_to_database(structured_data)
             
             output = "Scraper finished successfully."
             status = "success"
@@ -143,32 +153,87 @@ def to_camel_case(snake_str):
 @app.route('/get-data', methods=['GET'])
 def get_data():
     """
-    Retrieves all inventory data from the database and converts keys to camelCase.
+    Retrieves all inventory and custom store data, merges them,
+    and returns them as a single JSON response with camelCase keys.
     """
+    db: Session = next(get_db())
     try:
-        db = sqlite3.connect(DB_PATH)
-        db.row_factory = sqlite3.Row # This allows accessing columns by name
-        cursor = db.cursor()
-        cursor.execute("""
-            SELECT 
-                store, machine_id, product_name, quantity, 
-                last_updated, process_time
-            FROM inventory
-        """)
+        # 1. Fetch all inventory data
+        inventory_items = db.query(Inventory).all()
         
-        # Fetch all rows
-        rows = cursor.fetchall()
-        db.close()
+        # 2. Fetch all custom store data
+        stores = db.query(Store).all()
+        # Create a dictionary for quick lookups: {'store_key': {address: '...', 'note': '...'}}
+        store_info_map = {store.store_key: store.to_dict() for store in stores}
 
-        # Convert list of Row objects to list of dicts with camelCase keys
-        data = []
-        for row in rows:
-            camel_case_row = {to_camel_case(key): value for key, value in dict(row).items()}
-            data.append(camel_case_row)
+        # 3. Merge the data
+        merged_data = []
+        for item in inventory_items:
+            item_dict = item.to_dict()
+            store_key = f"{item.store}-{item.machine_id}"
+            
+            # Get custom data for this store, if it exists
+            custom_store_data = store_info_map.get(store_key, {})
+            
+            # Merge inventory data with custom store data
+            full_item_data = {**item_dict, **custom_store_data}
+            
+            # 4. Convert all keys to camelCase for the frontend
+            camel_case_data = {to_camel_case(key): value for key, value in full_item_data.items()}
+            
+            # Ensure process_time is in ISO format string
+            if 'processTime' in camel_case_data and hasattr(camel_case_data['processTime'], 'isoformat'):
+                camel_case_data['processTime'] = camel_case_data['processTime'].isoformat()
+
+            merged_data.append(camel_case_data)
         
-        return jsonify({"success": True, "data": data})
+        return jsonify({"success": True, "data": merged_data})
+        
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
+    finally:
+        db.close()
+
+@app.route('/api/stores/<string:store_key>', methods=['POST'])
+def update_store_data(store_key):
+    """
+    Updates the custom data for a specific store (address, note, sales, hidden status).
+    This is the new endpoint for saving user edits.
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({"success": False, "message": "No data provided"}), 400
+
+    db: Session = next(get_db())
+    try:
+        store = db.query(Store).filter(Store.store_key == store_key).first()
+        
+        # If the store doesn't exist in our custom table, create it
+        if not store:
+            store = Store(store_key=store_key)
+            db.add(store)
+        
+        # Update fields if they are present in the request
+        if 'address' in data:
+            store.address = data['address']
+        if 'note' in data:
+            store.note = data['note']
+        if 'manualSales' in data:
+            store.manual_sales = data['manualSales']
+        if 'isHidden' in data:
+            store.is_hidden = data['isHidden']
+            
+        db.commit()
+        db.refresh(store) # Refresh to get the latest state from DB
+        
+        return jsonify({"success": True, "data": store.to_dict()})
+        
+    except Exception as e:
+        db.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
+    finally:
+        db.close()
+
 
 # --- Static File Serving ---
 @app.route('/')
@@ -182,42 +247,16 @@ def serve_static_files(path):
 
 
 # --- Scheduler Setup ---
-def run_scraper_job():
-    """
-    The actual job of running the scraper script.
-    Called by the scheduler.
-    """
-    print(f"[{datetime.now()}] --- Starting scheduled scraper job ---")
-    try:
-        process = subprocess.run(
-            [PYTHON_EXECUTABLE, SCRAPER_SCRIPT_PATH],
-            capture_output=True,
-            text=True,
-            check=True,
-            encoding='utf-8',
-            errors='replace',
-            timeout=300
-        )
-        print(f"[{datetime.now()}] Scraper job finished successfully.")
-        print("Output:", process.stdout)
-        return True, "Scraper job successful."
-    except Exception as e:
-        error_message = f"An error occurred in scraper job: {getattr(e, 'stderr', str(e))}"
-        print(f"[{datetime.now()}] {error_message}")
-        return False, error_message
-
 def run_scheduler():
     """
     Sets up and runs the scheduler in a loop.
+    We'll disable this for now as the background trigger is the main focus.
+    TODO: Re-evaluate the need for a scheduler with the new architecture.
     """
-    # Define the schedule
-    schedule.every().hour.at(":10").do(run_scraper_job)
-    # schedule.every().day.at("08:00").do(run_scraper_job)
-
-    print("Scheduler started. Waiting for scheduled jobs...")
+    # schedule.every().hour.at(":10").do(run_scraper_job)
+    print("Scheduler is currently disabled.")
     while True:
-        schedule.run_pending()
-        time.sleep(1)
+        time.sleep(3600) # Sleep for an hour
 
 # --- Main Execution ---
 if __name__ == '__main__':

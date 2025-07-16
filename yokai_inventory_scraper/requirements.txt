@@ -6,3 +6,5 @@ python-dotenv
 schedule
 gunicorn
 pytz
+SQLAlchemy
+psycopg2-binary
