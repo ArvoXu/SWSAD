@@ -24,7 +24,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const confirmMonthButton = document.getElementById('confirmMonthButton');
     const cancelMonthButton = document.getElementById('cancelMonthButton');
     const monthDialogCloseButton = monthSelectionDialog.querySelector('.close');
-    const viewPresentationButton = document.getElementById('viewPresentationButton');
+    const openChartWindowButton = document.getElementById('openChartWindowButton');
     
     // --- Global State ---
     let currentView = 'card';
@@ -328,6 +328,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if(clearStorageButton) {
         clearStorageButton.addEventListener('click', () => {
             if (confirm('此操作將清除本地暫存的「銷售導入」相關數據，但不會影響伺服器上的永久資料。是否繼續?')) {
+                // We only clear the sales-related data that is truly local now
                 localStorage.removeItem('fullSalesData');
                 localStorage.removeItem('salesData');
                 localStorage.removeItem('selectedSalesMonth');
@@ -336,6 +337,11 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
     if(saveDataButton) saveDataButton.addEventListener('click', () => alert('此功能已過時。'));
+    if(openChartWindowButton) {
+        openChartWindowButton.addEventListener('click', () => {
+            window.open('presentation.html', '_blank');
+        });
+    }
     
     // --- Utility Functions ---
     function getStoreKey(item) {
@@ -385,15 +391,23 @@ document.addEventListener('DOMContentLoaded', function () {
     fetchAndDisplayData();
     updateView();
 
+    function populateMonthSelector() {
+        monthSelect.innerHTML = '<option value="">-- 請選擇 --</option>'; // Clear previous options
+        const now = new Date();
+        for (let i = 0; i < 12; i++) {
+            const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const option = document.createElement('option');
+            option.value = `${year}-${month}`;
+            option.textContent = `${year}年 ${month}月`;
+            monthSelect.appendChild(option);
+        }
+    }
+
     // --- Sales Import Logic ---
     if (importSalesButton) {
         importSalesButton.addEventListener('click', () => salesFileInput.click());
-    }
-
-    if (viewPresentationButton) {
-        viewPresentationButton.addEventListener('click', () => {
-            window.open('presentation.html', '_blank');
-        });
     }
 
     if (salesFileInput) {
@@ -404,30 +418,31 @@ document.addEventListener('DOMContentLoaded', function () {
         const file = event.target.files[0];
         if (!file) return;
 
+        populateMonthSelector(); // Populate the dropdown before showing
         monthSelectionDialog.style.display = 'block';
 
         confirmMonthButton.onclick = () => {
             const selectedMonth = monthSelect.value;
             if (!selectedMonth) {
                 alert('請選擇一個月份');
-                return;
+            return;
             }
             monthSelectionDialog.style.display = 'none';
             processSalesFile(file, selectedMonth);
         };
-    }
-    
-    if (monthDialogCloseButton) monthDialogCloseButton.onclick = () => monthSelectionDialog.style.display = 'none';
-    if (cancelMonthButton) cancelMonthButton.onclick = () => monthSelectionDialog.style.display = 'none';
+        }
+
+    monthDialogCloseButton.onclick = () => monthSelectionDialog.style.display = 'none';
+    cancelMonthButton.onclick = () => monthSelectionDialog.style.display = 'none';
     
     async function processSalesFile(file, selectedMonth) {
         const reader = new FileReader();
         reader.onload = async (e) => {
             try {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, { type: 'array' });
-                const firstSheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[firstSheetName];
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
                 
                 const fullSalesData = XLSX.utils.sheet_to_json(worksheet, {
                     raw: false,
