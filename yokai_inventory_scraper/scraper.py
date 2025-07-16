@@ -6,11 +6,13 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from datetime import datetime
+from zoneinfo import ZoneInfo
 import re
 import json
 import sqlite3
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
+import logging
 
 # --- Configurable Variables ---
 URL = "https://manager.yokaiexpress.com/#/standStoreManager"
@@ -149,19 +151,24 @@ def scrape_all_inventory_text():
 
 def parse_inventory_from_text(raw_text):
     """
-    Parses the raw inventory text string, which is grouped by store,
-    into a structured list of dictionaries.
+    Parses the raw inventory text string into a structured list of dictionaries.
     """
-    print("\nStarting to parse data in Python...")
-    final_result = []
+    if not raw_text:
+        logging.warning("parse_inventory_from_text received empty or None raw_text.")
+        return []
+
+    # Get current time in Taipei timezone ONCE for all records in this batch
+    tz = ZoneInfo("Asia/Taipei")
+    process_time = datetime.now(tz).isoformat()
     
-    # Split the entire text into blocks for each store
-    store_blocks = raw_text.split('--- Store #')[1:]
+    # Split the text into blocks for each store
+    store_blocks = raw_text.strip().split('店鋪/廠商:')[1:]
     
     if not store_blocks:
         print("Warning: Could not find any store blocks in the raw text.")
         return []
 
+    final_result = []
     for block in store_blocks:
         lines = [line.strip() for line in block.split('\n') if line.strip()]
         
@@ -209,7 +216,7 @@ def parse_inventory_from_text(raw_text):
                 'product_name': product_name,
                 'quantity': int(quantity_str),
                 'last_updated': last_updated,
-                'process_time': datetime.now().isoformat() # Use ISO format for consistency
+                'process_time': process_time,  # Use the same timestamp for the whole batch
             })
 
     if not final_result:
