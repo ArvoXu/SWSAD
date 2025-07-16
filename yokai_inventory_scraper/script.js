@@ -439,10 +439,10 @@ document.addEventListener('DOMContentLoaded', function () {
         const reader = new FileReader();
         reader.onload = async (e) => {
             try {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, { type: 'array' });
-                const firstSheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[firstSheetName];
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
                 
                 // Use the first row as headers, then map to the desired keys
                 const rawData = XLSX.utils.sheet_to_json(worksheet, {
@@ -509,8 +509,8 @@ document.addEventListener('DOMContentLoaded', function () {
             try {
                 // The date from xlsx might be a string like 'YYYY-MM-DD HH:mm:ss'
                 // or a number (Excel date). We need to handle both.
-                let date;
-                if (typeof row.date === 'number') {
+            let date;
+            if (typeof row.date === 'number') {
                     date = new Date((row.date - 25569) * 86400000); // Excel date to JS date
                 } else {
                     date = new Date(row.date.replace(/-/g, '/')); // More robust date parsing

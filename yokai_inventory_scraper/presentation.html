@@ -1100,11 +1100,6 @@
                     <i class="fas fa-sort-amount-up"></i>
                     <span class="tooltip">庫存量由少到多</span>
                 </button>
-                <!-- New Sales Month Selector -->
-                <div class="toolbar-group" style="padding: 0; background: none; border: none; align-items: center; margin-left: 10px;">
-                    <label for="salesMonthSelector" style="font-size: 14px; color: var(--text-secondary);">銷售月份:</label>
-                    <select id="salesMonthSelector" class="search-input-presentation" style="width: 150px; height: 38px;"></select>
-                </div>
             </div>
             <div class="toolbar-section"> <!-- Right -->
                 <input type="text" id="inventorySearchInput" class="search-input-presentation" placeholder="搜尋機台名稱/編號...">
@@ -1215,12 +1210,7 @@
         // 全局產品顏色映射表，確保跨所有圖表的一致性
         const globalProductColorMap = {};
         
-        // 全局數據存儲
-        window.inventoryData = [];
-        window.fullSalesData = [];
-        window.monthlyGroupedSales = {}; // New: For inventory tab rankings
-        
-        // 輔助函數：從URL獲取參數的函數
+        // 新增：從URL獲取參數的函數
         function getDataFromUrl() {
             const params = new URLSearchParams(window.location.search);
             const updateTime = params.get('updateTime');
@@ -1239,10 +1229,11 @@
             if (typeof window.embeddedData !== 'undefined') {
                 console.log('使用內嵌數據');
                 window.inventoryData = window.embeddedData;
-                window.fullSalesData = window.embeddedFullSalesData || [];
-                window.monthlyGroupedSales = processRawTransactions(window.fullSalesData);
-                if (typeof window.embeddedUpdateTime !== 'undefined') {
-                    window.updateTime = window.embeddedUpdateTime;
+                window.storeNotesAndAddresses = window.embeddedNotes || {};
+                window.fullSalesData = window.embeddedFullSalesData || null;
+                // ... 其他嵌入數據 ...
+                if (window.embeddedColorMap) {
+                     Object.assign(globalProductColorMap, window.embeddedColorMap);
                 }
                 return; // 返回 Promise.resolve() 的隱式結果
             }
@@ -1261,16 +1252,36 @@
                 if (!inventoryResult.success) throw new Error(inventoryResult.message);
                 
                 if (!transactionsRes.ok) throw new Error(`獲取交易數據失敗: ${transactionsRes.statusText}`);
-                
-                window.inventoryData = inventoryResult.data;
                 window.fullSalesData = await transactionsRes.json();
-                window.monthlyGroupedSales = processRawTransactions(window.fullSalesData);
-                
-                // Extract latest update time from inventory data
-                const processTimes = window.inventoryData.map(item => item.processTime ? new Date(item.processTime).getTime() : 0).filter(Boolean);
-                if (processTimes.length > 0) {
-                    window.updateTime = new Date(Math.max(...processTimes)).toLocaleString('zh-TW');
+
+                // 處理庫存數據
+                const inventoryData = inventoryResult.data;
+                window.inventoryData = inventoryData;
+
+                // 從庫存數據中提取備註、地址和手動銷售額
+                const notes = {};
+                let latestProcessTime = 0;
+                inventoryData.forEach(item => {
+                    const storeKey = `${item.store}-${item.machineId}`;
+                    if (!notes[storeKey]) {
+                        notes[storeKey] = {
+                            address: item.address,
+                            note: item.note,
+                            sales: item.manualSales || 0 // 使用後端提供的銷售額
+                        };
+                    }
+                    const processTime = item.processTime ? new Date(item.processTime).getTime() : 0;
+                    if (processTime > latestProcessTime) {
+                        latestProcessTime = processTime;
+                    }
+                });
+                window.storeNotesAndAddresses = notes;
+                if(latestProcessTime > 0) {
+                     window.updateTime = new Date(latestProcessTime).toLocaleString('zh-TW');
                 }
+                 // 模擬舊版數據結構，以確保兼容性
+                window.salesData = null; 
+                window.selectedSalesMonth = null;
                 
                 console.log('成功從 API 獲取所有數據');
 
@@ -1280,36 +1291,6 @@
                 document.getElementById('chartContainer').innerHTML = `<p style="color: red;">加載數據失敗: ${error.message}</p>`;
                 throw error; // 拋出錯誤以停止後續執行
             }
-        }
-        
-        function processRawTransactions(transactions) {
-            if (!transactions || transactions.length === 0) return {};
-            
-            const monthlySales = {};
-            transactions.forEach(t => {
-                if (!t.date || !t.shopName || !t.product) return;
-                
-                const transactionDate = new Date(t.date);
-                if (isNaN(transactionDate.getTime())) return; // Skip invalid dates
-
-                const year = transactionDate.getFullYear();
-                const month = String(transactionDate.getMonth() + 1).padStart(2, '0');
-                const yyyymm = `${year}-${month}`;
-
-                if (!monthlySales[yyyymm]) monthlySales[yyyymm] = {};
-                if (!monthlySales[yyyymm][t.shopName]) monthlySales[yyyymm][t.shopName] = {};
-                if (!monthlySales[yyyymm][t.shopName][t.product]) {
-                    monthlySales[yyyymm][t.shopName][t.product] = { count: 0, lastSoldDate: '' };
-                }
-                
-                monthlySales[yyyymm][t.shopName][t.product].count++;
-                
-                const formattedDate = transactionDate.toISOString().split('T')[0];
-                if (monthlySales[yyyymm][t.shopName][t.product].lastSoldDate < formattedDate) {
-                    monthlySales[yyyymm][t.shopName][t.product].lastSoldDate = formattedDate;
-                }
-            });
-            return monthlySales;
         }
         
         // 生成一致的顏色
@@ -1407,19 +1388,19 @@
         }
         
         // 顯示圓餅圖
-        function displayCharts(inventoryData, salesDataForMonth, selectedMonth) {
+        function displayCharts(data, salesData, selectedSalesMonth) {
             const chartContainer = document.getElementById('chartContainer');
             chartContainer.innerHTML = '';
             
-            if (!inventoryData || inventoryData.length === 0) {
+            if (!data || data.length === 0) {
                 chartContainer.innerHTML = '<p>沒有數據可顯示</p>';
                 return;
             }
 
-            const hiddenStores = {}; // This can be enhanced later if needed
+            const hiddenStores = window.hiddenStores || {};
             
             // 對數據進行預處理，移除重複的機台信息項
-            const cleanedData = inventoryData.filter(item => {
+            const cleanedData = data.filter(item => {
                 const storeKey = `${item.store}-${item.machineId}`;
                 return item.productName !== item.store && !hiddenStores[storeKey];
             });
@@ -1434,11 +1415,8 @@
                         machineId: item.machineId,
                         lastUpdated: item.lastUpdated,
                         lastCleaned: item.lastCleaned,
-                        address: item.address,
-                        note: item.note,
                         products: [],
-                        totalQuantity: 0,
-                        salesAmount: item.manualSales || 0 // Use manual_sales as default/fallback
+                        totalQuantity: 0 // 添加總數量欄位
                     };
                 }
                 
@@ -1458,7 +1436,15 @@
             const storeNotesAndAddresses = window.storeNotesAndAddresses || {};
             
             // 將storeGroups轉換為數組以便排序
-            let storeGroupsArray = Object.values(storeGroups);
+            let storeGroupsArray = Object.entries(storeGroups).map(([key, value]) => {
+                // 獲取銷售額
+                const noteData = storeNotesAndAddresses[key] || { address: '', note: '', sales: 0 };
+                return {
+                    key,
+                    ...value,
+                    salesAmount: noteData.sales || 0
+                };
+            });
             
             // --- 新的排序和篩選邏輯 ---
             let fullStoreGroupsArray = [...storeGroupsArray];
@@ -1486,7 +1472,7 @@
                     });
                 }
                 
-                renderStoreCards(dataToRender, storeNotesAndAddresses, salesDataForMonth, selectedMonth);
+                renderStoreCards(dataToRender, storeNotesAndAddresses, salesData, selectedSalesMonth);
                 updateSortButtonsState(currentInventorySort.key ? `sortBy${currentInventorySort.key}` : null);
             }
             
@@ -1517,13 +1503,13 @@
             // 更新摘要信息
             const summaryText = document.getElementById('summaryText');
             const updateTime = window.updateTime || '未設定';
-            summaryText.innerHTML = `共有 ${storeGroupsArray.length} 個機台的庫存數據<br>更新時間: ${updateTime}`;
+            summaryText.innerHTML = `共有 ${storeGroupsArray.length} 個機台的庫存數據，總計 ${cleanedData.length} 項產品數據<br>更新時間: ${updateTime}`;
 
             const salesSummaryText = document.getElementById('salesSummaryText');
-            if (selectedMonth && salesDataForMonth) {
-                salesSummaryText.textContent = `正在顯示基於 ${selectedMonth} 的銷售數據排名。`;
+            if (selectedSalesMonth && salesData) {
+                salesSummaryText.textContent = `正在顯示基於 ${selectedSalesMonth} 的銷售數據排名。`;
             } else {
-                salesSummaryText.textContent = '未選擇銷售月份，無法顯示排名。';
+                salesSummaryText.textContent = '未加載銷售數據，無法顯示排名。';
             }
         }
         
@@ -1659,20 +1645,14 @@
                 });
             });
 
-            // --- NEW: Set default date range based on the data, not current date ---
-            if (fullSalesData && fullSalesData.length > 0) {
-                const latestDate = new Date(Math.max.apply(null, fullSalesData.map(d => d.jsDate)));
-                
-                const endDate = new Date(latestDate);
-                const startDate = new Date(latestDate);
-                startDate.setDate(startDate.getDate() - 29);
-
-                datePickerInstance.setDateRange(startDate, endDate);
-                // Manually trigger the selection event to load the chart with the new default range
-                processAndRenderCharts(fullSalesData, startDate, endDate);
-            } else {
-                // If there's no data, we don't need to do anything, the initial message is already shown.
-            }
+            // 預設顯示最近30天的數據
+            const endDate = new Date();
+            const startDate = new Date();
+            startDate.setDate(endDate.getDate() - 29);
+            datePickerInstance.setDateRange(startDate, endDate);
+            
+            // 首次加載時觸發數據處理與圖表渲染
+            processAndRenderCharts(fullSalesData, startDate, endDate);
         }
         
         function processAndRenderCharts(fullSalesData, startDate, endDate) {
@@ -2324,7 +2304,8 @@
             const chartContainer = document.getElementById('chartContainer');
             chartContainer.innerHTML = '';
             
-            storeGroupsArray.forEach(({ key, store, machineId, lastUpdated, lastCleaned, products, totalQuantity, address, note, salesAmount }) => {
+            storeGroupsArray.forEach(({ key, store, machineId, lastUpdated, lastCleaned, products, totalQuantity }) => {
+                const noteData = storeNotesAndAddresses[key] || { address: '', note: '', sales: 0 };
                 const maxCapacity = 50;
                 const usagePercentage = Math.min(Math.round((totalQuantity / maxCapacity) * 100), 100);
                 
@@ -2337,7 +2318,7 @@
                 cardDiv.innerHTML = `
                     <div class="chart-card-title">
                         ${store}<br>${machineId}
-                        ${salesAmount ? `<div class="sales-info">月銷售額: ${salesAmount.toLocaleString()} 元</div>` : ''}
+                        ${noteData.sales ? `<div class="sales-info">月銷售額: ${noteData.sales.toLocaleString()} 元</div>` : ''}
                     </div>
                     <div class="chart-card-chart">
                         <canvas id="chart-${key}"></canvas>
@@ -2360,12 +2341,12 @@
                     </div>
                 `;
                 
-                if (note || address) {
-                    if (address) {
-                        detailHtml += `<div class="detail-address">地址: ${address}</div>`;
+                if (noteData.address || noteData.note) {
+                    if (noteData.address) {
+                        detailHtml += `<div class="detail-address">地址: ${noteData.address}</div>`;
                     }
-                    if (note) {
-                        detailHtml += `<div class="detail-address">備註: ${note}</div>`;
+                    if (noteData.note) {
+                        detailHtml += `<div class="detail-address">備註: ${noteData.note}</div>`;
                     }
                 }
                 
@@ -2797,63 +2778,6 @@
                 });
             }, 300); // 增加延遲確保渲染
         });
-
-        // --- NEW INITIALIZATION LOGIC ---
-        function initializeInventoryTab() {
-            const selector = document.getElementById('salesMonthSelector');
-            const monthKeys = Object.keys(window.monthlyGroupedSales).sort().reverse();
-            
-            selector.innerHTML = '';
-            if (monthKeys.length === 0) {
-                selector.innerHTML = '<option>無銷售數據</option>';
-                selector.disabled = true;
-                return;
-            }
-            
-            monthKeys.forEach(key => {
-                const option = document.createElement('option');
-                option.value = key;
-                option.textContent = key.replace('-', '年 ') + '月';
-                selector.appendChild(option);
-            });
-            selector.disabled = false;
-
-            const renderInventory = () => {
-                const selectedMonth = selector.value;
-                const salesForMonth = window.monthlyGroupedSales[selectedMonth] || null;
-                // We pass the global inventory data, and the specific month's sales data
-                displayCharts(window.inventoryData, salesForMonth, selectedMonth);
-            };
-
-            selector.addEventListener('change', renderInventory);
-            
-            // Initial render
-            renderInventory();
-        }
-
-        function initializeSalesTab() {
-            setupSalesTrendTab(window.fullSalesData);
-        }
-
-        //載入數據並顯示圖表
-        window.addEventListener('DOMContentLoaded', async function() {
-            // ... (setup report title)
-
-            try {
-                await loadAllData(); 
-                
-                if (window.inventoryData) {
-                    initializeInventoryTab();
-                    initializeSalesTab();
-                } else {
-                    throw new Error('數據未成功加載。');
-                }
-            } catch (error) {
-                // ... (error handling)
-            }
-        });
-
-        // ... (rest of the file)
     </script>
 </body>
 </html> 
