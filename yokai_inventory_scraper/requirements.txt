@@ -1,7 +1,8 @@
 Flask
-gunicorn
-requests
-schedule
-selenium
-python-dotenv
 Flask-Cors
+selenium
+webdriver-manager
+python-dotenv
+schedule
+gunicorn
+pytz

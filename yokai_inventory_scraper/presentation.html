@@ -2305,7 +2305,7 @@
             const chartContainer = document.getElementById('chartContainer');
             chartContainer.innerHTML = '';
             
-            storeGroupsArray.forEach(({ key, store, machineId, lastUpdated, products, totalQuantity }) => {
+            storeGroupsArray.forEach(({ key, store, machineId, lastUpdated, lastCleaned, products, totalQuantity }) => {
                 const noteData = storeNotesAndAddresses[key] || { address: '', note: '', sales: 0 };
                 const maxCapacity = 50;
                 const usagePercentage = Math.min(Math.round((totalQuantity / maxCapacity) * 100), 100);
@@ -2326,7 +2326,8 @@
                     </div>
                     <div class="chart-card-info">
                         <div>使用量: ${totalQuantity}/${maxCapacity} (${usagePercentage}%)</div>
-                        <div>補貨: ${lastUpdated ? lastUpdated.split(' ')[0] : 'N/A'}</div>
+                        <div>補貨: ${lastUpdated.split(' ')[0]}</div>
+                        <div>清潔: ${lastCleaned.split(' ')[0]}</div>
                     </div>
                 `;
                 
@@ -2336,7 +2337,8 @@
                 
                 let detailHtml = `
                     <div class="detail-dates">
-                        <div>補貨: ${lastUpdated ? lastUpdated.split(' ')[0] : 'N/A'}</div>
+                        <div>補貨: ${lastUpdated.split(' ')[0]}</div>
+                        <div>清潔: ${lastCleaned.split(' ')[0]}</div>
                     </div>
                 `;
                 
@@ -2638,6 +2640,7 @@
                         store: item.store,
                         machineId: item.machineId,
                         lastUpdated: item.lastUpdated,
+                        lastCleaned: item.lastCleaned,
                         products: []
                     };
                 }
