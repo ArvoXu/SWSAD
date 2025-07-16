@@ -439,21 +439,26 @@ document.addEventListener('DOMContentLoaded', function () {
         const reader = new FileReader();
         reader.onload = async (e) => {
             try {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, { type: 'array' });
-            const firstSheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[firstSheetName];
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
                 
-                const fullSalesData = XLSX.utils.sheet_to_json(worksheet, {
-                    raw: false,
-                    defval: null,
-                    header: ["shopName", "product", "date", "amount", "payType"]
+                // Use the first row as headers, then map to the desired keys
+                const rawData = XLSX.utils.sheet_to_json(worksheet, {
+                    raw: false, // Keep dates as formatted strings
+                    defval: null
                 });
 
-                // Filter out header row if it exists
-                if (fullSalesData.length > 0 && fullSalesData[0].shopName === '店櫃') {
-                    fullSalesData.shift();
-                }
+                // Map the raw data to the format our API expects
+                const fullSalesData = rawData.map(row => ({
+                    shopName: row['Shop name'],
+                    product: row['Product'],
+                    date: row['Trasaction Date'],
+                    amount: row['Total Transaction Amount'],
+                    payType: row['Pay type']
+                })).filter(item => item.shopName && item.date && item.amount); // Filter out invalid rows
+
 
                 // API-driven: Upload to server instead of saving to localStorage
                 await uploadTransactions(fullSalesData);
@@ -502,7 +507,15 @@ document.addEventListener('DOMContentLoaded', function () {
         fullSalesData.forEach(row => {
             if (!row.date || !row.shopName || !row.amount) return;
             try {
-                const date = new Date((row.date - 25569) * 86400000); // Excel date to JS date
+                // The date from xlsx might be a string like 'YYYY-MM-DD HH:mm:ss'
+                // or a number (Excel date). We need to handle both.
+                let date;
+                if (typeof row.date === 'number') {
+                    date = new Date((row.date - 25569) * 86400000); // Excel date to JS date
+                } else {
+                    date = new Date(row.date.replace(/-/g, '/')); // More robust date parsing
+                }
+
                 const rowMonth = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0');
                 if (rowMonth === yyyymm) {
                     const storeName = row.shopName.trim();
