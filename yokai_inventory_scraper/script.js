@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const confirmMonthButton = document.getElementById('confirmMonthButton');
     const cancelMonthButton = document.getElementById('cancelMonthButton');
     const monthDialogCloseButton = monthSelectionDialog.querySelector('.close');
+    const viewPresentationButton = document.getElementById('viewPresentationButton');
     
     // --- Global State ---
     let currentView = 'card';
@@ -389,6 +390,12 @@ document.addEventListener('DOMContentLoaded', function () {
         importSalesButton.addEventListener('click', () => salesFileInput.click());
     }
 
+    if (viewPresentationButton) {
+        viewPresentationButton.addEventListener('click', () => {
+            window.open('presentation.html', '_blank');
+        });
+    }
+
     if (salesFileInput) {
         salesFileInput.addEventListener('change', handleSalesFile);
     }
@@ -410,8 +417,8 @@ document.addEventListener('DOMContentLoaded', function () {
         };
     }
     
-    monthDialogCloseButton.onclick = () => monthSelectionDialog.style.display = 'none';
-    cancelMonthButton.onclick = () => monthSelectionDialog.style.display = 'none';
+    if (monthDialogCloseButton) monthDialogCloseButton.onclick = () => monthSelectionDialog.style.display = 'none';
+    if (cancelMonthButton) cancelMonthButton.onclick = () => monthSelectionDialog.style.display = 'none';
     
     async function processSalesFile(file, selectedMonth) {
         const reader = new FileReader();
