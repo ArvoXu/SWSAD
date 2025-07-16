@@ -514,6 +514,9 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
+        // Save data to localStorage ONLY when the user decides to open the presentation view
+        saveToLocalStorage('inventoryData', savedInventoryData);
+
         const updateTime = document.getElementById('updateTimeInput').value;
         let url = 'presentation.html';
 
@@ -533,23 +536,40 @@ document.addEventListener('DOMContentLoaded', function() {
     // 新增：從後端 API 獲取數據並渲染頁面的核心函數
     async function fetchAndDisplayData() {
         try {
-            console.log("正在從伺服器獲取最新數據...");
-            const response = await fetch('/get-data'); // 修正: 移除絕對路徑
-            const result = await response.json();
+            console.log("LOG: [1] Starting fetchAndDisplayData function.");
+            const response = await fetch('/get-data');
+            
+            // Log the raw text response to check for malformed JSON
+            const rawText = await response.text();
+            console.log("LOG: [2] Raw response text from /get-data:", rawText);
+
+            // Now, parse the text as JSON
+            const result = JSON.parse(rawText);
+            console.log("LOG: [3] Parsed JSON result from /get-data:", result);
+
 
             if (response.ok && result.success) {
                 savedInventoryData = result.data; // 更新全局數據變量
+                console.log("LOG: [4] Successfully assigned result.data to savedInventoryData. Items count:", savedInventoryData.length);
                 
                 // 從數據中找到最新的更新時間並顯示
                 if (savedInventoryData.length > 0) {
-                    const latestProcessTime = savedInventoryData.reduce((latest, item) => {
-                        return item.processTime > latest ? item.processTime : latest;
-                    }, savedInventoryData[0].processTime);
-                    updateTimeInput.value = new Date(latestProcessTime).toLocaleString();
+                    // Use a Set to avoid errors on empty data and get the latest time efficiently
+                    const processTimes = savedInventoryData.map(item => new Date(item.process_time).getTime());
+                    const latestTimestamp = Math.max(...processTimes);
+                    updateTimeInput.value = new Date(latestTimestamp).toLocaleString();
                 }
 
+                // Directly render data on the current page
                 displayResults(savedInventoryData);
                 console.log('成功從伺服器獲取並顯示數據。', savedInventoryData);
+                
+                // Make sure the main container is visible
+                const mainContainer = document.querySelector('.container');
+                if (mainContainer) {
+                    mainContainer.style.visibility = 'visible';
+                }
+
             } else {
                 console.error('獲取數據失敗:', result);
                 outputTableDiv.innerHTML = `<p style="color: red;">無法從伺服器加載數據: ${result.message || '未知錯誤'}</p>`;
@@ -758,9 +778,9 @@ document.addEventListener('DOMContentLoaded', function() {
                             productName: productName,
                             quantity: quantity,
                             lastUpdated: lastUpdated,
-                        lastCleaned: lastCleaned,
-                        processTime: processTimestamp
-                    });
+                            lastCleaned: lastCleaned,
+                            processTime: processTimestamp.toISOString()
+                        });
                     
                     i += 4; // 已消耗4行，直接跳到下一個可能的條目
                     continue;
@@ -792,6 +812,8 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 顯示結果 - 現在作為數據準備和初始化的入口
     function displayResults(data) {
+        console.log("LOG: [5] Entering displayResults with data:", JSON.parse(JSON.stringify(data)));
+
         if (!data || data.length === 0) {
             outputTableDiv.innerHTML = '<p>沒有數據可顯示</p>';
             outputListDiv.innerHTML = '';
@@ -801,6 +823,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const cleanedData = data.filter(item => item.productName !== item.store);
         
+        console.log("LOG: [6] Data after cleaning (if any):", cleanedData.length);
         const storeGroups = {};
         cleanedData.forEach(item => {
             const storeKey = `${item.store}-${item.machineId}`;
@@ -823,6 +846,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             }
         });
+        
+        console.log("LOG: [7] Data grouped into storeGroups. Groups count:", Object.keys(storeGroups).length);
+        if(Object.keys(storeGroups).length > 0) {
+            console.log("LOG: [8] Example of a grouped store:", storeGroups[Object.keys(storeGroups)[0]]);
+        }
         
         // 轉換為可排序的數組並計算總量
         storeGroupsArray = Object.values(storeGroups).map(group => {
