@@ -9,12 +9,13 @@ import threading
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 from dateutil.parser import parse as parse_date
+from werkzeug.utils import secure_filename
 import pandas as pd
-import traceback
+from io import BytesIO
 
 
 # --- Custom Imports ---
-from database import init_db, get_db, Inventory, Store, Sales
+from database import init_db, get_db, Inventory, Store, SalesData
 from scraper import run_scraper as run_scraper_function, parse_inventory_from_text, save_to_database, save_to_json
 
 # --- Pre-startup Configuration ---
@@ -142,6 +143,90 @@ def get_scraper_status():
     with state_lock:
         return jsonify(scraper_state)
 
+@app.route('/api/sales/upload', methods=['POST'])
+def upload_sales_data():
+    if 'salesFile' not in request.files:
+        return jsonify(success=False, message="沒有上傳檔案"), 400
+    
+    file = request.files['salesFile']
+    if file.filename == '':
+        return jsonify(success=False, message="未選擇檔案"), 400
+
+    if file and (file.filename.endswith('.xlsx') or file.filename.endswith('.xls')):
+        db_session = next(get_db())
+        try:
+            # Step 1: Delete all existing sales data
+            num_deleted = db_session.query(SalesData).delete()
+            
+            # Step 2: Read the new file into a pandas DataFrame
+            file_content = file.read()
+            df = pd.read_excel(BytesIO(file_content))
+            
+            # Step 3: Clean and process data
+            df.columns = [c.strip() for c in df.columns]
+
+            column_mapping = {
+                'date': ['日期', '銷售日期', '交易日期'],
+                'shop_name': ['店名', '分店', '門市', '店舖名稱'],
+                'product_name': ['產品', '產品名稱', '商品', '商品名稱'],
+                'pay_type': ['支付方式', '付款方式'],
+                'amount': ['金額', '銷售額', '價格', '單價']
+            }
+
+            def find_column(df_columns, possible_names):
+                for name in possible_names:
+                    if name in df_columns:
+                        return name
+                return None
+
+            actual_columns = {
+                key: find_column(df.columns, names) for key, names in column_mapping.items()
+            }
+
+            if not all(actual_columns.values()):
+                missing = [key for key, val in actual_columns.items() if val is None]
+                return jsonify(success=False, message=f"檔案缺少必要的欄位: {', '.join(missing)}"), 400
+            
+            # Step 4: Prepare data for bulk insertion
+            sales_records_to_add = []
+            for _, row in df.iterrows():
+                # Skip rows where essential data might be missing
+                if pd.isna(row[actual_columns['date']]) or pd.isna(row[actual_columns['amount']]):
+                    continue
+                
+                # Convert date, handling potential format issues
+                try:
+                    sale_date = pd.to_datetime(row[actual_columns['date']]).date()
+                except (ValueError, TypeError):
+                    continue # Skip if date is not valid
+
+                record = SalesData(
+                    date=sale_date,
+                    shop_name=row.get(actual_columns['shop_name'], 'N/A'),
+                    product_name=row.get(actual_columns['product_name'], 'N/A'),
+                    pay_type=row.get(actual_columns['pay_type'], 'N/A'),
+                    amount=float(row.get(actual_columns['amount'], 0))
+                )
+                sales_records_to_add.append(record)
+
+            # Step 5: Bulk insert into the database
+            db_session.bulk_save_objects(sales_records_to_add)
+            db_session.commit()
+            
+            return jsonify(
+                success=True, 
+                message=f"成功刪除 {num_deleted} 筆舊紀錄，並匯入 {len(sales_records_to_add)} 筆新銷售資料。"
+            )
+
+        except Exception as e:
+            db_session.rollback()
+            return jsonify(success=False, message=f"處理檔案時發生錯誤: {str(e)}"), 500
+        finally:
+            db_session.close()
+
+    return jsonify(success=False, message="不支援的檔案格式，請上傳 Excel (.xlsx) 檔案"), 400
+
+
 def to_camel_case(snake_str):
     """
     Converts a snake_case string to camelCase.
@@ -196,158 +281,68 @@ def get_data():
     finally:
         db.close()
 
-@app.route('/api/stores/<store_key>', methods=['POST'])
-def update_store(store_key):
+@app.route('/api/stores/<string:store_key>', methods=['POST'])
+def update_store_data(store_key):
     """
-    Updates or creates a store's address, note, and manual sales data.
+    Updates the custom data for a specific store (address, note, sales, hidden status).
+    This is the new endpoint for saving user edits.
     """
     data = request.get_json()
     if not data:
-        return jsonify(success=False, message="Invalid JSON data"), 400
+        return jsonify({"success": False, "message": "No data provided"}), 400
 
-    db = get_db()
+    db: Session = next(get_db())
     try:
-        # Find if the store entry already exists
         store = db.query(Store).filter(Store.store_key == store_key).first()
-
-        if store:
-            # Update existing store
-            if 'address' in data:
-                store.address = data['address']
-            if 'note' in data:
-                store.note = data['note']
-            if 'manualSales' in data:
-                store.manual_sales = data['manualSales']
-            if 'isHidden' in data:
-                store.is_hidden = data['isHidden']
-        else:
-            # Create new store if it doesn't exist
-            store = Store(
-                store_key=store_key,
-                address=data.get('address'),
-                note=data.get('note'),
-                manual_sales=data.get('manualSales'),
-                is_hidden=data.get('isHidden', False)
-            )
+        
+        if not store:
+            store = Store(store_key=store_key)
             db.add(store)
         
+        if 'address' in data:
+            store.address = data['address']
+        if 'note' in data:
+            store.note = data['note']
+        if 'manualSales' in data:
+            store.manual_sales = data['manualSales']
+        if 'isHidden' in data:
+            store.is_hidden = data['isHidden']
+            
         db.commit()
-        return jsonify(success=True, data=store.to_dict())
+        db.refresh(store)
+        
+        return jsonify({"success": True, "data": store.to_dict()})
+        
     except Exception as e:
         db.rollback()
-        return jsonify(success=False, message=str(e)), 500
+        return jsonify({"success": False, "message": str(e)}), 500
     finally:
         db.close()
 
-
-@app.route('/api/inventory/<store_key>', methods=['DELETE'])
-def delete_inventory_and_store(store_key):
+@app.route('/api/inventory/<string:store_key>', methods=['DELETE'])
+def delete_inventory_data(store_key):
     """
-    Deletes all inventory and store-related data for a given store_key.
-    This is a permanent and destructive action.
+    Deletes all inventory and custom data associated with a specific store_key.
     """
     if not store_key:
-        return jsonify(success=False, message="store_key is required"), 400
-    
-    store, machine_id = store_key.split('-', 1)
+        return jsonify({"success": False, "message": "store_key is required"}), 400
 
-    db = get_db()
+    db: Session = next(get_db())
     try:
-        # Delete from Inventory table
-        inventory_deleted_count = db.query(Inventory).filter_by(store=store, machine_id=machine_id).delete()
-        
-        # Delete from Store table
-        store_deleted_count = db.query(Store).filter_by(store_key=store_key).delete()
+        store_name, machine_id = store_key.split('-', 1)
+
+        db.query(Inventory).filter_by(store=store_name, machine_id=machine_id).delete(synchronize_session=False)
+        db.query(Store).filter_by(store_key=store_key).delete(synchronize_session=False)
 
         db.commit()
-        
-        return jsonify(
-            success=True, 
-            message=f"成功刪除 {inventory_deleted_count} 筆庫存紀錄和 {store_deleted_count} 筆商店資訊。"
-        )
+
+        return jsonify({"success": True, "message": "Data deleted successfully."})
+
     except Exception as e:
         db.rollback()
-        return jsonify(success=False, message=str(e)), 500
+        return jsonify({"success": False, "message": str(e)}), 500
     finally:
         db.close()
-
-# --- New Sales Data Routes ---
-@app.route('/api/sales', methods=['GET'])
-def get_sales_data():
-    """
-    Endpoint to retrieve all sales data from the database.
-    This will be used by the presentation page to build its charts.
-    """
-    db = get_db()
-    try:
-        sales_records = db.query(Sales).all()
-        return jsonify(success=True, data=[record.to_dict() for record in sales_records])
-    except Exception as e:
-        return jsonify(success=False, message=str(e)), 500
-    finally:
-        db.close()
-
-@app.route('/api/sales/upload', methods=['POST'])
-def upload_sales_data():
-    """
-    Endpoint to upload an Excel file with sales data.
-    It clears the existing sales data and replaces it with the new data.
-    """
-    if 'salesFile' not in request.files:
-        return jsonify(success=False, message='沒有找到上傳的檔案'), 400
-    
-    file = request.files['salesFile']
-    if file.filename == '':
-        return jsonify(success=False, message='沒有選擇檔案'), 400
-
-    if file and (file.filename.endswith('.xlsx') or file.filename.endswith('.csv')):
-        db = get_db()
-        try:
-            # Clear all existing sales data
-            db.query(Sales).delete()
-            
-            # Read new data from the uploaded file
-            if file.filename.endswith('.xlsx'):
-                df = pd.read_excel(file, engine='openpyxl')
-            else:
-                df = pd.read_csv(file)
-
-            # Define the columns we need based on the user-provided headers
-            column_map = {
-                'Shop name': 'shop_name',
-                'Product': 'product',
-                'Trasaction Date(Local Time)': 'transaction_date', # Using local time version
-                'Total Transaction Amount': 'amount',
-                'Pay type': 'pay_type'
-            }
-            
-            # Select and rename the required columns
-            df = df[list(column_map.keys())].rename(columns=column_map)
-            
-            # Convert date column to datetime objects
-            df['transaction_date'] = pd.to_datetime(df['transaction_date'], errors='coerce')
-            
-            # Convert amount to numeric, coercing errors
-            df['amount'] = pd.to_numeric(df['amount'], errors='coerce')
-            
-            # Drop rows where essential data is missing after conversion
-            df.dropna(subset=['transaction_date', 'amount'], inplace=True)
-
-            # Convert dataframe to a list of dictionaries and then to Sales objects
-            sales_records = [Sales(**record) for record in df.to_dict(orient='records')]
-            
-            db.bulk_save_objects(sales_records)
-            db.commit()
-            
-            return jsonify(success=True, message=f'成功匯入 {len(sales_records)} 筆銷售紀錄。')
-
-        except Exception as e:
-            db.rollback()
-            return jsonify(success=False, message=f'檔案處理失敗: {str(e)}'), 500
-        finally:
-            db.close()
-    
-    return jsonify(success=False, message='不支援的檔案格式，請上傳 .xlsx 或 .csv 檔案'), 400
 
 
 # --- Static File Serving ---

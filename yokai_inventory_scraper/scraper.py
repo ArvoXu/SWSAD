@@ -11,10 +11,9 @@ import re
 import json
 from sqlalchemy.orm import Session
 from dateutil.parser import parse as parse_date
-import traceback
 
 # --- Custom Imports from our project ---
-from database import get_db, Inventory
+from database import SessionLocal, Inventory, Store, init_db
 
 # --- Configurable Variables ---
 URL = "https://manager.yokaiexpress.com/#/standStoreManager"
@@ -230,35 +229,38 @@ def parse_inventory_from_text(raw_text):
     return final_result
 
 
-def save_to_database(structured_data, db_session):
+def save_to_database(data: list):
     """
-    Saves structured inventory data to the database using an existing session.
-
-    Args:
-        structured_data (list): A list of dictionaries, where each dictionary 
-                                represents a record for the Inventory table.
-        db_session: The SQLAlchemy session object to use for database operations.
+    Saves the structured data to the database using SQLAlchemy, completely replacing old inventory data.
     """
-    if not structured_data:
-        print("No structured data to save to the database.")
+    if not data:
+        print("No data to save to database.")
         return
 
+    db: Session = SessionLocal()
     try:
-        # Since we are replacing the data, we first delete all existing records.
-        # This is more efficient than checking for each record individually.
-        db_session.query(Inventory).delete()
-        print(f"Cleared existing inventory data from the database.")
+        # Begin a transaction
+        db.begin()
 
-        # Use bulk_save_objects for efficient insertion of many records.
-        inventory_objects = [Inventory(**item) for item in structured_data]
-        db_session.bulk_save_objects(inventory_objects)
-        db_session.commit()
+        # Clear the table to ensure a fresh snapshot of the inventory
+        num_deleted = db.query(Inventory).delete()
+        print(f"Cleared {num_deleted} old records from the inventory table.")
+
+        # Prepare data for insertion
+        inventory_objects = [Inventory(**item) for item in data]
+
+        # Use bulk_save_objects for efficient bulk insertion
+        db.bulk_save_objects(inventory_objects)
+
+        # Commit the transaction to make the changes permanent
+        db.commit()
         print(f"Successfully saved {len(inventory_objects)} new records to the database.")
 
     except Exception as e:
-        db_session.rollback()
-        print(f"Error during database operation: {e}")
-        traceback.print_exc()
+        print(f"Database error during save: {e}")
+        db.rollback() # Roll back changes on error
+    finally:
+        db.close()
 
 
 def save_to_json(data, filename):
@@ -441,20 +443,13 @@ if __name__ == "__main__":
             save_to_json(structured_data, output_json_path)
             
             # 4. Initialize and save to the database (PostgreSQL or SQLite)
-            db_session = get_db()
-            try:
-                # Re-parse dates before saving to DB
-                for item in structured_data:
-                    if 'process_time' in item and isinstance(item['process_time'], str):
-                        item['process_time'] = parse_date(item['process_time'])
+            init_db()
+            # Re-parse dates before saving to DB
+            for item in structured_data:
+                if 'process_time' in item and isinstance(item['process_time'], str):
+                    item['process_time'] = parse_date(item['process_time'])
 
-                save_to_database(structured_data, db_session)
-                return_message, _ = run_scraper(headless=True)
-                print(return_message)
-            except Exception as e:
-                print(f"An error occurred in the main execution block: {e}")
-            finally:
-                db_session.close()
+            save_to_database(structured_data)
             
     except Exception as e:
         print(f"An error occurred in the main execution block: {e}")

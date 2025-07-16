@@ -260,46 +260,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // --- Event Listeners Setup ---
-    if(importSalesButton) {
-        importSalesButton.addEventListener('click', () => salesFileInput.click());
-    }
-
-    if(salesFileInput) {
-        salesFileInput.addEventListener('change', async function() {
-            if (this.files.length === 0) {
-                return;
-            }
-            const file = this.files[0];
-            const formData = new FormData();
-            formData.append('salesFile', file);
-
-            // Show loading state
-            importSalesButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 上傳中...';
-            importSalesButton.disabled = true;
-
-            try {
-                const response = await fetch('/api/sales/upload', {
-                    method: 'POST',
-                    body: formData,
-                });
-                const result = await response.json();
-                if (!response.ok) {
-                    throw new Error(result.message || '上傳失敗');
-                }
-                alert(result.message);
-            } catch (error) {
-                console.error('銷售資料上傳失敗:', error);
-                alert(`上傳失敗: ${error.message}`);
-            } finally {
-                // Restore button state
-                importSalesButton.innerHTML = '<i class="fas fa-file-import"></i> 導入銷售訂單';
-                importSalesButton.disabled = false;
-                // Clear the file input so the user can upload the same file again
-                this.value = '';
-            }
-        });
-    }
-
     if(autoUpdateButton) {
         autoUpdateButton.addEventListener('click', function() {
             this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 請求已發送...';
@@ -351,6 +311,51 @@ document.addEventListener('DOMContentLoaded', function () {
     if(closeDialogButton) closeDialogButton.addEventListener('click', () => { editDialog.style.display = 'none'; });
     window.addEventListener('click', (event) => { if (event.target === editDialog) editDialog.style.display = 'none'; });
     
+    // --- New: Sales Data Import ---
+    if (importSalesButton && salesFileInput) {
+        importSalesButton.addEventListener('click', () => {
+            salesFileInput.click(); 
+        });
+
+        salesFileInput.addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            if (!file) {
+                return;
+            }
+
+            importSalesButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 上傳中...';
+            importSalesButton.disabled = true;
+
+            const formData = new FormData();
+            formData.append('salesFile', file);
+
+            try {
+                const response = await fetch('/api/sales/upload', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    alert(result.message);
+                    // Optionally, you can trigger a data refresh for other components
+                    // that might use sales data. For now, we just show success.
+                } else {
+                    throw new Error(result.message || '上傳失敗');
+                }
+            } catch (error) {
+                alert(`上傳失敗: ${error.message}`);
+                console.error('Error uploading sales data:', error);
+            } finally {
+                importSalesButton.innerHTML = '導入銷售';
+                importSalesButton.disabled = false;
+                // Clear the file input so the 'change' event fires again for the same file
+                salesFileInput.value = '';
+            }
+        });
+    }
+
     if(clearStorageButton) {
         clearStorageButton.addEventListener('click', () => {
             if (confirm('此操作將清除本地暫存的「銷售導入」相關數據，但不會影響伺服器上的永久資料。是否繼續?')) {
