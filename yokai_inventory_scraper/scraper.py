@@ -63,6 +63,9 @@ def scrape_all_inventory_text():
         login_button.click()
         print("Login successful.")
 
+        # --- 等待一下下 ---
+        time.sleep(2) # 等待 3 秒，你可以根據需要調整秒數
+
         # --- Navigate to Inventory ---
         print("Navigating to Store Management...")
         store_management_link = wait.until(EC.element_to_be_clickable((By.XPATH, "//li[.//span[contains(text(), 'Store management')]]")))
