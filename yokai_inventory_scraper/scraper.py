@@ -160,7 +160,7 @@ def parse_inventory_from_text(raw_text):
     
     # Define the target timezone
     taipei_tz = pytz.timezone('Asia/Taipei')
-
+    
     # Split the entire text into blocks for each store
     store_blocks = raw_text.split('--- Store #')[1:]
     
@@ -248,10 +248,10 @@ def save_to_database(data: list):
 
         # Prepare data for insertion
         inventory_objects = [Inventory(**item) for item in data]
-        
+
         # Use bulk_save_objects for efficient bulk insertion
         db.bulk_save_objects(inventory_objects)
-        
+
         # Commit the transaction to make the changes permanent
         db.commit()
         print(f"Successfully saved {len(inventory_objects)} new records to the database.")
@@ -421,7 +421,7 @@ if __name__ == "__main__":
 
         except ImportError:
             print("警告: python-dotenv 未安裝。本地測試時請確保手動設置環境變數。")
-
+        
         # 1. Execute the web scraper to get raw text
         # We set headless=True for any automated run, local test or server.
         raw_inventory_text = run_scraper(headless=True)

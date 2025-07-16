@@ -24,7 +24,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const confirmMonthButton = document.getElementById('confirmMonthButton');
     const cancelMonthButton = document.getElementById('cancelMonthButton');
     const monthDialogCloseButton = monthSelectionDialog.querySelector('.close');
-
+    
     // --- Global State ---
     let currentView = 'card';
     let storeGroupsArray = [];
@@ -42,7 +42,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             savedInventoryData = result.data;
             updateLatestTime(savedInventoryData);
-            displayResults(savedInventoryData);
+                displayResults(savedInventoryData);
             console.log('成功從伺服器獲取並顯示數據。');
         } catch (error) {
             console.error('獲取數據時發生網絡錯誤:', error);
@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', function () {
             storeGroupsArray = [];
             return;
         }
-
+        
         const storeGroups = {};
         data.forEach(item => {
             const storeKey = getStoreKey(item);
@@ -105,19 +105,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
         renderViews(dataToRender);
         updateSortButtonsUI();
-    }
-
+        }
+        
     function renderViews(dataArray) {
         if (!dataArray || dataArray.length === 0) {
             outputTableDiv.innerHTML = '<p>沒有數據可顯示</p>';
             outputListDiv.innerHTML = '';
             return;
         }
-        
+
         let maxProducts = Math.max(0, ...dataArray.map(g => g.products.length));
         let cardHtml = '<div class="multi-column-container">';
         let listHtml = '<div class="list-view-container">';
-
+        
         dataArray.forEach(group => {
             const storeKey = getStoreKey(group);
             const isHidden = group.isHidden;
@@ -165,8 +165,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- User Interaction Handlers (API-driven) ---
 
-    window.editStoreNotes = function(storeKey) {
-        currentEditingStore = storeKey;
+        window.editStoreNotes = function(storeKey) {
+            currentEditingStore = storeKey;
         const group = storeGroupsArray.find(g => getStoreKey(g) === storeKey);
         if (group) {
             document.getElementById('storeAddress').value = group.address || '';
@@ -252,7 +252,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         }
                     }, 3000);
                 }
-            } catch (error) {
+        } catch (error) {
                 console.error('輪詢狀態時出錯:', error);
                 clearInterval(statusCheckInterval);
             }
@@ -260,6 +260,46 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // --- Event Listeners Setup ---
+    if(importSalesButton) {
+        importSalesButton.addEventListener('click', () => salesFileInput.click());
+    }
+
+    if(salesFileInput) {
+        salesFileInput.addEventListener('change', async function() {
+            if (this.files.length === 0) {
+                return;
+            }
+            const file = this.files[0];
+            const formData = new FormData();
+            formData.append('salesFile', file);
+
+            // Show loading state
+            importSalesButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 上傳中...';
+            importSalesButton.disabled = true;
+
+            try {
+                const response = await fetch('/api/sales/upload', {
+                    method: 'POST',
+                    body: formData,
+                });
+                const result = await response.json();
+                if (!response.ok) {
+                    throw new Error(result.message || '上傳失敗');
+                }
+                alert(result.message);
+            } catch (error) {
+                console.error('銷售資料上傳失敗:', error);
+                alert(`上傳失敗: ${error.message}`);
+            } finally {
+                // Restore button state
+                importSalesButton.innerHTML = '<i class="fas fa-file-import"></i> 導入銷售訂單';
+                importSalesButton.disabled = false;
+                // Clear the file input so the user can upload the same file again
+                this.value = '';
+            }
+        });
+    }
+
     if(autoUpdateButton) {
         autoUpdateButton.addEventListener('click', function() {
             this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 請求已發送...';
@@ -370,4 +410,4 @@ document.addEventListener('DOMContentLoaded', function () {
     // --- Initial Load ---
     fetchAndDisplayData();
     updateView();
-});
+}); 

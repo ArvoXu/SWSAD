@@ -1,5 +1,5 @@
 import os
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, Text, DateTime
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, Text, DateTime, Float, UniqueConstraint, func, inspect
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.pool import NullPool
 from datetime import datetime
@@ -56,9 +56,23 @@ class Inventory(Base):
     # The timestamp when this specific record was scraped and processed
     process_time = Column(DateTime(timezone=True), nullable=False)
 
+    __table_args__ = (UniqueConstraint('store', 'machine_id', 'product_name', name='_store_machine_product_uc'),)
+
     def to_dict(self):
-        """Converts the object to a dictionary."""
-        return {c.name: getattr(self, c.name) for c in self.__table__.columns}
+        return {c.key: getattr(self, c.key) for c in inspect(self).mapper.column_attrs}
+
+
+class Sales(Base):
+    __tablename__ = 'sales'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    shop_name = Column(String)
+    product = Column(String)
+    transaction_date = Column(DateTime)
+    amount = Column(Float)
+    pay_type = Column(String)
+
+    def to_dict(self):
+        return {c.key: getattr(self, c.key) for c in inspect(self).mapper.column_attrs}
 
 
 class Store(Base):

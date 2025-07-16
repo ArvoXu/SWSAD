@@ -9,10 +9,11 @@ import threading
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 from dateutil.parser import parse as parse_date
+import pandas as pd
 
 
 # --- Custom Imports ---
-from database import init_db, get_db, Inventory, Store
+from database import init_db, get_db, Inventory, Store, Sales
 from scraper import run_scraper as run_scraper_function, parse_inventory_from_text, save_to_database, save_to_json
 
 # --- Pre-startup Configuration ---
@@ -112,7 +113,7 @@ def run_scraper_background():
     with state_lock:
         scraper_state['status'] = status
         scraper_state['last_run_output'] = output
-        
+
 
 # --- API Endpoints ---
 @app.route('/run-scraper', methods=['POST'])
@@ -256,6 +257,84 @@ def delete_inventory_data(store_key):
         return jsonify({"success": False, "message": str(e)}), 500
     finally:
         db.close()
+
+# --- New Sales Data Routes ---
+@app.route('/api/sales', methods=['GET'])
+def get_sales_data():
+    """
+    Endpoint to retrieve all sales data from the database.
+    This will be used by the presentation page to build its charts.
+    """
+    db = get_db()
+    try:
+        sales_records = db.query(Sales).all()
+        return jsonify(success=True, data=[record.to_dict() for record in sales_records])
+    except Exception as e:
+        return jsonify(success=False, message=str(e)), 500
+    finally:
+        db.close()
+
+@app.route('/api/sales/upload', methods=['POST'])
+def upload_sales_data():
+    """
+    Endpoint to upload an Excel file with sales data.
+    It clears the existing sales data and replaces it with the new data.
+    """
+    if 'salesFile' not in request.files:
+        return jsonify(success=False, message='沒有找到上傳的檔案'), 400
+    
+    file = request.files['salesFile']
+    if file.filename == '':
+        return jsonify(success=False, message='沒有選擇檔案'), 400
+
+    if file and (file.filename.endswith('.xlsx') or file.filename.endswith('.csv')):
+        db = get_db()
+        try:
+            # Clear all existing sales data
+            db.query(Sales).delete()
+            
+            # Read new data from the uploaded file
+            if file.filename.endswith('.xlsx'):
+                df = pd.read_excel(file, engine='openpyxl')
+            else:
+                df = pd.read_csv(file)
+
+            # Define the columns we need based on the user-provided headers
+            column_map = {
+                'Shop name': 'shop_name',
+                'Product': 'product',
+                'Trasaction Date(Local Time)': 'transaction_date', # Using local time version
+                'Total Transaction Amount': 'amount',
+                'Pay type': 'pay_type'
+            }
+            
+            # Select and rename the required columns
+            df = df[list(column_map.keys())].rename(columns=column_map)
+            
+            # Convert date column to datetime objects
+            df['transaction_date'] = pd.to_datetime(df['transaction_date'], errors='coerce')
+            
+            # Convert amount to numeric, coercing errors
+            df['amount'] = pd.to_numeric(df['amount'], errors='coerce')
+            
+            # Drop rows where essential data is missing after conversion
+            df.dropna(subset=['transaction_date', 'amount'], inplace=True)
+
+            # Convert dataframe to a list of dictionaries and then to Sales objects
+            sales_records = [Sales(**record) for record in df.to_dict(orient='records')]
+            
+            db.bulk_save_objects(sales_records)
+            db.commit()
+            
+            return jsonify(success=True, message=f'成功匯入 {len(sales_records)} 筆銷售紀錄。')
+
+        except Exception as e:
+            db.rollback()
+            return jsonify(success=False, message=f'檔案處理失敗: {str(e)}'), 500
+        finally:
+            db.close()
+    
+    return jsonify(success=False, message='不支援的檔案格式，請上傳 .xlsx 或 .csv 檔案'), 400
 
 
 # --- Static File Serving ---
