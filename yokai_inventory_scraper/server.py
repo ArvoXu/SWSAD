@@ -208,12 +208,10 @@ def update_store_data(store_key):
     try:
         store = db.query(Store).filter(Store.store_key == store_key).first()
         
-        # If the store doesn't exist in our custom table, create it
         if not store:
             store = Store(store_key=store_key)
             db.add(store)
         
-        # Update fields if they are present in the request
         if 'address' in data:
             store.address = data['address']
         if 'note' in data:
@@ -224,10 +222,35 @@ def update_store_data(store_key):
             store.is_hidden = data['isHidden']
             
         db.commit()
-        db.refresh(store) # Refresh to get the latest state from DB
+        db.refresh(store)
         
         return jsonify({"success": True, "data": store.to_dict()})
         
+    except Exception as e:
+        db.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
+    finally:
+        db.close()
+
+@app.route('/api/inventory/<string:store_key>', methods=['DELETE'])
+def delete_inventory_data(store_key):
+    """
+    Deletes all inventory and custom data associated with a specific store_key.
+    """
+    if not store_key:
+        return jsonify({"success": False, "message": "store_key is required"}), 400
+
+    db: Session = next(get_db())
+    try:
+        store_name, machine_id = store_key.split('-', 1)
+
+        db.query(Inventory).filter_by(store=store_name, machine_id=machine_id).delete(synchronize_session=False)
+        db.query(Store).filter_by(store_key=store_key).delete(synchronize_session=False)
+
+        db.commit()
+
+        return jsonify({"success": True, "message": "Data deleted successfully."})
+
     except Exception as e:
         db.rollback()
         return jsonify({"success": False, "message": str(e)}), 500

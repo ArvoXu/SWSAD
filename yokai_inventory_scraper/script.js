@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Chart.js庫已成功加載，版本：', Chart.version);
         }
     }, 1000);
+    // --- Element Selections ---
     const processButton = document.getElementById('processButton');
     const clearButton = document.getElementById('clearButton');
     const clearStorageButton = document.getElementById('clearStorageButton');
@@ -19,30 +20,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const editDialog = document.getElementById('editDialog');
     const closeDialogButton = document.querySelector('.close');
     const saveNoteButton = document.getElementById('saveNoteButton');
-    const toggleDebugButton = document.getElementById('toggleDebugButton');
-    const debugInfoDiv = document.getElementById('debugInfo');
-    const checkStorageButton = document.getElementById('checkStorageButton');
-    const openChartWindowButton = document.getElementById('openChartWindowButton');
-    const saveUpdateTimeButton = document.getElementById('saveUpdateTimeButton');
-    const updateTimeInput = document.getElementById('updateTimeInput');
-    
-    // 一鍵更新按鈕
     const autoUpdateButton = document.getElementById('autoUpdateButton');
-
-    // 搜尋相關元素
     const searchInput = document.getElementById('searchInput');
-
-    // 視圖切換相關元素
     const viewAsCardButton = document.getElementById('viewAsCardButton');
     const viewAsListButton = document.getElementById('viewAsListButton');
     const outputListDiv = document.getElementById('outputList');
-    let currentView = 'card'; // 'card' or 'list'
-    
-    // 排序相關
-    let storeGroupsArray = []; // 用於存儲可排序的數據
-    let currentSort = { key: 'store', order: 'asc' }; // 默認排序狀態
-
-    // 銷售數據導入相關元素
+    const updateTimeInput = document.getElementById('updateTimeInput');
     const importSalesButton = document.getElementById('importSalesButton');
     const salesFileInput = document.getElementById('salesFileInput');
     const monthSelectionDialog = document.getElementById('monthSelectionDialog');
@@ -50,97 +33,296 @@ document.addEventListener('DOMContentLoaded', function() {
     const confirmMonthButton = document.getElementById('confirmMonthButton');
     const cancelMonthButton = document.getElementById('cancelMonthButton');
     const monthDialogCloseButton = monthSelectionDialog.querySelector('.close');
-    
-    let parsedSalesData = []; // 用於存儲從Excel解析的原始銷售數據
-    
-    // 重定向控制台輸出到除錯區域
-    if (debugInfoDiv) {
-        const originalConsoleLog = console.log;
-        const originalConsoleWarn = console.warn;
-        const originalConsoleError = console.error;
-        
-        console.log = function() {
-            // 原始控制台輸出
-            originalConsoleLog.apply(console, arguments);
+
+    // --- Global State ---
+    let currentView = 'card';
+    let storeGroupsArray = [];
+    let currentSort = { key: 'store', order: 'asc' };
+    let currentEditingStore = null;
+
+    // The single source of truth for all data fetched from the server.
+    let savedInventoryData = [];
+
+    // --- Core Functions ---
+
+    // Fetches all data from the server and initiates the display process.
+    async function fetchAndDisplayData() {
+        try {
+            const response = await fetch('/get-data');
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                throw new Error(result.message || '從伺服器獲取數據失敗');
+            }
             
-            // 添加到除錯區域
-            const args = Array.from(arguments).map(arg => {
-                if (typeof arg === 'object') {
-                    return JSON.stringify(arg, null, 2);
-                }
-                return String(arg);
-            });
+            // The server now sends a single array of items, each potentially containing
+            // inventory data and custom store data.
+            savedInventoryData = result.data;
             
-            const message = args.join(' ');
-            appendToDebugInfo('LOG: ' + message);
-        };
-        
-        console.warn = function() {
-            originalConsoleWarn.apply(console, arguments);
-            const args = Array.from(arguments).map(arg => {
-                if (typeof arg === 'object') {
-                    return JSON.stringify(arg, null, 2);
-                }
-                return String(arg);
-            });
-            
-            const message = args.join(' ');
-            appendToDebugInfo('WARN: ' + message, 'orange');
-        };
-        
-        console.error = function() {
-            originalConsoleError.apply(console, arguments);
-            const args = Array.from(arguments).map(arg => {
-                if (typeof arg === 'object') {
-                    return JSON.stringify(arg, null, 2);
-                }
-                return String(arg);
-            });
-            
-            const message = args.join(' ');
-            appendToDebugInfo('ERROR: ' + message, 'red');
-        };
-        
-        function appendToDebugInfo(message, color = 'black') {
-            const line = document.createElement('div');
-            line.style.color = color;
-            line.textContent = message;
-            debugInfoDiv.appendChild(line);
-            debugInfoDiv.scrollTop = debugInfoDiv.scrollHeight;
+            updateLatestTime(savedInventoryData);
+            displayResults(savedInventoryData);
+
+            console.log('成功從伺服器獲取並顯示數據。');
+        } catch (error) {
+            console.error('獲取數據時發生網絡錯誤:', error);
+            outputTableDiv.innerHTML = `<p style="color: red;">無法從伺服器加載數據: ${error.message}</p>`;
         }
     }
-    
-    // "一鍵更新" 按鈕事件
-    if(autoUpdateButton) {
-        autoUpdateButton.addEventListener('click', function() {
-            // Immediately change button state
-            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 請求已發送...';
-            this.disabled = true;
 
-            fetch('/run-scraper', {
-                method: 'POST'
-            })
-            .then(response => {
-                if (response.status === 202) { // 202 Accepted: The request has been accepted for processing
-                    this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 爬蟲執行中...';
-                    // Start polling for the status
-                    pollScraperStatus();
-                } else if (response.status === 409) { // 409 Conflict: Scraper is already running
-                     alert('錯誤：爬蟲已經在執行中。請稍後再試。');
-                     this.innerHTML = '一鍵更新';
-                     this.disabled = false;
-                } else {
-                    return response.json().then(err => { throw new Error(err.message || '無法啟動爬蟲。') });
-                }
-            })
-            .catch(error => {
-                console.error('無法啟動爬蟲任務:', error);
-                alert(`無法啟動爬蟲任務: ${error.message}`);
-                this.innerHTML = '一鍵更新';
-                this.disabled = false;
+    // Updates the time input field with the latest processing time.
+    function updateLatestTime(data) {
+        if (data && data.length > 0) {
+            const processTimes = data
+                .map(item => item.processTime ? new Date(item.processTime).getTime() : 0)
+                .filter(time => time > 0);
+            
+            if (processTimes.length > 0) {
+               const latestTimestamp = Math.max(...processTimes);
+               updateTimeInput.value = new Date(latestTimestamp).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
+            }
+        }
+    }
+
+    // Groups the flat data from the server by store/machine for display.
+    function displayResults(data) {
+        if (!data || data.length === 0) {
+            outputTableDiv.innerHTML = '<p>沒有數據可顯示</p>';
+            outputListDiv.innerHTML = '';
+            storeGroupsArray = [];
+            return;
+        }
+
+        const storeGroups = {};
+        data.forEach(item => {
+            const storeKey = getStoreKey(item);
+            if (!storeGroups[storeKey]) {
+                storeGroups[storeKey] = {
+                    // Copy all properties from the item, including custom ones like address, note, isHidden
+                    ...item,
+                    processTime: item.processTime ? new Date(item.processTime) : null,
+                    products: []
+                };
+            }
+            // Group product items under the same store
+            storeGroups[storeKey].products.push({
+                name: item.productName,
+                quantity: item.quantity
             });
         });
+
+        storeGroupsArray = Object.values(storeGroups).map(group => {
+            const totalQuantity = group.products.reduce((sum, p) => sum + p.quantity, 0);
+            return { ...group, totalQuantity };
+        });
+
+        applyFiltersAndRender();
     }
+
+    // Applies current search and sort filters, then calls renderViews.
+    function applyFiltersAndRender() {
+        let dataToRender = [...storeGroupsArray];
+
+        // 1. Apply search filter
+        const searchTerm = searchInput.value.trim().toLowerCase();
+        if (searchTerm) {
+            dataToRender = dataToRender.filter(group => {
+                return group.store.toLowerCase().includes(searchTerm) || 
+                       group.machineId.toLowerCase().includes(searchTerm);
+            });
+        }
+
+        // 2. Apply sorting
+        dataToRender.sort((a, b) => {
+            const valA = a[currentSort.key];
+            const valB = b[currentSort.key];
+            let comparison = 0;
+            if (valA === null || valA === undefined) return 1;
+            if (valB === null || valB === undefined) return -1;
+            if (typeof valA === 'string') {
+                comparison = valA.localeCompare(valB, 'zh-Hans-CN');
+            } else {
+                comparison = valA - valB;
+            }
+            return currentSort.order === 'asc' ? comparison : -comparison;
+        });
+
+        renderViews(dataToRender);
+        updateSortButtonsUI();
+    }
+    
+    // Renders the final HTML for both card and list views.
+    function renderViews(dataArray) {
+        if (!dataArray || dataArray.length === 0) {
+            outputTableDiv.innerHTML = '<p>沒有數據可顯示</p>';
+            outputListDiv.innerHTML = '';
+            return;
+        }
+
+        let maxProducts = Math.max(0, ...dataArray.map(g => g.products.length));
+        let cardHtml = '<div class="multi-column-container">';
+        let listHtml = '<div class="list-view-container">';
+
+        dataArray.forEach(group => {
+            const storeKey = getStoreKey(group);
+            // All data now comes directly from the 'group' object.
+            const noteData = { address: group.address || '', note: group.note || '' };
+            const isHidden = group.isHidden;
+            const replenishmentCleanInfo = `補貨: ${group.lastUpdated ? group.lastUpdated.split(' ')[0] : 'N/A'} | 清潔: ${group.lastCleaned ? group.lastCleaned.split(' ')[0] : 'N/A'}`;
+            
+            let updateTimeHTML = '';
+            if (group.processTime) {
+                const processDate = group.processTime;
+                const today = new Date();
+                const diffDays = Math.ceil((today.getTime() - processDate.getTime()) / (1000 * 60 * 60 * 24)) -1;
+                let updateTimeColor = diffDays >= 2 ? 'var(--danger-color)' : (diffDays === 1 ? 'var(--warning-color)' : 'var(--success-color)');
+                updateTimeHTML = `<br><span style="color: ${updateTimeColor};">更新時間: ${processDate.toLocaleString('zh-TW')}</span>`;
+            }
+
+            // Card View HTML
+            cardHtml += `
+                <div class="store-container compact-container ${isHidden ? 'is-hidden' : ''}">
+                    <table class="compact-table">
+                        <tr class="store-header">
+                            <td colspan="3">
+                                ${group.store} ${group.machineId}
+                                <button class="hide-button" onclick="toggleHideStore('${storeKey}')">${isHidden ? '取消隱藏' : '隱藏'}</button>
+                                <button class="edit-button" onclick="editStoreNotes('${storeKey}')">編輯</button>
+                                <button class="delete-button" onclick="deleteStoreData('${storeKey}')">刪除</button>
+                            </td>
+                        </tr>
+                        <tr><td colspan="3" class="compact-info">${replenishmentCleanInfo}${updateTimeHTML}</td></tr>
+                        <tr>
+                            <td colspan="3">
+                                <div class="info-box">
+                                    <div class="info-line">${noteData.address ? `地址: ${noteData.address}` : '&nbsp;'}</div>
+                                    <div class="info-line">${noteData.note ? `備註: ${noteData.note}` : '&nbsp;'}</div>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr><th class="col-num">#</th><th>產品名稱</th><th class="col-qty">數量</th></tr>
+                        ${group.products.map((p, i) => `<tr><td class="col-num">${i + 1}</td><td>${p.name}</td><td class="col-qty">${p.quantity}</td></tr>`).join('')}
+                        ${Array(maxProducts - group.products.length).fill('<tr><td colspan="3">&nbsp;</td></tr>').join('')}
+                        <tr class="total-row"><td colspan="2">總計</td><td class="col-qty">${group.totalQuantity}</td></tr>
+                    </table>
+                </div>`;
+            
+            // List View HTML (omitted for brevity, similar logic)
+        });
+        
+        cardHtml += '</div>';
+        listHtml += '</div>'; // Assume listHtml is built similarly
+        outputTableDiv.innerHTML = cardHtml;
+        outputListDiv.innerHTML = listHtml;
+    }
+    
+    // --- User Interaction Handlers (API-driven) ---
+
+    window.editStoreNotes = function(storeKey) {
+        currentEditingStore = storeKey;
+        // Find the item from the master data array to populate the dialog
+        const item = storeGroupsArray.find(g => getStoreKey(g) === storeKey);
+        if (item) {
+            document.getElementById('storeAddress').value = item.address || '';
+            document.getElementById('storeNote').value = item.note || '';
+            document.getElementById('storeSales').value = item.manualSales || '';
+            editDialog.style.display = 'block';
+        }
+    };
+
+    saveNoteButton.addEventListener('click', async function() {
+        if (!currentEditingStore) return;
+        
+        const payload = {
+            address: document.getElementById('storeAddress').value,
+            note: document.getElementById('storeNote').value,
+            manualSales: parseInt(document.getElementById('storeSales').value, 10) || 0
+        };
+
+        try {
+            const response = await fetch(`/api/stores/${currentEditingStore}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const result = await response.json();
+            if (!result.success) throw new Error(result.message || '儲存失敗');
+            
+            alert('儲存成功！');
+            await fetchAndDisplayData(); // Refresh data from server
+            editDialog.style.display = 'none';
+        } catch (error) {
+            alert(`儲存失敗: ${error.message}`);
+            console.error('Error saving store data:', error);
+        }
+    });
+
+    window.toggleHideStore = async function(storeKey) {
+        const group = storeGroupsArray.find(g => getStoreKey(g) === storeKey);
+        if (!group) return;
+
+        try {
+            const response = await fetch(`/api/stores/${storeKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ isHidden: !group.isHidden }),
+            });
+            const result = await response.json();
+            if (!result.success) throw new Error(result.message || '更新失敗');
+            
+            // Update local state for immediate UI feedback and re-render
+            group.isHidden = !group.isHidden;
+            applyFiltersAndRender();
+        } catch (error) {
+            alert(`操作失敗: ${error.message}`);
+            console.error('Error toggling hide state:', error);
+        }
+    };
+
+    window.deleteStoreData = async function(storeKey) {
+        if (confirm(`確定要從資料庫永久刪除機台 ${storeKey} 的所有相關資料嗎？此操作不可恢復。`)) {
+            try {
+                const response = await fetch(`/api/inventory/${storeKey}`, { method: 'DELETE' });
+                const result = await response.json();
+                if (!result.success) throw new Error(result.message || '刪除失敗');
+
+                alert('資料已成功從資料庫刪除。');
+                await fetchAndDisplayData(); // Refresh data from server
+            } catch (error) {
+                alert(`刪除失敗: ${error.message}`);
+                console.error('Error deleting store data:', error);
+            }
+        }
+    };
+
+    // --- Event Listeners Setup ---
+    autoUpdateButton.addEventListener('click', function() {
+        // Immediately change button state
+        this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 請求已發送...';
+        this.disabled = true;
+
+        fetch('/run-scraper', {
+            method: 'POST'
+        })
+        .then(response => {
+            if (response.status === 202) { // 202 Accepted: The request has been accepted for processing
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 爬蟲執行中...';
+                // Start polling for the status
+                pollScraperStatus();
+            } else if (response.status === 409) { // 409 Conflict: Scraper is already running
+                 alert('錯誤：爬蟲已經在執行中。請稍後再試。');
+                 this.innerHTML = '一鍵更新';
+                 this.disabled = false;
+            } else {
+                return response.json().then(err => { throw new Error(err.message || '無法啟動爬蟲。') });
+            }
+        })
+        .catch(error => {
+            console.error('無法啟動爬蟲任務:', error);
+            alert(`無法啟動爬蟲任務: ${error.message}`);
+            this.innerHTML = '一鍵更新';
+            this.disabled = false;
+        });
+    });
 
     // New polling function
     function pollScraperStatus() {
@@ -190,15 +372,19 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // 切換除錯信息顯示
-    toggleDebugButton.addEventListener('click', function() {
-        if (debugInfoDiv.style.display === 'none') {
-            debugInfoDiv.style.display = 'block';
-            toggleDebugButton.textContent = '隱藏除錯信息';
-        } else {
-            debugInfoDiv.style.display = 'none';
-            toggleDebugButton.textContent = '顯示除錯信息';
-        }
-    });
+    const toggleDebugButton = document.getElementById('toggleDebugButton');
+    const debugInfoDiv = document.getElementById('debugInfo');
+    if (toggleDebugButton) {
+        toggleDebugButton.addEventListener('click', function() {
+            if (debugInfoDiv.style.display === 'none') {
+                debugInfoDiv.style.display = 'block';
+                toggleDebugButton.textContent = '隱藏除錯信息';
+            } else {
+                debugInfoDiv.style.display = 'none';
+                toggleDebugButton.textContent = '顯示除錯信息';
+            }
+        });
+    }
     
     // 視圖切換事件
     viewAsCardButton.addEventListener('click', () => {
@@ -243,55 +429,58 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // 檢查本地存儲空間使用情況
-    checkStorageButton.addEventListener('click', function() {
-        const storageInfo = getLocalStorageInfo();
-        
-        // 在除錯區域顯示信息
-        debugInfoDiv.innerHTML = '';
-        debugInfoDiv.style.display = 'block';
-        
-        const usedKB = Math.round(storageInfo.usedSpace / 1024);
-        const totalKB = Math.round(storageInfo.totalSpace / 1024);
-        const percentUsed = Math.round((storageInfo.usedSpace / storageInfo.totalSpace) * 100);
-        
-        appendToDebugInfo(`---- 本地存儲空間使用情況 ----`, 'blue');
-        appendToDebugInfo(`已使用: ${usedKB} KB / ${totalKB} KB (${percentUsed}%)`, 'black');
-        appendToDebugInfo(`剩餘空間: ${totalKB - usedKB} KB`, 'black');
-        appendToDebugInfo('', 'black');
-        appendToDebugInfo('---- 分片詳情 ----', 'blue');
-        
-        // 顯示inventoryData分片
-        const invChunks = localStorage.getItem('inventoryData_chunks');
-        if (invChunks) {
-            appendToDebugInfo(`庫存數據: ${invChunks} 個分片`, 'black');
-        } else {
-            appendToDebugInfo('庫存數據: 未使用分片儲存', 'black');
-        }
-        
-        // 顯示storeNotesAndAddresses分片
-        const notesChunks = localStorage.getItem('storeNotesAndAddresses_chunks');
-        if (notesChunks) {
-            appendToDebugInfo(`備註地址數據: ${notesChunks} 個分片`, 'black');
-        } else {
-            appendToDebugInfo('備註地址數據: 未使用分片儲存', 'black');
-        }
-        
-        // 顯示數據詳情
-        appendToDebugInfo('', 'black');
-        appendToDebugInfo('---- 數據統計 ----', 'blue');
-        
-        if (savedInventoryData && savedInventoryData.length > 0) {
-            // 計算店鋪數量
-            const stores = new Set();
-            savedInventoryData.forEach(item => {
-                stores.add(`${item.store}-${item.machineId}`);
-            });
+    const checkStorageButton = document.getElementById('checkStorageButton');
+    if (checkStorageButton) {
+        checkStorageButton.addEventListener('click', function() {
+            const storageInfo = getLocalStorageInfo();
             
-            appendToDebugInfo(`已儲存 ${savedInventoryData.length} 項產品數據，涵蓋 ${stores.size} 家店鋪`, 'black');
-        } else {
-            appendToDebugInfo('未發現已儲存的庫存數據', 'orange');
-        }
-    });
+            // 在除錯區域顯示信息
+            debugInfoDiv.innerHTML = '';
+            debugInfoDiv.style.display = 'block';
+            
+            const usedKB = Math.round(storageInfo.usedSpace / 1024);
+            const totalKB = Math.round(storageInfo.totalSpace / 1024);
+            const percentUsed = Math.round((storageInfo.usedSpace / storageInfo.totalSpace) * 100);
+            
+            appendToDebugInfo(`---- 本地存儲空間使用情況 ----`, 'blue');
+            appendToDebugInfo(`已使用: ${usedKB} KB / ${totalKB} KB (${percentUsed}%)`, 'black');
+            appendToDebugInfo(`剩餘空間: ${totalKB - usedKB} KB`, 'black');
+            appendToDebugInfo('', 'black');
+            appendToDebugInfo('---- 分片詳情 ----', 'blue');
+            
+            // 顯示inventoryData分片
+            const invChunks = localStorage.getItem('inventoryData_chunks');
+            if (invChunks) {
+                appendToDebugInfo(`庫存數據: ${invChunks} 個分片`, 'black');
+            } else {
+                appendToDebugInfo('庫存數據: 未使用分片儲存', 'black');
+            }
+            
+            // 顯示storeNotesAndAddresses分片
+            const notesChunks = localStorage.getItem('storeNotesAndAddresses_chunks');
+            if (notesChunks) {
+                appendToDebugInfo(`備註地址數據: ${notesChunks} 個分片`, 'black');
+            } else {
+                appendToDebugInfo('備註地址數據: 未使用分片儲存', 'black');
+            }
+            
+            // 顯示數據詳情
+            appendToDebugInfo('', 'black');
+            appendToDebugInfo('---- 數據統計 ----', 'blue');
+            
+            if (savedInventoryData && savedInventoryData.length > 0) {
+                // 計算店鋪數量
+                const stores = new Set();
+                savedInventoryData.forEach(item => {
+                    stores.add(`${item.store}-${item.machineId}`);
+                });
+                
+                appendToDebugInfo(`已儲存 ${savedInventoryData.length} 項產品數據，涵蓋 ${stores.size} 家店鋪`, 'black');
+            } else {
+                appendToDebugInfo('未發現已儲存的庫存數據', 'orange');
+            }
+        });
+    }
     
     // 從本地存儲加載更新時間
     if (updateTimeInput) {
@@ -299,6 +488,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // 保存更新時間
+    const saveUpdateTimeButton = document.getElementById('saveUpdateTimeButton');
     if (saveUpdateTimeButton) {
         saveUpdateTimeButton.addEventListener('click', function() {
             const updateTime = updateTimeInput.value.trim();
@@ -337,388 +527,6 @@ document.addEventListener('DOMContentLoaded', function() {
         line.textContent = message;
         debugInfoDiv.appendChild(line);
         debugInfoDiv.scrollTop = debugInfoDiv.scrollHeight;
-    }
-    
-    let processedData = null;
-    let currentEditingStore = null; // 當前編輯的店鋪ID
-    
-    // 從本地存儲加載備註和地址數據 (這些使用者自訂數據繼續保留在本地)
-    let storeNotesAndAddresses = loadFromLocalStorage('storeNotesAndAddresses') || {};
-    let hiddenStores = loadFromLocalStorage('hiddenStores') || {};
-    
-    // 全局庫存數據變量，將由 API 填充
-    let savedInventoryData = [];
-    
-    // 處理數據 (此按鈕現在的功能是基於文本框的手動操作，與資料庫無關)
-    processButton.addEventListener('click', function() {
-        const rawData = rawDataTextarea.value.trim();
-        if (!rawData) {
-            alert('請先輸入庫存數據');
-            return;
-        }
-        
-        try {
-            // 新增: 記錄處理時間
-            const processTimestamp = new Date();
-
-            // 解析新數據
-            const newData = parseInventoryData(rawData, processTimestamp);
-            
-            // 檢查是否有現有數據需要合併
-            if (savedInventoryData.length > 0) {
-                processedData = mergeInventoryData(savedInventoryData, newData);
-            } else {
-                processedData = newData;
-            }
-            
-            // 更新本地存儲 (手動模式下，暫存到LocalStorage)
-            saveToLocalStorage('inventoryData_manual_override', processedData);
-            savedInventoryData = processedData;
-            
-            // 顯示處理後數據
-            displayResults(processedData);
-            
-            console.log("處理後數據:", processedData); // 用於除錯
-            
-            // 顯示成功消息
-            alert(`數據處理成功！\n- 新增/更新了 ${newData.length} 項產品數據\n- 總共有 ${processedData.length} 項產品數據`);
-        } catch (error) {
-            console.error("解析錯誤:", error);
-            alert("解析數據時發生錯誤: " + error.message);
-        }
-    });
-    
-    // 清除輸入區域數據
-    clearButton.addEventListener('click', function() {
-        rawDataTextarea.value = '';
-        if (confirm('是否要清空顯示區域的數據？（已保存的數據不會被刪除）')) {
-            outputTableDiv.innerHTML = '';
-            processedData = null;
-        }
-    });
-    
-    // 清除所有本地存儲數據
-    clearStorageButton.addEventListener('click', function() {
-        if (confirm('確定要清除所有已保存的數據嗎？此操作不可恢復。這將清除本地的使用者備註、隱藏設定等，但不會刪除伺服器上的資料庫。')) {
-            // 使用分片方式清除
-            clearStorageChunks('inventoryData'); // 舊的，可能還存在
-            clearStorageChunks('inventoryData_manual_override'); // 手動覆蓋的
-            clearStorageChunks('storeNotesAndAddresses');
-            clearStorageChunks('hiddenStores');
-            
-            // 移除舊式存儲（兼容性）
-            localStorage.removeItem('inventoryData');
-            localStorage.removeItem('inventoryData_manual_override');
-            localStorage.removeItem('storeNotesAndAddresses');
-            localStorage.removeItem('hiddenStores');
-            
-            savedInventoryData = [];
-            storeNotesAndAddresses = {};
-            hiddenStores = {};
-            outputTableDiv.innerHTML = '';
-            processedData = null;
-            alert('所有數據已清除');
-        }
-    });
-    
-    // 保存數據到本地 (此按鈕的功能現已過時，可考慮移除或改造)
-    saveDataButton.addEventListener('click', function() {
-        alert('此功能已過時。數據現在從伺服器自動加載和更新。手動處理的數據會被下一次「一鍵更新」覆蓋。');
-    });
-    
-    // 下載為真正的Excel (.xlsx)
-    downloadExcelButton.addEventListener('click', function() {
-        if (!processedData || processedData.length === 0) {
-            if (savedInventoryData.length > 0) {
-                processedData = savedInventoryData;
-            } else {
-                alert('請先處理數據');
-                return;
-            }
-        }
-        
-        downloadXLSX(processedData);
-    });
-    
-    // 下載為CSV
-    downloadCSVButton.addEventListener('click', function() {
-        if (!processedData || processedData.length === 0) {
-            if (savedInventoryData.length > 0) {
-                processedData = savedInventoryData;
-            } else {
-                alert('請先處理數據');
-                return;
-            }
-        }
-        
-        downloadCSV(processedData);
-    });
-    
-    // 關閉編輯對話框
-    closeDialogButton.addEventListener('click', function() {
-        editDialog.style.display = 'none';
-    });
-    
-    // 點擊對話框外部區域關閉對話框
-    window.addEventListener('click', function(event) {
-        if (event.target === editDialog) {
-            editDialog.style.display = 'none';
-        }
-    });
-    
-    // 保存備註按鈕事件
-    saveNoteButton.addEventListener('click', function() {
-        if (!currentEditingStore) return;
-        
-        const address = document.getElementById('storeAddress').value;
-        const note = document.getElementById('storeNote').value;
-        const sales = document.getElementById('storeSales').value;
-        
-        // 保存備註、地址和銷售額
-        storeNotesAndAddresses[currentEditingStore] = {
-            address: address,
-            note: note,
-            sales: sales ? parseInt(sales) : 0
-        };
-        
-        // 保存到本地存儲
-        saveToLocalStorage('storeNotesAndAddresses', storeNotesAndAddresses);
-        
-        // 更新顯示
-        if (processedData && processedData.length > 0) {
-            displayResults(processedData);
-        } else if (savedInventoryData && savedInventoryData.length > 0) {
-            displayResults(savedInventoryData);
-        }
-        
-        // 關閉對話框
-        editDialog.style.display = 'none';
-    });
-    
-    // 全局化：切換隱藏狀態
-    window.toggleHideStore = function(storeKey) {
-        if (hiddenStores[storeKey]) {
-            delete hiddenStores[storeKey];
-        } else {
-            hiddenStores[storeKey] = true;
-        }
-        
-        saveToLocalStorage('hiddenStores', hiddenStores);
-        applyFiltersAndRender(); // 重新渲染以應用樣式
-    };
-    
-    // 進入展示階段按鈕事件
-    openChartWindowButton.addEventListener('click', function() {
-        if (!savedInventoryData || savedInventoryData.length === 0) {
-            alert('沒有可視化的數據。請先「一鍵更新」獲取數據。');
-            return;
-        }
-
-        // Save data to localStorage ONLY when the user decides to open the presentation view
-        saveToLocalStorage('inventoryData', savedInventoryData);
-
-        const updateTime = document.getElementById('updateTimeInput').value;
-        let url = 'presentation.html';
-
-        if (updateTime) {
-            url += '?updateTime=' + encodeURIComponent(updateTime);
-        }
-
-        // 數據已通過LocalStorage共享，直接打開新窗口即可
-        const chartWindow = window.open(url, 'ChartWindow');
-        if (!chartWindow) {
-            alert('彈出窗口被阻止，請允許彈出窗口後重試。');
-        }
-    });
-    
-    // --- 新的數據獲取和頁面初始化流程 ---
-
-    // 新增：從後端 API 獲取數據並渲染頁面的核心函數
-    async function fetchAndDisplayData() {
-        try {
-            console.log("LOG: [1] Starting fetchAndDisplayData function.");
-            const response = await fetch('/get-data');
-            
-            // Log the raw text response to check for malformed JSON
-            const rawText = await response.text();
-            console.log("LOG: [2] Raw response text from /get-data:", rawText);
-
-            // Now, parse the text as JSON
-            const result = JSON.parse(rawText);
-            console.log("LOG: [3] Parsed JSON result from /get-data:", result);
-
-
-            if (response.ok && result.success) {
-                savedInventoryData = result.data; // 更新全局數據變量
-                console.log("LOG: [4] Successfully assigned result.data to savedInventoryData. Items count:", savedInventoryData.length);
-                
-                // 從數據中找到最新的更新時間並顯示
-                if (savedInventoryData.length > 0) {
-                    // Use a Set to avoid errors on empty data and get the latest time efficiently
-                    const processTimes = savedInventoryData.map(item => new Date(item.process_time).getTime());
-                    const latestTimestamp = Math.max(...processTimes);
-                    updateTimeInput.value = new Date(latestTimestamp).toLocaleString();
-                }
-
-                // Directly render data on the current page
-                displayResults(savedInventoryData);
-                console.log('成功從伺服器獲取並顯示數據。', savedInventoryData);
-                
-                // Make sure the main container is visible
-                const mainContainer = document.querySelector('.container');
-                if (mainContainer) {
-                    mainContainer.style.visibility = 'visible';
-                }
-
-            } else {
-                console.error('獲取數據失敗:', result);
-                outputTableDiv.innerHTML = `<p style="color: red;">無法從伺服器加載數據: ${result.message || '未知錯誤'}</p>`;
-            }
-        } catch (error) {
-            console.error('獲取數據時發生網絡錯誤:', error);
-            outputTableDiv.innerHTML = `<p style="color: red;">無法連接到伺服器。請確認 server.py 正在運行。</p>`;
-        }
-    }
-
-    // 頁面載入時，自動從伺服器獲取初始數據
-    fetchAndDisplayData();
-    
-    // 合併新舊庫存數據 (此函數在手動模式下仍然有用)
-    function mergeInventoryData(oldData, newData) {
-        // 創建一個映射，按店鋪-機台分組存儲舊數據
-        const oldStoreData = {};
-        oldData.forEach(item => {
-            const storeKey = `${item.store}-${item.machineId}`;
-            if (!oldStoreData[storeKey]) {
-                oldStoreData[storeKey] = [];
-            }
-            oldStoreData[storeKey].push(item);
-        });
-        
-        // 創建一個映射，按店鋪-機台分組存儲新數據
-        const newStoreData = {};
-        newData.forEach(item => {
-            const storeKey = `${item.store}-${item.machineId}`;
-            if (!newStoreData[storeKey]) {
-                newStoreData[storeKey] = [];
-            }
-            newStoreData[storeKey].push(item);
-        });
-        
-        // 合併結果
-        const mergedData = [];
-        
-        // 首先，處理新數據中的所有店鋪-機台
-        for (const storeKey in newStoreData) {
-            // 新數據直接添加到結果中
-            mergedData.push(...newStoreData[storeKey]);
-            
-            // 標記該店鋪-機台已處理
-            delete oldStoreData[storeKey];
-        }
-        
-        // 然後，處理舊數據中剩餘的店鋪-機台（這些在新數據中不存在）
-        for (const storeKey in oldStoreData) {
-            mergedData.push(...oldStoreData[storeKey]);
-        }
-        
-        console.log(`合併後數據: 總計 ${mergedData.length} 項，來自 ${Object.keys(newStoreData).length} 個新店鋪-機台和 ${Object.keys(oldStoreData).length} 個舊店鋪-機台`);
-        
-        return mergedData;
-    }
-    
-    // 保存到本地存儲 (使用分片存儲方式來避免容量限制)
-    function saveToLocalStorage(key, data) {
-        try {
-            // 將數據轉換為JSON字符串
-            const jsonData = JSON.stringify(data);
-            
-            // 計算需要多少分片來存儲數據
-            // localStorage通常限制約為5MB
-            const chunkSize = 500000; // 每個分片大約500KB
-            const chunks = Math.ceil(jsonData.length / chunkSize);
-            
-            console.log(`數據總大小: ${jsonData.length} 字節，分為 ${chunks} 個分片`);
-            
-            // 先清除舊的分片
-            clearStorageChunks(key);
-            
-            // 存儲分片數量
-            localStorage.setItem(`${key}_chunks`, chunks.toString());
-            
-            // 存儲每個分片
-            for (let i = 0; i < chunks; i++) {
-                const start = i * chunkSize;
-                const end = Math.min(start + chunkSize, jsonData.length);
-                const chunk = jsonData.substring(start, end);
-                localStorage.setItem(`${key}_${i}`, chunk);
-                console.log(`保存分片 ${i+1}/${chunks}, 大小: ${chunk.length} 字節`);
-            }
-            
-            return true;
-        } catch (e) {
-            console.error('保存到本地存儲失敗:', e);
-            alert('保存失敗: ' + e.message);
-            return false;
-        }
-    }
-    
-    // 清除特定鍵的所有分片
-    function clearStorageChunks(key) {
-        try {
-            // 獲取分片數量
-            const chunksStr = localStorage.getItem(`${key}_chunks`);
-            if (chunksStr) {
-                const chunks = parseInt(chunksStr, 10);
-                
-                // 刪除所有分片
-                for (let i = 0; i < chunks; i++) {
-                    localStorage.removeItem(`${key}_${i}`);
-                }
-            }
-            
-            // 刪除分片計數
-            localStorage.removeItem(`${key}_chunks`);
-        } catch (e) {
-            console.error('清除分片失敗:', e);
-        }
-    }
-    
-    // 從本地存儲加載 (支持分片數據)
-    function loadFromLocalStorage(key) {
-        try {
-            // 檢查是否有分片數據
-            const chunksStr = localStorage.getItem(`${key}_chunks`);
-            
-            if (chunksStr) {
-                // 使用分片模式讀取
-                const chunks = parseInt(chunksStr, 10);
-                let jsonData = '';
-                
-                console.log(`從 ${chunks} 個分片讀取數據`);
-                
-                // 讀取所有分片並合併
-                for (let i = 0; i < chunks; i++) {
-                    const chunk = localStorage.getItem(`${key}_${i}`);
-                    if (chunk) {
-                        jsonData += chunk;
-                        console.log(`讀取分片 ${i+1}/${chunks}, 當前總大小: ${jsonData.length} 字節`);
-                    } else {
-                        console.warn(`找不到分片 ${i+1}/${chunks}`);
-                    }
-                }
-                
-                // 解析JSON數據
-                return jsonData ? JSON.parse(jsonData) : null;
-            } else {
-                // 嘗試使用舊式方法讀取（向後兼容）
-                const data = localStorage.getItem(key);
-                return data ? JSON.parse(data) : null;
-            }
-        } catch (e) {
-            console.error('從本地存儲加載失敗:', e);
-            return null;
-        }
     }
     
     // 解析庫存數據
@@ -821,45 +629,30 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        const cleanedData = data.filter(item => item.productName !== item.store);
-        
-        console.log("LOG: [6] Data after cleaning (if any):", cleanedData.length);
+        // Data from server is pre-merged, but we still need to group it for display
         const storeGroups = {};
-        cleanedData.forEach(item => {
-            const storeKey = `${item.store}-${item.machineId}`;
+        data.forEach(item => {
+            const storeKey = getStoreKey(item);
             if (!storeGroups[storeKey]) {
                 storeGroups[storeKey] = {
-                    store: item.store,
-                    machineId: item.machineId,
-                    lastUpdated: item.lastUpdated,
-                    lastCleaned: item.lastCleaned,
+                    ...item, // All properties (store, machineId, address, note, isHidden etc.) are copied
                     processTime: item.processTime ? new Date(item.processTime) : null,
                     products: []
                 };
             }
-            
-            const existingProduct = storeGroups[storeKey].products.find(p => p.name === item.productName);
-            if (!existingProduct) {
-                storeGroups[storeKey].products.push({
-                    name: item.productName,
-                    quantity: item.quantity
-                });
-            }
+            // Add product info to the group
+            storeGroups[storeKey].products.push({
+                name: item.productName,
+                quantity: item.quantity
+            });
         });
         
-        console.log("LOG: [7] Data grouped into storeGroups. Groups count:", Object.keys(storeGroups).length);
-        if(Object.keys(storeGroups).length > 0) {
-            console.log("LOG: [8] Example of a grouped store:", storeGroups[Object.keys(storeGroups)[0]]);
-        }
-        
-        // 轉換為可排序的數組並計算總量
         storeGroupsArray = Object.values(storeGroups).map(group => {
             const totalQuantity = group.products.reduce((sum, p) => sum + p.quantity, 0);
             return { ...group, totalQuantity };
         });
         
-        // 初始排序和渲染
-        sortAndRender();
+        applyFiltersAndRender();
     }
     
     // 新增：排序和渲染的函數
@@ -963,9 +756,10 @@ document.addEventListener('DOMContentLoaded', function() {
         let listHtml = '<div class="list-view-container">';
         
         dataArray.forEach(group => {
-            const storeKey = `${group.store}-${group.machineId}`;
-            const noteData = storeNotesAndAddresses[storeKey] || { address: '', note: '' };
-            const isHidden = hiddenStores[storeKey];
+            const storeKey = getStoreKey(group);
+            // Data now comes directly from the group object
+            const noteData = { address: group.address || '', note: group.note || '' };
+            const isHidden = group.isHidden;
             
             const lastUpdatedText = group.lastUpdated ? group.lastUpdated.split(' ')[0] : 'N/A';
             const lastCleanedText = group.lastCleaned ? group.lastCleaned.split(' ')[0] : 'N/A';
@@ -1125,15 +919,13 @@ document.addEventListener('DOMContentLoaded', function() {
             currentEditingStore = storeKey;
             
             // 獲取備註數據
-            const noteData = storeNotesAndAddresses[storeKey] || { address: '', note: '', sales: 0 };
-            
-            // 填充表單
-            document.getElementById('storeAddress').value = noteData.address;
-            document.getElementById('storeNote').value = noteData.note;
-            document.getElementById('storeSales').value = noteData.sales || '';
-            
-            // 顯示對話框
-            editDialog.style.display = 'block';
+            const noteData = storeGroupsArray.find(g => getStoreKey(g) === storeKey);
+            if (noteData) {
+                document.getElementById('storeAddress').value = noteData.address || '';
+                document.getElementById('storeNote').value = noteData.note || '';
+                document.getElementById('storeSales').value = noteData.manualSales || '';
+                editDialog.style.display = 'block';
+            }
         };
     
     // 新增: 展開/收合列表項的函數
@@ -1147,31 +939,25 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     
     // 新增: 刪除特定機台數據的函數
-    window.deleteStoreData = function(storeKey) {
-        if (confirm(`確定要刪除機台 ${storeKey} 的所有庫存資料嗎？此操作不可恢復，但不會影響銷售訂單數據。`)) {
-            // 從 savedInventoryData 中過濾掉該機台的數據
-            savedInventoryData = savedInventoryData.filter(item => {
-                const itemKey = `${item.store}-${item.machineId}`;
-                return itemKey !== storeKey;
-            });
-            
-            // 從 storeNotesAndAddresses 中刪除該機台的備註
-            delete storeNotesAndAddresses[storeKey];
+    window.deleteStoreData = async function(storeKey) {
+        if (confirm(`確定要從資料庫永久刪除機台 ${storeKey} 的所有相關資料嗎？此操作不可恢復。`)) {
+            try {
+                const response = await fetch(`/api/inventory/${storeKey}`, {
+                    method: 'DELETE',
+                });
+                const result = await response.json();
 
-            // 更新本地存儲
-            saveToLocalStorage('inventoryData', savedInventoryData);
-            saveToLocalStorage('storeNotesAndAddresses', storeNotesAndAddresses);
-
-            // 重新渲染顯示
-            if (savedInventoryData.length > 0) {
-                processedData = savedInventoryData;
-                displayResults(savedInventoryData);
-            } else {
-                outputTableDiv.innerHTML = '<p>所有數據已被刪除。</p>';
-                processedData = null;
+                if (result.success) {
+                    alert('資料已成功從資料庫刪除。');
+                    // Refresh data from the server to show the change
+                    await fetchAndDisplayData();
+                } else {
+                    throw new Error(result.message || '刪除失敗');
+                }
+            } catch (error) {
+                alert(`刪除失敗: ${error.message}`);
+                console.error('Error deleting store data:', error);
             }
-
-            alert(`機台 ${storeKey} 的庫存資料已成功刪除。`);
         }
     }
     
@@ -1218,7 +1004,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         cleanedData.forEach(item => {
             const storeKey = `${item.store}-${item.machineId}`;
-            const noteData = storeNotesAndAddresses[storeKey] || { address: '', note: '' };
+            const noteData = storeGroups[storeKey] || { address: '', note: '' };
             
             wsData.push([
                 item.store,
@@ -1239,7 +1025,7 @@ document.addEventListener('DOMContentLoaded', function() {
         for (const storeKey in storeGroups) {
             const group = storeGroups[storeKey];
             const storeName = group.store.substring(0, 15); // Excel工作表名稱長度限制
-            const noteData = storeNotesAndAddresses[storeKey] || { address: '', note: '' };
+            const noteData = storeGroups[storeKey] || { address: '', note: '' };
             
             // 計算商品數量總和
             let totalQuantity = 0;
@@ -1304,7 +1090,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         cleanedData.forEach(item => {
             const storeKey = `${item.store}-${item.machineId}`;
-            const noteData = storeNotesAndAddresses[storeKey] || { address: '', note: '' };
+            const noteData = storeGroups[storeKey] || { address: '', note: '' };
             
             csv += `"${item.store}","${item.machineId}","${item.productName}","${item.quantity}","${item.lastUpdated}","${item.lastCleaned}","${noteData.address}","${noteData.note}"\n`;
         });
@@ -1457,7 +1243,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            parsedSalesData = jsonData.map(row => ({
+            const parsedSalesData = jsonData.map(row => ({
                 shopName: row[shopNameCol],
                 product: row[productCol],
                 date: row[dateCol],
@@ -1619,6 +1405,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // ... (可能存在的其他函數)
     
     function getStoreKey(item) {
-        return `${item.store}-${item.machineId}`;
+        // Ensure item is valid before trying to access properties
+        if (item && item.store && item.machineId) {
+            return `${item.store}-${item.machineId}`;
+        }
+        // Return a default or null if the item is not as expected
+        return null;
     }
 }); 
