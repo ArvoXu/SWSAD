@@ -130,10 +130,20 @@ def get_scraper_status():
     with state_lock:
         return jsonify(scraper_state)
 
+def to_camel_case(snake_str):
+    """
+    Converts a snake_case string to camelCase.
+    Example: 'product_name' -> 'productName'
+    """
+    components = snake_str.split('_')
+    # Capitalize the first letter of each component except the first one
+    # and join them together.
+    return components[0] + ''.join(x.title() for x in components[1:])
+
 @app.route('/get-data', methods=['GET'])
 def get_data():
     """
-    Retrieves all inventory data from the database.
+    Retrieves all inventory data from the database and converts keys to camelCase.
     """
     try:
         db = sqlite3.connect(DB_PATH)
@@ -145,10 +155,17 @@ def get_data():
                 last_updated, process_time
             FROM inventory
         """)
-        # Convert rows to a list of dictionaries
-        data = [dict(row) for row in cursor.fetchall()]
         
+        # Fetch all rows
+        rows = cursor.fetchall()
         db.close()
+
+        # Convert list of Row objects to list of dicts with camelCase keys
+        data = []
+        for row in rows:
+            camel_case_row = {to_camel_case(key): value for key, value in dict(row).items()}
+            data.append(camel_case_row)
+        
         return jsonify({"success": True, "data": data})
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
