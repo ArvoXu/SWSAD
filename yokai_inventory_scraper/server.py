@@ -11,8 +11,8 @@ import threading
 from dotenv import load_dotenv
 
 # --- Custom Imports ---
-# Import the function to set up the database from our scraper script
-from scraper import setup_database
+# Import the function to set up the database and the scraper job from our scraper script
+from scraper import setup_database, run_scraper
 
 # --- Pre-startup Configuration ---
 # Get the directory where the script is located
@@ -33,8 +33,16 @@ else:
 app = Flask(__name__, static_folder=script_dir, static_url_path='')
 CORS(app) # 允許所有來源的跨域請求，方便本地開發
 
+# --- Path Configuration ---
+# Use an environment variable for the data directory on Render,
+# falling back to the script's directory for local development.
+# Revert to using the script's directory for all paths
+script_dir = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = script_dir # No longer needed, but keeping for consistency
+
 # --- Global Variables & Constants ---
-# Use the script's directory to build absolute paths
+# Revert to using the script's directory for all paths
+script_dir = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(script_dir, 'inventory.db')
 SCRAPER_SCRIPT_PATH = os.path.join(script_dir, 'scraper.py')
 PYTHON_EXECUTABLE = sys.executable
@@ -49,7 +57,7 @@ print("Database initialization complete.")
 
 # --- API Endpoints ---
 @app.route('/run-scraper', methods=['POST'])
-def run_scraper():
+def run_scraper_endpoint():
     """
     Triggers the scraper script to run as a separate process.
     """
@@ -154,11 +162,22 @@ def run_scheduler():
 
 # --- Main Execution ---
 if __name__ == '__main__':
-    # Run the scheduler in a separate thread
+    # Ensure the database file and table structure exist on startup.
+    setup_database(DB_PATH)
+
+    # Run an initial scrape in a background thread to populate data right away.
+    print("Triggering initial data scrape in the background...")
+    initial_scrape_thread = threading.Thread(target=run_scraper_job, daemon=True)
+    initial_scrape_thread.start()
+
+    # Run the scheduler in a separate thread for periodic updates.
+    print("Starting scheduler for periodic updates...")
     scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
     scheduler_thread.start()
     
     # Start the Flask app
-    # Render will use gunicorn, but for local testing, this is fine.
-    # The host '0.0.0.0' makes it accessible on your local network.
-    app.run(host='0.0.0.0', port=5001, debug=False) 
+    # Render will use gunicorn, which gets the port from the $PORT env var.
+    # For local testing, this is fine.
+    # Use the PORT environment variable provided by Render.
+    port = int(os.environ.get('PORT', 5001))
+    app.run(host='0.0.0.0', port=port, debug=False) 
