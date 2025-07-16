@@ -967,7 +967,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const noteData = storeNotesAndAddresses[storeKey] || { address: '', note: '' };
             const isHidden = hiddenStores[storeKey];
             
-            const replenishmentCleanInfo = `補貨: ${group.lastUpdated.split(' ')[0]} | 清潔: ${group.lastCleaned.split(' ')[0]}`;
+            const lastUpdatedText = group.lastUpdated ? group.lastUpdated.split(' ')[0] : 'N/A';
+            const lastCleanedText = group.lastCleaned ? group.lastCleaned.split(' ')[0] : 'N/A';
+            const replenishmentCleanInfo = `補貨: ${lastUpdatedText} | 清潔: ${lastCleanedText}`;
             
             // 統一處理更新時間及其顏色
             let updateTimeHTML = '';
