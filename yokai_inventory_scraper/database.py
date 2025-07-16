@@ -113,12 +113,5 @@ def init_db():
 
 # --- Convenience function for getting a DB session ---
 def get_db():
-    """
-    Generator function to get a database session.
-    Ensures the session is properly closed after use.
-    """
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close() 
+    """Returns a new database session."""
+    return SessionLocal() 
