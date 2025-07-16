@@ -192,7 +192,7 @@ document.addEventListener('DOMContentLoaded', function () {
         await updateStoreData(storeKey, { isHidden: !group.isHidden }, '更新隱藏狀態');
     };
     
-    async function updateStoreData(storeKey, payload, actionName) {
+    async function updateStoreData(storeKey, payload, actionName, silent = false) {
         try {
             const response = await fetch(`/api/stores/${storeKey}`, {
                 method: 'POST',
@@ -201,11 +201,24 @@ document.addEventListener('DOMContentLoaded', function () {
             });
             const result = await response.json();
             if (!result.success) throw new Error(result.message);
-            alert(`${actionName}成功！`);
-            await fetchAndDisplayData();
-            if (actionName === '儲存') editDialog.style.display = 'none';
+            
+            if (!silent) {
+                alert(`${actionName}成功！`);
+            }
+
+            // In some cases, we refresh outside the loop (like in updateManualSales)
+            if (actionName !== '儲存' && !silent) {
+                 await fetchAndDisplayData();
+            }
+             if (actionName === '儲存') {
+                editDialog.style.display = 'none';
+                await fetchAndDisplayData();
+            }
+
         } catch (error) {
-            alert(`${actionName}失敗: ${error.message}`);
+            if (!silent) {
+                alert(`${actionName}失敗: ${error.message}`);
+            }
             console.error(`Error during ${actionName}:`, error);
         }
     }
@@ -311,51 +324,6 @@ document.addEventListener('DOMContentLoaded', function () {
     if(closeDialogButton) closeDialogButton.addEventListener('click', () => { editDialog.style.display = 'none'; });
     window.addEventListener('click', (event) => { if (event.target === editDialog) editDialog.style.display = 'none'; });
     
-    // --- New: Sales Data Import ---
-    if (importSalesButton && salesFileInput) {
-        importSalesButton.addEventListener('click', () => {
-            salesFileInput.click(); 
-        });
-
-        salesFileInput.addEventListener('change', async (event) => {
-            const file = event.target.files[0];
-            if (!file) {
-                return;
-            }
-
-            importSalesButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 上傳中...';
-            importSalesButton.disabled = true;
-
-            const formData = new FormData();
-            formData.append('salesFile', file);
-
-            try {
-                const response = await fetch('/api/sales/upload', {
-                    method: 'POST',
-                    body: formData,
-                });
-
-                const result = await response.json();
-
-                if (response.ok && result.success) {
-                    alert(result.message);
-                    // Optionally, you can trigger a data refresh for other components
-                    // that might use sales data. For now, we just show success.
-                } else {
-                    throw new Error(result.message || '上傳失敗');
-                }
-            } catch (error) {
-                alert(`上傳失敗: ${error.message}`);
-                console.error('Error uploading sales data:', error);
-            } finally {
-                importSalesButton.innerHTML = '導入銷售';
-                importSalesButton.disabled = false;
-                // Clear the file input so the 'change' event fires again for the same file
-                salesFileInput.value = '';
-            }
-        });
-    }
-
     if(clearStorageButton) {
         clearStorageButton.addEventListener('click', () => {
             if (confirm('此操作將清除本地暫存的「銷售導入」相關數據，但不會影響伺服器上的永久資料。是否繼續?')) {
@@ -415,4 +383,136 @@ document.addEventListener('DOMContentLoaded', function () {
     // --- Initial Load ---
     fetchAndDisplayData();
     updateView();
+
+    // --- Sales Import Logic ---
+    if (importSalesButton) {
+        importSalesButton.addEventListener('click', () => salesFileInput.click());
+    }
+
+    if (salesFileInput) {
+        salesFileInput.addEventListener('change', handleSalesFile);
+    }
+
+    function handleSalesFile(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        monthSelectionDialog.style.display = 'block';
+
+        confirmMonthButton.onclick = () => {
+            const selectedMonth = monthSelect.value;
+            if (!selectedMonth) {
+                alert('請選擇一個月份');
+                return;
+            }
+            monthSelectionDialog.style.display = 'none';
+            processSalesFile(file, selectedMonth);
+        };
+    }
+    
+    monthDialogCloseButton.onclick = () => monthSelectionDialog.style.display = 'none';
+    cancelMonthButton.onclick = () => monthSelectionDialog.style.display = 'none';
+    
+    async function processSalesFile(file, selectedMonth) {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                
+                const fullSalesData = XLSX.utils.sheet_to_json(worksheet, {
+                    raw: false,
+                    defval: null,
+                    header: ["shopName", "product", "date", "amount", "payType"]
+                });
+
+                // Filter out header row if it exists
+                if (fullSalesData.length > 0 && fullSalesData[0].shopName === '店櫃') {
+                    fullSalesData.shift();
+                }
+
+                // API-driven: Upload to server instead of saving to localStorage
+                await uploadTransactions(fullSalesData);
+
+                // This part for local month-based sales can be removed or refactored
+                // For now, we'll keep it for manual_sales but it should be deprecated.
+                const salesData = processSalesDataForMonth(fullSalesData, selectedMonth);
+                
+                // Update manual_sales field in the database for each store
+                await updateManualSales(salesData);
+
+                // Refresh data from server to reflect changes
+                await fetchAndDisplayData();
+
+            } catch (error) {
+                console.error('處理銷售文件時出錯:', error);
+                alert('處理銷售文件失敗: ' + error.message);
+            } finally {
+                // Reset file input to allow re-uploading the same file
+                salesFileInput.value = '';
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+    
+    async function uploadTransactions(transactions) {
+        alert('正在上傳銷售數據到伺服器...');
+        try {
+            const response = await fetch('/api/transactions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(transactions)
+            });
+            const result = await response.json();
+            if (!result.success) throw new Error(result.message);
+            alert('銷售數據已成功上傳並永久保存！');
+        } catch (error) {
+            console.error('上傳交易數據失敗:', error);
+            alert('上傳失敗: ' + error.message);
+            throw error; // Re-throw to be caught by the outer try-catch
+        }
+    }
+
+    function processSalesDataForMonth(fullSalesData, yyyymm) {
+        const salesByStore = {};
+        fullSalesData.forEach(row => {
+            if (!row.date || !row.shopName || !row.amount) return;
+            try {
+                const date = new Date((row.date - 25569) * 86400000); // Excel date to JS date
+                const rowMonth = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0');
+                if (rowMonth === yyyymm) {
+                    const storeName = row.shopName.trim();
+                    if (!salesByStore[storeName]) {
+                        salesByStore[storeName] = 0;
+                    }
+                    salesByStore[storeName] += parseFloat(row.amount);
+                }
+            } catch (e) {
+                // Ignore rows with invalid dates
+            }
+        });
+        return salesByStore;
+    }
+
+    async function updateManualSales(salesData) {
+        // This function updates the 'manual_sales' field for each store.
+        // It's a temporary measure until the presentation layer fully uses the transactions table.
+        const storeKeys = Object.keys(storeGroupsArray.reduce((acc, g) => {
+            acc[g.store] = g.key;
+            return acc;
+        }, {}));
+
+        for (const storeName in salesData) {
+            const storeKey = storeGroupsArray.find(g => g.store === storeName)?.key;
+            if (storeKey) {
+                const payload = { manualSales: Math.round(salesData[storeName]) };
+                // Using updateStoreData to send update to the server
+                await updateStoreData(storeKey, payload, `更新 ${storeName} 銷售額`, true);
+            }
+        }
+        alert('所有機台的月銷售額已更新。');
+    }
+
 }); 

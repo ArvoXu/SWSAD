@@ -1220,34 +1220,8 @@
             }
         }
 
-        // 輔助函數：從本地存儲加載數據（支持分片）
-        function loadFromLocalStorage(key) {
-            const chunksKey = `${key}_chunks`;
-            const chunks = localStorage.getItem(chunksKey);
-            if (chunks) {
-                let fullData = '';
-                for (let i = 0; i < chunks; i++) {
-                    fullData += localStorage.getItem(`${key}_${i}`);
-                }
-                try {
-                    return JSON.parse(fullData);
-                } catch (e) {
-                    console.error(`解析分片數據失敗: ${key}`, e);
-                    return null;
-                }
-            } else {
-                // 兼容舊版，直接讀取
-                const data = localStorage.getItem(key);
-                try {
-                    return data ? JSON.parse(data) : null;
-                } catch (e) {
-                    console.error(`解析數據失敗: ${key}`, e);
-                    return null;
-                }
-            }
-        }
-
-        function loadAllData() {
+        // 輔助函數：從本地存儲加載數據（支持分片） - 這部分將被重構
+        async function loadAllData() {
             // 首先嘗試從URL獲取更新時間
             getDataFromUrl();
 
@@ -1256,42 +1230,67 @@
                 console.log('使用內嵌數據');
                 window.inventoryData = window.embeddedData;
                 window.storeNotesAndAddresses = window.embeddedNotes || {};
-                window.salesData = window.embeddedSalesData || null;
-                window.selectedSalesMonth = window.embeddedSalesMonth || null;
-                window.dailySalesTrend = window.embeddedDailySalesTrend || null;
                 window.fullSalesData = window.embeddedFullSalesData || null;
-                window.hiddenStores = window.embeddedHiddenStores || {};
-                // 如果內嵌數據中也有更新時間，它將覆蓋URL中的（這是正確的，因為保存的文件應具有權威性）
-                if (typeof window.embeddedUpdateTime !== 'undefined') {
-                    window.updateTime = window.embeddedUpdateTime;
-                }
+                // ... 其他嵌入數據 ...
                 if (window.embeddedColorMap) {
                      Object.assign(globalProductColorMap, window.embeddedColorMap);
                 }
-                return window.inventoryData;
+                return; // 返回 Promise.resolve() 的隱式結果
             }
 
-            // 從LocalStorage加載
-            window.inventoryData = loadFromLocalStorage('inventoryData');
-            window.storeNotesAndAddresses = loadFromLocalStorage('storeNotesAndAddresses') || {};
-            window.salesData = loadFromLocalStorage('salesData');
-            window.selectedSalesMonth = loadFromLocalStorage('selectedSalesMonth');
-            window.dailySalesTrend = loadFromLocalStorage('dailySalesTrend');
-            window.fullSalesData = loadFromLocalStorage('fullSalesData');
-            window.hiddenStores = loadFromLocalStorage('hiddenStores') || {};
-            // 不再從 localStorage 讀取 'updateTime'
-            
-            // 顏色映射表需要單獨處理，它不是分片的
-            const storedColorMap = localStorage.getItem('globalProductColorMap');
-            if(storedColorMap) {
-                try {
-                    Object.assign(globalProductColorMap, JSON.parse(storedColorMap));
-                } catch(e) {
-                    console.error('解析顏色映射表失敗', e);
+            // --- API-driven data loading ---
+            console.log('正在從伺服器 API 獲取數據...');
+            try {
+                // 並行獲取庫存和交易數據
+                const [inventoryRes, transactionsRes] = await Promise.all([
+                    fetch('/get-data'),
+                    fetch('/api/transactions')
+                ]);
+
+                if (!inventoryRes.ok) throw new Error(`獲取庫存數據失敗: ${inventoryRes.statusText}`);
+                const inventoryResult = await inventoryRes.json();
+                if (!inventoryResult.success) throw new Error(inventoryResult.message);
+                
+                if (!transactionsRes.ok) throw new Error(`獲取交易數據失敗: ${transactionsRes.statusText}`);
+                window.fullSalesData = await transactionsRes.json();
+
+                // 處理庫存數據
+                const inventoryData = inventoryResult.data;
+                window.inventoryData = inventoryData;
+
+                // 從庫存數據中提取備註、地址和手動銷售額
+                const notes = {};
+                let latestProcessTime = 0;
+                inventoryData.forEach(item => {
+                    const storeKey = `${item.store}-${item.machineId}`;
+                    if (!notes[storeKey]) {
+                        notes[storeKey] = {
+                            address: item.address,
+                            note: item.note,
+                            sales: item.manualSales || 0 // 使用後端提供的銷售額
+                        };
+                    }
+                    const processTime = item.processTime ? new Date(item.processTime).getTime() : 0;
+                    if (processTime > latestProcessTime) {
+                        latestProcessTime = processTime;
+                    }
+                });
+                window.storeNotesAndAddresses = notes;
+                if(latestProcessTime > 0) {
+                     window.updateTime = new Date(latestProcessTime).toLocaleString('zh-TW');
                 }
-            }
+                 // 模擬舊版數據結構，以確保兼容性
+                window.salesData = null; 
+                window.selectedSalesMonth = null;
+                
+                console.log('成功從 API 獲取所有數據');
 
-            return window.inventoryData;
+            } catch (error) {
+                console.error('從 API 獲取數據時出錯:', error);
+                // 可以在此處顯示錯誤訊息給用戶
+                document.getElementById('chartContainer').innerHTML = `<p style="color: red;">加載數據失敗: ${error.message}</p>`;
+                throw error; // 拋出錯誤以停止後續執行
+            }
         }
         
         // 生成一致的顏色
@@ -1384,7 +1383,7 @@
                 
                 console.log(`成功創建圖表: chart-${storeKey}`);
             } catch (error) {
-                console.error(`創建圖表時出錯 chart-${storeKey}:`, error);
+                console.error(`創建圓餅圖失敗 ${storeKey}:`, error);
             }
         }
         
@@ -2659,7 +2658,7 @@
         }
         
         // 載入數據並顯示圖表
-        window.addEventListener('DOMContentLoaded', function() {
+        window.addEventListener('DOMContentLoaded', async function() {
             // 新增: 設置報告標題
             const today = new Date();
             const year = today.getFullYear();
@@ -2670,22 +2669,26 @@
                 salesReportTitle.textContent = `${year}-${month}-${day} 銷售總覽`;
             }
 
-            const data = loadAllData(); // 使用新的加載函數
-            if (data) {
-                // 設置庫存視圖
-                displayCharts(data, window.salesData, window.selectedSalesMonth);
-                // 設置銷售趨勢視圖
-                setupSalesTrendTab(window.fullSalesData);
-            } else {
-                document.getElementById('chartContainer').innerHTML = '<p>沒有數據可顯示，請返回主頁面重新生成</p>';
+            try {
+                await loadAllData(); // 使用新的異步加載函數
+                
+                // 檢查數據是否存在
+                if (window.inventoryData) {
+                    // 設置庫存視圖
+                    displayCharts(window.inventoryData, window.salesData, window.selectedSalesMonth);
+                    // 設置銷售趨勢視圖
+                    setupSalesTrendTab(window.fullSalesData);
+                } else {
+                    throw new Error('數據未成功加載。');
+                }
+            } catch (error) {
+                 document.getElementById('chartContainer').innerHTML = '<p>沒有數據可顯示，請返回主頁面重新生成</p>';
                 document.getElementById('summaryText').textContent = '無法載入數據';
                 const loadingDiv = document.querySelector('.loading');
                 if (loadingDiv) {
                     loadingDiv.style.display = 'none';
                 }
             }
-
-
         });
 
         // 添加教學區塊的展開/收合功能

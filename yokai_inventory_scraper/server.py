@@ -8,15 +8,18 @@ import time
 import threading
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
+import subprocess
+import logging
+import traceback
 from dateutil.parser import parse as parse_date
-from werkzeug.utils import secure_filename
-import pandas as pd
-from io import BytesIO
 
 
 # --- Custom Imports ---
-from database import init_db, get_db, Inventory, Store, SalesData
+from database import init_db, get_db, Inventory, Store, Transaction
 from scraper import run_scraper as run_scraper_function, parse_inventory_from_text, save_to_database, save_to_json
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # --- Pre-startup Configuration ---
 # Get the directory where the script is located
@@ -143,90 +146,6 @@ def get_scraper_status():
     with state_lock:
         return jsonify(scraper_state)
 
-@app.route('/api/sales/upload', methods=['POST'])
-def upload_sales_data():
-    if 'salesFile' not in request.files:
-        return jsonify(success=False, message="沒有上傳檔案"), 400
-    
-    file = request.files['salesFile']
-    if file.filename == '':
-        return jsonify(success=False, message="未選擇檔案"), 400
-
-    if file and (file.filename.endswith('.xlsx') or file.filename.endswith('.xls')):
-        db_session = next(get_db())
-        try:
-            # Step 1: Delete all existing sales data
-            num_deleted = db_session.query(SalesData).delete()
-            
-            # Step 2: Read the new file into a pandas DataFrame
-            file_content = file.read()
-            df = pd.read_excel(BytesIO(file_content))
-            
-            # Step 3: Clean and process data
-            df.columns = [c.strip() for c in df.columns]
-
-            column_mapping = {
-                'date': ['日期', '銷售日期', '交易日期'],
-                'shop_name': ['店名', '分店', '門市', '店舖名稱'],
-                'product_name': ['產品', '產品名稱', '商品', '商品名稱'],
-                'pay_type': ['支付方式', '付款方式'],
-                'amount': ['金額', '銷售額', '價格', '單價']
-            }
-
-            def find_column(df_columns, possible_names):
-                for name in possible_names:
-                    if name in df_columns:
-                        return name
-                return None
-
-            actual_columns = {
-                key: find_column(df.columns, names) for key, names in column_mapping.items()
-            }
-
-            if not all(actual_columns.values()):
-                missing = [key for key, val in actual_columns.items() if val is None]
-                return jsonify(success=False, message=f"檔案缺少必要的欄位: {', '.join(missing)}"), 400
-            
-            # Step 4: Prepare data for bulk insertion
-            sales_records_to_add = []
-            for _, row in df.iterrows():
-                # Skip rows where essential data might be missing
-                if pd.isna(row[actual_columns['date']]) or pd.isna(row[actual_columns['amount']]):
-                    continue
-                
-                # Convert date, handling potential format issues
-                try:
-                    sale_date = pd.to_datetime(row[actual_columns['date']]).date()
-                except (ValueError, TypeError):
-                    continue # Skip if date is not valid
-
-                record = SalesData(
-                    date=sale_date,
-                    shop_name=row.get(actual_columns['shop_name'], 'N/A'),
-                    product_name=row.get(actual_columns['product_name'], 'N/A'),
-                    pay_type=row.get(actual_columns['pay_type'], 'N/A'),
-                    amount=float(row.get(actual_columns['amount'], 0))
-                )
-                sales_records_to_add.append(record)
-
-            # Step 5: Bulk insert into the database
-            db_session.bulk_save_objects(sales_records_to_add)
-            db_session.commit()
-            
-            return jsonify(
-                success=True, 
-                message=f"成功刪除 {num_deleted} 筆舊紀錄，並匯入 {len(sales_records_to_add)} 筆新銷售資料。"
-            )
-
-        except Exception as e:
-            db_session.rollback()
-            return jsonify(success=False, message=f"處理檔案時發生錯誤: {str(e)}"), 500
-        finally:
-            db_session.close()
-
-    return jsonify(success=False, message="不支援的檔案格式，請上傳 Excel (.xlsx) 檔案"), 400
-
-
 def to_camel_case(snake_str):
     """
     Converts a snake_case string to camelCase.
@@ -319,7 +238,91 @@ def update_store_data(store_key):
     finally:
         db.close()
 
-@app.route('/api/inventory/<string:store_key>', methods=['DELETE'])
+@app.route('/api/transactions', methods=['POST'])
+def add_transactions():
+    """
+    Receives a list of transactions, clears existing ones, and saves the new ones.
+    """
+    transactions_data = request.get_json()
+    if not isinstance(transactions_data, list):
+        return jsonify({"success": False, "message": "Invalid data format. Expected a list of transactions."}), 400
+
+    db: Session = next(get_db())
+    try:
+        # Clear existing transactions
+        db.query(Transaction).delete()
+        
+        new_transactions = []
+        
+        # Cache stores to avoid querying in a loop
+        all_stores = db.query(Store).all()
+        store_map = {s.store_key.split('-')[0]: s for s in all_stores}
+
+        for item in transactions_data:
+            shop_name = item.get('shopName')
+            if not shop_name:
+                continue
+
+            # Find the first store that matches the shop name.
+            # This is an assumption because sales data does not contain machine_id.
+            store = store_map.get(shop_name)
+            
+            if store:
+                new_transactions.append(Transaction(
+                    store_key=store.store_key,
+                    transaction_time=parse_date(item.get('date')),
+                    amount=int(float(item.get('amount', 0))),
+                    product_name=item.get('product'),
+                    payment_type=item.get('payType')
+                ))
+
+        if new_transactions:
+            db.bulk_save_objects(new_transactions)
+        
+        db.commit()
+        return jsonify({"success": True, "message": f"Successfully added {len(new_transactions)} transactions."})
+
+    except Exception as e:
+        db.rollback()
+        logging.error(f"Error adding transactions: {e}")
+        traceback.print_exc()
+        return jsonify({"success": False, "message": str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/transactions', methods=['GET'])
+def get_transactions():
+    """
+    Returns all transactions in the format expected by presentation.html.
+    """
+    db: Session = next(get_db())
+    try:
+        transactions = db.query(Transaction).all()
+        
+        # Create a map of store_key to store_name for quick lookup
+        stores = {s.store_key: s.store_key.split('-')[0] for s in db.query(Store).all()}
+
+        result = [
+            {
+                "shopName": stores.get(t.store_key, "Unknown"),
+                "date": t.transaction_time.isoformat(),
+                "amount": t.amount,
+                "product": t.product_name,
+                "payType": t.payment_type,
+            }
+            for t in transactions
+        ]
+        return jsonify(result)
+    except Exception as e:
+        logging.error(f"Error getting transactions: {e}")
+        traceback.print_exc()
+        return jsonify({"success": False, "message": str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/inventory/<store_key>', methods=['DELETE'])
 def delete_inventory_data(store_key):
     """
     Deletes all inventory and custom data associated with a specific store_key.
@@ -333,6 +336,7 @@ def delete_inventory_data(store_key):
 
         db.query(Inventory).filter_by(store=store_name, machine_id=machine_id).delete(synchronize_session=False)
         db.query(Store).filter_by(store_key=store_key).delete(synchronize_session=False)
+        db.query(Transaction).filter_by(store_key=store_key).delete(synchronize_session=False)
 
         db.commit()
 
