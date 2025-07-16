@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 from dateutil.parser import parse as parse_date
 import pandas as pd
+import traceback
 
 
 # --- Custom Imports ---
@@ -195,66 +196,78 @@ def get_data():
     finally:
         db.close()
 
-@app.route('/api/stores/<string:store_key>', methods=['POST'])
-def update_store_data(store_key):
+@app.route('/api/stores/<store_key>', methods=['POST'])
+def update_store(store_key):
     """
-    Updates the custom data for a specific store (address, note, sales, hidden status).
-    This is the new endpoint for saving user edits.
+    Updates or creates a store's address, note, and manual sales data.
     """
     data = request.get_json()
     if not data:
-        return jsonify({"success": False, "message": "No data provided"}), 400
+        return jsonify(success=False, message="Invalid JSON data"), 400
 
-    db: Session = next(get_db())
+    db = get_db()
     try:
+        # Find if the store entry already exists
         store = db.query(Store).filter(Store.store_key == store_key).first()
-        
-        if not store:
-            store = Store(store_key=store_key)
+
+        if store:
+            # Update existing store
+            if 'address' in data:
+                store.address = data['address']
+            if 'note' in data:
+                store.note = data['note']
+            if 'manualSales' in data:
+                store.manual_sales = data['manualSales']
+            if 'isHidden' in data:
+                store.is_hidden = data['isHidden']
+        else:
+            # Create new store if it doesn't exist
+            store = Store(
+                store_key=store_key,
+                address=data.get('address'),
+                note=data.get('note'),
+                manual_sales=data.get('manualSales'),
+                is_hidden=data.get('isHidden', False)
+            )
             db.add(store)
         
-        if 'address' in data:
-            store.address = data['address']
-        if 'note' in data:
-            store.note = data['note']
-        if 'manualSales' in data:
-            store.manual_sales = data['manualSales']
-        if 'isHidden' in data:
-            store.is_hidden = data['isHidden']
-            
         db.commit()
-        db.refresh(store)
-        
-        return jsonify({"success": True, "data": store.to_dict()})
-        
+        return jsonify(success=True, data=store.to_dict())
     except Exception as e:
         db.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return jsonify(success=False, message=str(e)), 500
     finally:
         db.close()
 
-@app.route('/api/inventory/<string:store_key>', methods=['DELETE'])
-def delete_inventory_data(store_key):
+
+@app.route('/api/inventory/<store_key>', methods=['DELETE'])
+def delete_inventory_and_store(store_key):
     """
-    Deletes all inventory and custom data associated with a specific store_key.
+    Deletes all inventory and store-related data for a given store_key.
+    This is a permanent and destructive action.
     """
     if not store_key:
-        return jsonify({"success": False, "message": "store_key is required"}), 400
+        return jsonify(success=False, message="store_key is required"), 400
+    
+    store, machine_id = store_key.split('-', 1)
 
-    db: Session = next(get_db())
+    db = get_db()
     try:
-        store_name, machine_id = store_key.split('-', 1)
-
-        db.query(Inventory).filter_by(store=store_name, machine_id=machine_id).delete(synchronize_session=False)
-        db.query(Store).filter_by(store_key=store_key).delete(synchronize_session=False)
+        # Delete from Inventory table
+        inventory_deleted_count = db.query(Inventory).filter_by(store=store, machine_id=machine_id).delete()
+        
+        # Delete from Store table
+        store_deleted_count = db.query(Store).filter_by(store_key=store_key).delete()
 
         db.commit()
-
-        return jsonify({"success": True, "message": "Data deleted successfully."})
-
+        
+        return jsonify(
+            success=True, 
+            message=f"成功刪除 {inventory_deleted_count} 筆庫存紀錄和 {store_deleted_count} 筆商店資訊。"
+        )
     except Exception as e:
         db.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return jsonify(success=False, message=str(e)), 500
     finally:
         db.close()
 
