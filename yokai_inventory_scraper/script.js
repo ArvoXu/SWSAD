@@ -438,17 +438,17 @@ document.addEventListener('DOMContentLoaded', function () {
                     defval: null
                 });
 
-                // 修正：將欄位名稱從 'Trasaction Date' 改為 'Transaction Date'
+                // 修正：欄位名稱必須與 Excel 中的完全一致，即使有拼寫錯誤
                 const fullSalesData = rawData.map(row => ({
                     shopName: row['Shop name'],
                     product: row['Product'],
-                    date: row['Transaction Date'], // 修正拼寫錯誤
+                    date: row['Trasaction Date'], // 改回匹配 Excel 的 'Trasaction Date'
                     amount: row['Total Transaction Amount'],
                     payType: row['Pay type']
                 })).filter(item => item.shopName && item.date && item.amount);
 
                 if (fullSalesData.length === 0) {
-                    alert('無法從 Excel 檔案中解析出有效的銷售數據。請檢查欄位名稱是否正確 (例如: "Shop name", "Transaction Date" 等) 且資料格式是否無誤。');
+                    alert('無法從 Excel 檔案中解析出有效的銷售數據。請檢查欄位名稱是否正確 (例如: "Shop name", "Trasaction Date" 等) 且資料格式是否無誤。');
                     salesFileInput.value = '';
                     return;
                 }
