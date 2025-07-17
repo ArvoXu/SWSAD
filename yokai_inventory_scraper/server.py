@@ -67,13 +67,19 @@ def run_scraper_background():
     """
     This function runs the scraper in a background thread and updates the global state.
     It now uses the new database functions.
+    It's also thread-safe, checking if another job is already running.
     """
     global scraper_state
     
-    # Update state to 'running'
     with state_lock:
+        if scraper_state['status'] == 'running':
+            print(f"[{datetime.now()}] Scraper start requested, but a job is already in progress. Aborting.")
+            return
+        
+        # Update state to 'running'
         scraper_state['status'] = 'running'
         scraper_state['last_run_output'] = ''
+        print(f"[{datetime.now()}] Scraper status set to 'running'. Starting job.")
 
     try:
         # We need to call the actual scraper logic here.
@@ -394,13 +400,13 @@ def serve_static_files(path):
 def run_scheduler():
     """
     Sets up and runs the scheduler in a loop.
-    We'll disable this for now as the background trigger is the main focus.
-    TODO: Re-evaluate the need for a scheduler with the new architecture.
     """
-    # schedule.every().hour.at(":10").do(run_scraper_job)
-    print("Scheduler is currently disabled.")
+    schedule.every().hour.at(":10").do(run_scraper_background)
+    print("Scheduler started. Will run scraper automatically at 10 minutes past every hour.")
+    
     while True:
-        time.sleep(3600) # Sleep for an hour
+        schedule.run_pending()
+        time.sleep(1) # Sleep for a second to avoid busy-waiting
 
 # --- Main Execution ---
 if __name__ == '__main__':
