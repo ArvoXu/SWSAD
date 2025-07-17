@@ -1270,9 +1270,10 @@
                             sales: item.manualSales || 0 // 恢復使用後端提供的銷售額
                         };
                     }
-                    const processTime = item.processTime ? new Date(item.processTime).getTime() : 0;
-                    if (processTime > latestProcessTime) {
-                        latestProcessTime = processTime;
+                    // 前端容錯：確保 processTime 總是被正確處理為 Date 物件
+                    const processTimeValue = item.processTime ? new Date(item.processTime).getTime() : 0;
+                    if (processTimeValue > latestProcessTime) {
+                        latestProcessTime = processTimeValue;
                     }
                 });
                 window.storeNotesAndAddresses = notes;

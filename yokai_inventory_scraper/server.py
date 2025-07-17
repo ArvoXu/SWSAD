@@ -164,7 +164,6 @@ def get_data():
     """
     db: Session = next(get_db())
     try:
-        # 1. Fetch all inventory data
         inventory_items = db.query(Inventory).all()
         
         # 2. Fetch all custom store data
