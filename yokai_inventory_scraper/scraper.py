@@ -67,7 +67,7 @@ def scrape_all_inventory_text():
         print("Login successful.")
 
         # --- 等待一下下 ---
-        time.sleep(2) # 等待 3 秒，你可以根據需要調整秒數
+        time.sleep(3) # 等待 3 秒，你可以根據需要調整秒數
 
         # --- Navigate to Inventory ---
         print("Navigating to Store Management...")

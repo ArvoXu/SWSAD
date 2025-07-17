@@ -1,7 +1,7 @@
 import sys
 import os
 from datetime import datetime
-from flask import Flask, jsonify, send_from_directory, request
+from flask import Flask, jsonify, send_from_directory, request, redirect, render_template, session, flash
 from flask_cors import CORS
 import schedule
 import time
@@ -40,8 +40,16 @@ else:
 
 
 # --- Flask App Setup ---
-app = Flask(__name__, static_folder=script_dir, static_url_path='')
+app = Flask(__name__, 
+            static_folder=script_dir, 
+            static_url_path='',
+            template_folder=os.path.join(script_dir, 'templates')) # Point to the templates folder
 CORS(app) # 允許所有來源的跨域請求，方便本地開發
+
+# --- Secret Key for Session Management ---
+# It's crucial this is set and kept secret in production.
+# We'll load it from an environment variable.
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-key-for-local-testing")
 
 # --- Global State for Scraper ---
 # This dictionary will hold the state of our scraper job.
@@ -526,15 +534,54 @@ def delete_inventory_data(store_key):
         db.close()
 
 
+# --- Password Protected Routes ---
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Handles the login process."""
+    if request.method == 'POST':
+        password = request.form.get('password')
+        # Load the access password from environment variables
+        access_password = os.getenv("ACCESS_PASSWORD")
+        
+        if not access_password:
+             flash("錯誤：應用程式未設定訪問密碼。")
+             return render_template('login.html'), 500
+
+        if password == access_password:
+            session['logged_in'] = True
+            return redirect('/')
+        else:
+            flash('密碼錯誤，請重試。')
+            return redirect('/login')
+            
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    """Logs the user out."""
+    session.pop('logged_in', None)
+    return redirect('/login')
+
+
 # --- Static File Serving ---
 @app.route('/')
 def serve_index():
+    if not session.get('logged_in'):
+        return redirect('/login')
     return send_from_directory(script_dir, 'index.html')
+
+@app.route('/presentation')
+def serve_presentation():
+    return send_from_directory(script_dir, 'presentation.html')
 
 @app.route('/<path:path>')
 def serve_static_files(path):
-    # This will serve other files like script.js and presentation.html
-    return send_from_directory(script_dir, path)
+    # This will serve other files like script.js
+    if path != 'presentation.html':
+        return send_from_directory(script_dir, path)
+    else:
+        # Redirect to the clean URL if someone tries to access the .html version directly
+        return redirect('/presentation')
 
 
 # --- Scheduler Setup ---
