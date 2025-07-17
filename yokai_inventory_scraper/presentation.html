@@ -1423,14 +1423,9 @@
                 chartContainer.innerHTML = '<p>沒有數據可顯示</p>';
                 return;
             }
-
-            const hiddenStores = window.hiddenStores || {};
             
-            // 對數據進行預處理，移除重複的機台信息項
-            const cleanedData = data.filter(item => {
-                const storeKey = `${item.store}-${item.machineId}`;
-                return item.productName !== item.store && !hiddenStores[storeKey];
-            });
+            // 對數據進行預處理，根據後端提供的 isHidden 標誌過濾數據
+            const cleanedData = data.filter(item => !item.isHidden);
             
             // 按機台分組
             const storeGroups = {};
