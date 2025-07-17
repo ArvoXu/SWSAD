@@ -1580,8 +1580,8 @@
                 if (typeof d.date === 'number') {
                     d.jsDate = new Date((d.date - 25569) * 86400000);
                 } else if (d.date && typeof d.date === 'string') {
-                    // 強制將日期字符串解析為 UTC 時間，避免時區問題
-                    d.jsDate = new Date(d.date.endsWith('Z') ? d.date : d.date + 'Z');
+                    // 恢復：將日期字符串直接解析為本地時間，以匹配日期選擇器的時區
+                    d.jsDate = new Date(d.date);
                 }
             });
 
