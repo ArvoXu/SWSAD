@@ -2464,8 +2464,9 @@
                 }
                 
                 // --- NEW: 銷售排名邏輯 (per-machine, includes sold-out items) ---
-                const machineSalesData = salesData ? salesData[store] : null;
-                console.log(`[Debug] Rendering card for '${store}'. Trying to find this key in sales data. Result:`, salesData[store] ? 'FOUND' : 'NOT FOUND');
+                const storeNameForLookup = store.trim();
+                const machineSalesData = salesData ? salesData[storeNameForLookup] : null;
+                console.log(`[Debug] Rendering card for store: '${store}' (trimmed to '${storeNameForLookup}'). Lookup result:`, machineSalesData ? 'Found' : 'NOT FOUND');
 
                 // 創建一個庫存產品的查找表，方便快速獲取庫存量
                 const inStockProducts = new Map(products.map(p => [p.name, p.quantity]));
