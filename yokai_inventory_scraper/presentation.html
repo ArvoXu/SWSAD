@@ -1483,6 +1483,13 @@
                         }
 
                         aggregatedSales[shopName][productName].count++;
+                        
+                        // Add sales amount to the store's total
+                        if (!aggregatedSales[shopName].totalSales) {
+                            aggregatedSales[shopName].totalSales = 0;
+                        }
+                        aggregatedSales[shopName].totalSales += parseFloat(sale.amount) || 0;
+
                         const saleDateStr = sale.jsDate.toISOString().split('T')[0];
                         if (saleDateStr > aggregatedSales[shopName][productName].lastSoldDate) {
                             aggregatedSales[shopName][productName].lastSoldDate = saleDateStr;
@@ -2419,6 +2426,9 @@
                 // 新增：對日期進行防禦性檢查
                 const lastUpdatedText = lastUpdated ? lastUpdated.split(' ')[0] : 'N/A';
                 const lastCleanedText = lastCleaned ? lastCleaned.split(' ')[0] : 'N/A';
+                
+                // --- NEW: Get the last 30 days sales for this specific store ---
+                const machineSalesTotal = salesData[store] ? salesData[store].totalSales : 0;
 
                 // 創建卡片
                 const cardDiv = document.createElement('div');
@@ -2429,7 +2439,7 @@
                 cardDiv.innerHTML = `
                     <div class="chart-card-title">
                         ${store}<br>${machineId}
-                        ${noteData.sales ? `<div class="sales-info">月銷售額: ${noteData.sales.toLocaleString()} 元</div>` : ''}
+                        ${machineSalesTotal > 0 ? `<div class="sales-info">過去一個月銷售額: ${machineSalesTotal.toLocaleString()} 元</div>` : ''}
                     </div>
                     <div class="chart-card-chart">
                         <canvas id="chart-${key}"></canvas>
