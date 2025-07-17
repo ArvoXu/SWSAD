@@ -66,12 +66,14 @@ def run_sales_scraper():
         order_management_item.click()
         print("Navigation complete.")
         
-        print("Setting a very large date range to get all data...")
+        print("Setting date range...")
         start_date_input = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Select start date']")))
-        driver.execute_script("arguments[0].value = '2025-01-01';", start_date_input)
+        start_date_input.clear()
+        start_date_input.send_keys("2025-01-01")
 
         end_date_input = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Select end date']")))
-        driver.execute_script("arguments[0].value = '2026-01-01';", end_date_input)
+        end_date_input.clear()
+        end_date_input.send_keys("2026-01-01")
         print("Date range set.")
         
         # Adding a small delay for search button to become interactable if needed
