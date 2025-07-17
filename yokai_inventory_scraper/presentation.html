@@ -2339,6 +2339,10 @@
                 const maxCapacity = 50;
                 const usagePercentage = Math.min(Math.round((totalQuantity / maxCapacity) * 100), 100);
                 
+                // 新增：對日期進行防禦性檢查
+                const lastUpdatedText = lastUpdated ? lastUpdated.split(' ')[0] : 'N/A';
+                const lastCleanedText = lastCleaned ? lastCleaned.split(' ')[0] : 'N/A';
+
                 // 創建卡片
                 const cardDiv = document.createElement('div');
                 cardDiv.className = 'chart-card';
@@ -2355,8 +2359,8 @@
                     </div>
                     <div class="chart-card-info">
                         <div>使用量: ${totalQuantity}/${maxCapacity} (${usagePercentage}%)</div>
-                        <div>補貨: ${lastUpdated.split(' ')[0]}</div>
-                        <div>清潔: ${lastCleaned.split(' ')[0]}</div>
+                        <div>補貨: ${lastUpdatedText}</div>
+                        <div>清潔: ${lastCleanedText}</div>
                     </div>
                 `;
                 
@@ -2366,8 +2370,8 @@
                 
                 let detailHtml = `
                     <div class="detail-dates">
-                        <div>補貨: ${lastUpdated.split(' ')[0]}</div>
-                        <div>清潔: ${lastCleaned.split(' ')[0]}</div>
+                        <div>補貨: ${lastUpdatedText}</div>
+                        <div>清潔: ${lastCleanedText}</div>
                     </div>
                 `;
                 
