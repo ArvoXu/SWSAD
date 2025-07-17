@@ -1572,30 +1572,18 @@
             }
             
             // 預處理日期
-            let invalidDateCount = 0;
             fullSalesData.forEach(d => {
-                let dateObj;
-                if (typeof d.date === 'number') {
-                    dateObj = new Date((d.date - 25569) * 86400000);
-                } else if (typeof d.date === 'string') {
-                    // 嘗試替換斜線以提高兼容性
-                    dateObj = new Date(d.date.replace(/-/g, '/'));
-                }
-                
-                // 新增：檢查日期是否有效
-                if (dateObj && !isNaN(dateObj)) {
-                    d.jsDate = dateObj;
-                } else {
-                    if (invalidDateCount < 10) { // 只顯示前10筆錯誤以避免刷屏
-                        console.warn('[日期解析警告] 發現無效或無法解析的日期格式，該筆資料將被忽略:', d);
+                if (typeof d.date === 'string') {
+                    // 手動、可靠地解析 'YYYY-MM-DD HH:mm:ss' 格式
+                    const parts = d.date.match(/(\d{4})-(\d{2})-(\d{2})\s(\d{2}):(\d{2}):(\d{2})/);
+                    if (parts) {
+                        // parts[2] - 1 是因為 JavaScript 的月份是從 0 開始的
+                        d.jsDate = new Date(parts[1], parts[2] - 1, parts[3], parts[4], parts[5], parts[6]);
                     }
-                    invalidDateCount++;
+                } else if (typeof d.date === 'number') {
+                     d.jsDate = new Date((d.date - 25569) * 86400000);
                 }
             });
-
-            if (invalidDateCount > 0) {
-                console.error(`[日期解析錯誤] 共發現 ${invalidDateCount} 筆交易紀錄因日期格式問題被忽略。請檢查 Excel 檔案中的 'Trasaction Date' 欄位。`);
-            }
 
             // 初始化日期選擇器
             datePickerInstance = new Litepicker({
@@ -2728,23 +2716,18 @@
             }
 
             try {
-                console.log('[Debug] DOMContentLoaded: Starting data load process...');
                 await loadAllData(); // 使用新的異步加載函數
                 
                 // 檢查數據是否存在
                 if (window.inventoryData) {
-                    console.log('[Debug] DOMContentLoaded: Data loaded. Calling displayCharts and setupSalesTrendTab...');
                 // 設置庫存視圖
                     displayCharts(window.inventoryData, window.salesData, window.selectedSalesMonth);
                 // 設置銷售趨勢視圖
                 setupSalesTrendTab(window.fullSalesData);
-                    console.log('[Debug] DOMContentLoaded: Render functions called.');
                 } else {
-                    console.error('[Debug] DOMContentLoaded: window.inventoryData is missing after loadAllData.');
                     throw new Error('數據未成功加載。');
                 }
             } catch (error) {
-                console.error('[Debug] DOMContentLoaded: Caught an error during initialization.', error);
                 document.getElementById('chartContainer').innerHTML = '<p>沒有數據可顯示，請返回主頁面重新生成</p>';
                 document.getElementById('summaryText').textContent = '無法載入數據';
                 const loadingDiv = document.querySelector('.loading');
