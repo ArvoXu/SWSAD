@@ -1267,7 +1267,7 @@
                         notes[storeKey] = {
                             address: item.address,
                             note: item.note,
-                            sales: item.manualSales || 0 // 使用後端提供的銷售額
+                            sales: item.manualSales || 0 // 恢復使用後端提供的、匯入時計算的銷售額
                         };
                     }
                     const processTime = item.processTime ? new Date(item.processTime).getTime() : 0;
@@ -1275,11 +1275,12 @@
                         latestProcessTime = processTime;
                     }
                 });
+                
                 window.storeNotesAndAddresses = notes;
                 if(latestProcessTime > 0) {
                      window.updateTime = new Date(latestProcessTime).toLocaleString('zh-TW');
                 }
-                 // 模擬舊版數據結構，以確保兼容性
+                 // 移除舊的、已棄用的全域變數
                 window.salesData = null; 
                 window.selectedSalesMonth = null;
                 
@@ -1388,7 +1389,7 @@
         }
         
         // 顯示圓餅圖
-        function displayCharts(data, salesData, selectedSalesMonth) {
+        function displayCharts(data) {
             const chartContainer = document.getElementById('chartContainer');
             chartContainer.innerHTML = '';
             
@@ -1472,7 +1473,7 @@
                     });
                 }
                 
-                renderStoreCards(dataToRender, storeNotesAndAddresses, salesData, selectedSalesMonth);
+                renderStoreCards(dataToRender, storeNotesAndAddresses);
                 updateSortButtonsState(currentInventorySort.key ? `sortBy${currentInventorySort.key}` : null);
             }
             
@@ -1506,11 +1507,7 @@
             summaryText.innerHTML = `共有 ${storeGroupsArray.length} 個機台的庫存數據，總計 ${cleanedData.length} 項產品數據<br>更新時間: ${updateTime}`;
 
             const salesSummaryText = document.getElementById('salesSummaryText');
-            if (selectedSalesMonth && salesData) {
-                salesSummaryText.textContent = `正在顯示基於 ${selectedSalesMonth} 的銷售數據排名。`;
-            } else {
-                salesSummaryText.textContent = '未加載銷售數據，無法顯示排名。';
-            }
+            salesSummaryText.textContent = '機台卡片內的銷售額與排名均基於您在主頁匯入時所選的月份計算。';
         }
         
         // --- 新的銷售趨勢圖表邏輯 ---
@@ -2300,7 +2297,7 @@
         }
         
         // 渲染機台卡片
-        function renderStoreCards(storeGroupsArray, storeNotesAndAddresses, salesData, selectedSalesMonth) {
+        function renderStoreCards(storeGroupsArray, storeNotesAndAddresses) {
             const chartContainer = document.getElementById('chartContainer');
             chartContainer.innerHTML = '';
             
@@ -2674,15 +2671,15 @@
                 
                 // 檢查數據是否存在
                 if (window.inventoryData) {
-                    // 設置庫存視圖
-                    displayCharts(window.inventoryData, window.salesData, window.selectedSalesMonth);
-                    // 設置銷售趨勢視圖
-                    setupSalesTrendTab(window.fullSalesData);
-                } else {
+                // 設置庫存視圖
+                    displayCharts(window.inventoryData);
+                // 設置銷售趨勢視圖
+                setupSalesTrendTab(window.fullSalesData);
+            } else {
                     throw new Error('數據未成功加載。');
                 }
             } catch (error) {
-                 document.getElementById('chartContainer').innerHTML = '<p>沒有數據可顯示，請返回主頁面重新生成</p>';
+                document.getElementById('chartContainer').innerHTML = '<p>沒有數據可顯示，請返回主頁面重新生成</p>';
                 document.getElementById('summaryText').textContent = '無法載入數據';
                 const loadingDiv = document.querySelector('.loading');
                 if (loadingDiv) {

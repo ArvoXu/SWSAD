@@ -418,7 +418,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const file = event.target.files[0];
         if (!file) return;
 
-        populateMonthSelector(); // Populate the dropdown before showing
+        populateMonthSelector(); // 恢復月份選擇器
         monthSelectionDialog.style.display = 'block';
 
         confirmMonthButton.onclick = () => {
@@ -444,40 +444,39 @@ document.addEventListener('DOMContentLoaded', function () {
             const firstSheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[firstSheetName];
                 
-                // Use the first row as headers, then map to the desired keys
                 const rawData = XLSX.utils.sheet_to_json(worksheet, {
-                    raw: false, // Keep dates as formatted strings
+                    raw: false,
                     defval: null
                 });
 
-                // Map the raw data to the format our API expects
                 const fullSalesData = rawData.map(row => ({
                     shopName: row['Shop name'],
                     product: row['Product'],
-                    date: row['Trasaction Date'],
+                    date: row['Transaction Date'],
                     amount: row['Total Transaction Amount'],
                     payType: row['Pay type']
-                })).filter(item => item.shopName && item.date && item.amount); // Filter out invalid rows
+                })).filter(item => item.shopName && item.date && item.amount);
 
+                if (fullSalesData.length === 0) {
+                    alert('無法從 Excel 檔案中解析出有效的銷售數據。請檢查欄位名稱是否正確。');
+                    salesFileInput.value = '';
+                    return;
+                }
 
-                // API-driven: Upload to server instead of saving to localStorage
+                // 任務一：上傳完整的交易紀錄
                 await uploadTransactions(fullSalesData);
 
-                // This part for local month-based sales can be removed or refactored
-                // For now, we'll keep it for manual_sales but it should be deprecated.
-                const salesData = processSalesDataForMonth(fullSalesData, selectedMonth);
+                // 任務二：根據選擇的月份計算銷售額並更新
+                const salesDataForMonth = processSalesDataForMonth(fullSalesData, selectedMonth);
+                await updateManualSales(salesDataForMonth);
                 
-                // Update manual_sales field in the database for each store
-                await updateManualSales(salesData);
-
-                // Refresh data from server to reflect changes
+                // 完成後刷新頁面數據
                 await fetchAndDisplayData();
 
             } catch (error) {
                 console.error('處理銷售文件時出錯:', error);
                 alert('處理銷售文件失敗: ' + error.message);
             } finally {
-                // Reset file input to allow re-uploading the same file
                 salesFileInput.value = '';
             }
         };
@@ -498,17 +497,16 @@ document.addEventListener('DOMContentLoaded', function () {
         } catch (error) {
             console.error('上傳交易數據失敗:', error);
             alert('上傳失敗: ' + error.message);
-            throw error; // Re-throw to be caught by the outer try-catch
+            throw error;
         }
     }
 
+    // --- 恢復以下兩個函數 ---
     function processSalesDataForMonth(fullSalesData, yyyymm) {
         const salesByStore = {};
         fullSalesData.forEach(row => {
             if (!row.date || !row.shopName || !row.amount) return;
             try {
-                // The date from xlsx might be a string like 'YYYY-MM-DD HH:mm:ss'
-                // or a number (Excel date). We need to handle both.
             let date;
             if (typeof row.date === 'number') {
                     date = new Date((row.date - 25569) * 86400000); // Excel date to JS date
@@ -532,8 +530,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     async function updateManualSales(salesData) {
-        // This function updates the 'manual_sales' field for each store.
-        // It's a temporary measure until the presentation layer fully uses the transactions table.
         const storeKeys = Object.keys(storeGroupsArray.reduce((acc, g) => {
             acc[g.store] = g.key;
             return acc;
@@ -543,11 +539,10 @@ document.addEventListener('DOMContentLoaded', function () {
             const storeKey = storeGroupsArray.find(g => g.store === storeName)?.key;
             if (storeKey) {
                 const payload = { manualSales: Math.round(salesData[storeName]) };
-                // Using updateStoreData to send update to the server
-                await updateStoreData(storeKey, payload, `更新 ${storeName} 銷售額`, true);
+                await updateStoreData(storeKey, payload, `更新 ${storeName} 銷售額`, true); // silent = true
             }
         }
-        alert('所有機台的月銷售額已更新。');
+        alert('所有機台的月銷售額已更新，用於庫存頁面排名。');
     }
 
 }); 
