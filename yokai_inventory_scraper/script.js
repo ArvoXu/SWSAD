@@ -25,6 +25,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const cancelMonthButton = document.getElementById('cancelMonthButton');
     const monthDialogCloseButton = monthSelectionDialog.querySelector('.close');
     const openChartWindowButton = document.getElementById('openChartWindowButton');
+    const autoUpdateSalesButton = document.getElementById('autoUpdateSalesButton');
     
     // --- Global State ---
     let currentView = 'card';
@@ -241,28 +242,28 @@ document.addEventListener('DOMContentLoaded', function () {
     
     // --- Background Scraper Handling ---
 
-    function pollScraperStatus() {
+    function pollScraperStatus(statusUrl, buttonElement, buttonText) {
         const statusCheckInterval = setInterval(async () => {
             try {
-                const response = await fetch('/scraper-status');
+                const response = await fetch(statusUrl);
                 const result = await response.json();
-                const updateButton = document.getElementById('autoUpdateButton');
+                
                 if (result.status === 'running') {
-                    updateButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 爬蟲執行中...';
+                    buttonElement.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${buttonText}執行中...`;
                 } else {
                     clearInterval(statusCheckInterval);
                     if (result.status === 'success') {
-                        updateButton.innerHTML = '<i class="fas fa-check-circle"></i> 更新成功';
-                        alert('資料庫更新成功！正在獲取最新資料...');
+                        buttonElement.innerHTML = `<i class="fas fa-check-circle"></i> ${buttonText}成功`;
+                        alert(`${buttonText}成功！正在獲取最新資料...`);
                         await fetchAndDisplayData();
                     } else if (result.status === 'error') {
-                        updateButton.innerHTML = '<i class="fas fa-times-circle"></i> 更新失敗';
-                        alert(`爬蟲執行失敗: ${result.last_run_output}`);
+                        buttonElement.innerHTML = `<i class="fas fa-times-circle"></i> ${buttonText}失敗`;
+                        alert(`${buttonText}失敗: ${result.last_run_output}`);
                     }
                     setTimeout(() => {
-                        if(updateButton) {
-                            updateButton.innerHTML = '一鍵更新';
-                            updateButton.disabled = false;
+                        if(buttonElement) {
+                            buttonElement.innerHTML = `一鍵更新${buttonText}`;
+                            buttonElement.disabled = false;
                         }
                     }, 3000);
                 }
@@ -280,17 +281,38 @@ document.addEventListener('DOMContentLoaded', function () {
             this.disabled = true;
             fetch('/run-scraper', { method: 'POST' }).then(response => {
                 if (response.status === 202) {
-                    this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 爬蟲執行中...';
-                    pollScraperStatus();
+                    this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 庫存更新執行中...';
+                    pollScraperStatus('/scraper-status', this, '庫存更新');
                 } else {
-                    this.innerHTML = '一鍵更新';
+                    this.innerHTML = '一鍵更新庫存';
                     this.disabled = false;
-                    alert('錯誤：無法啟動爬蟲，可能已在執行中。');
+                    alert('錯誤：無法啟動庫存更新，可能已在執行中。');
                 }
             }).catch(err => {
-                this.innerHTML = '一鍵更新';
+                this.innerHTML = '一鍵更新庫存';
                 this.disabled = false;
-                alert(`啟動爬蟲失敗: ${err.message}`);
+                alert(`啟動庫存更新失敗: ${err.message}`);
+            });
+        });
+    }
+    
+    if(autoUpdateSalesButton) {
+        autoUpdateSalesButton.addEventListener('click', function() {
+            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 請求已發送...';
+            this.disabled = true;
+            fetch('/run-sales-scraper', { method: 'POST' }).then(response => {
+                if (response.status === 202) {
+                    this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 銷售額更新執行中...';
+                    pollScraperStatus('/sales-scraper-status', this, '銷售額更新');
+                } else {
+                    this.innerHTML = '一鍵更新銷售額';
+                    this.disabled = false;
+                    alert('錯誤：無法啟動銷售額更新，可能已在執行中。');
+                }
+            }).catch(err => {
+                this.innerHTML = '一鍵更新銷售額';
+                this.disabled = false;
+                alert(`啟動銷售額更新失敗: ${err.message}`);
             });
         });
     }

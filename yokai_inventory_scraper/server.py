@@ -12,11 +12,14 @@ import subprocess
 import logging
 import traceback
 from dateutil.parser import parse as parse_date
+import pandas as pd
+import shutil
 
 
 # --- Custom Imports ---
 from database import init_db, get_db, Inventory, Store, Transaction
-from scraper import run_scraper as run_scraper_function, parse_inventory_from_text, save_to_database, save_to_json
+from scraper import run_scraper as run_inventory_scraper_function, parse_inventory_from_text, save_to_database, save_to_json
+from salesscraper import run_sales_scraper
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -49,6 +52,14 @@ scraper_state = {
 }
 state_lock = threading.Lock()
 
+# --- Global State for Sales Scraper ---
+sales_scraper_state = {
+    "status": "idle", # Can be 'idle', 'running', 'success', 'error'
+    "last_run_output": ""
+}
+sales_state_lock = threading.Lock()
+
+
 # --- Global Variables & Constants ---
 # Use the script's directory to build absolute paths
 # DB_PATH = os.path.join(script_dir, 'inventory.db') # This line is no longer needed
@@ -63,7 +74,7 @@ init_db() # This command creates the tables in our PostgreSQL or SQLite database
 print("Database initialization complete.")
 
 
-def run_scraper_background():
+def run_inventory_scraper_background():
     """
     This function runs the scraper in a background thread and updates the global state.
     It now uses the new database functions.
@@ -87,7 +98,7 @@ def run_scraper_background():
         # we directly call the necessary functions.
         
         # 1. Execute the web scraper to get raw text
-        raw_inventory_text = run_scraper_function(headless=True)
+        raw_inventory_text = run_inventory_scraper_function(headless=True)
         
         if raw_inventory_text:
             # 2. Parse the raw text into structured data
@@ -126,6 +137,113 @@ def run_scraper_background():
         scraper_state['last_run_output'] = output
 
 
+def run_sales_scraper_background():
+    """
+    Runs the sales scraper in a background thread, processes the downloaded file,
+    and updates the database.
+    """
+    global sales_scraper_state
+    
+    with sales_state_lock:
+        if sales_scraper_state['status'] == 'running':
+            print(f"[{datetime.now()}] Sales scraper start requested, but a job is already in progress. Aborting.")
+            return
+        sales_scraper_state['status'] = 'running'
+        sales_scraper_state['last_run_output'] = ''
+        print(f"[{datetime.now()}] Sales scraper status set to 'running'. Starting job.")
+
+    downloaded_file_path = None
+    try:
+        # 1. Run the scraper to download the file
+        downloaded_file_path = run_sales_scraper()
+        
+        # 2. Process the downloaded Excel file
+        if downloaded_file_path:
+            # Read the excel file into a pandas DataFrame
+            df = pd.read_excel(downloaded_file_path)
+            
+            # Map DataFrame columns to the keys expected by add_transactions
+            df.rename(columns={
+                'Shop name': 'shopName',
+                'Product': 'product',
+                'Trasaction Date': 'date', # Matching the original manual upload key
+                'Total Transaction Amount': 'amount',
+                'Pay type': 'payType'
+            }, inplace=True)
+            
+            # Convert DataFrame to list of dictionaries
+            transactions_data = df.to_dict('records')
+            
+            # 3. Call the existing function to add transactions to the DB
+            db: Session = next(get_db())
+            try:
+                # This block is a simplified version of the logic in add_transactions endpoint
+                db.query(Transaction).delete()
+                
+                all_stores = db.query(Store).all()
+                store_name_map = {}
+                for s in all_stores:
+                    name_parts = s.store_key.rsplit('-', 1)
+                    name = name_parts[0]
+                    if name not in store_name_map:
+                        store_name_map[name] = s
+
+                new_transactions = []
+                for item in transactions_data:
+                    shop_name_raw = item.get('shopName')
+                    if not shop_name_raw or pd.isna(item.get('date')):
+                        continue
+                    
+                    shop_name = str(shop_name_raw).strip()
+                    store = store_name_map.get(shop_name)
+                    
+                    if not store:
+                        new_store_key = f"{shop_name}-provisional_sales"
+                        store = db.query(Store).filter(Store.store_key == new_store_key).first()
+                        if not store:
+                            store = Store(store_key=new_store_key)
+                            db.add(store)
+                            db.flush()
+                        store_name_map[shop_name] = store
+
+                    new_transactions.append(Transaction(
+                        store_key=store.store_key,
+                        transaction_time=pd.to_datetime(item.get('date')),
+                        amount=int(float(item.get('amount', 0))),
+                        product_name=str(item.get('product')),
+                        payment_type=str(item.get('payType'))
+                    ))
+
+                if new_transactions:
+                    db.bulk_save_objects(new_transactions)
+                
+                db.commit()
+                output = f"Sales scraper finished successfully. Processed {len(new_transactions)} transactions."
+                status = "success"
+            finally:
+                db.close()
+        else:
+            output = "Sales scraper ran but did not return a file path."
+            status = "error"
+            
+    except Exception as e:
+        output = f"An error occurred in background sales scraper: {str(e)}"
+        status = "error"
+    finally:
+        # 4. Clean up the downloaded file and temporary directory
+        if downloaded_file_path:
+            download_dir = os.path.dirname(downloaded_file_path)
+            try:
+                shutil.rmtree(download_dir)
+                print(f"Successfully cleaned up temporary directory: {download_dir}")
+            except OSError as e:
+                print(f"Error removing directory {download_dir}: {e.strerror}")
+                
+        with sales_state_lock:
+            sales_scraper_state['status'] = status
+            sales_scraper_state['last_run_output'] = output
+
+
 # --- API Endpoints ---
 @app.route('/run-scraper', methods=['POST'])
 def trigger_scraper():
@@ -139,7 +257,7 @@ def trigger_scraper():
 
     print(f"[{datetime.now()}] Received request to run scraper in background.")
     # Run the scraper in a separate thread
-    thread = threading.Thread(target=run_scraper_background)
+    thread = threading.Thread(target=run_inventory_scraper_background)
     thread.start()
     
     return jsonify({'success': True, 'message': 'Scraper job started in the background.'}), 202
@@ -151,6 +269,29 @@ def get_scraper_status():
     """
     with state_lock:
         return jsonify(scraper_state)
+
+@app.route('/run-sales-scraper', methods=['POST'])
+def trigger_sales_scraper():
+    """
+    Triggers the sales scraper to run in a background thread.
+    """
+    with sales_state_lock:
+        if sales_scraper_state['status'] == 'running':
+            return jsonify({'success': False, 'message': 'Sales scraper is already running.'}), 409
+
+    print(f"[{datetime.now()}] Received request to run sales scraper in background.")
+    thread = threading.Thread(target=run_sales_scraper_background)
+    thread.start()
+    
+    return jsonify({'success': True, 'message': 'Sales scraper job started in the background.'}), 202
+
+@app.route('/sales-scraper-status', methods=['GET'])
+def get_sales_scraper_status():
+    """
+    Returns the current status of the sales scraper job.
+    """
+    with sales_state_lock:
+        return jsonify(sales_scraper_state)
 
 def to_camel_case(snake_str):
     """
@@ -401,7 +542,7 @@ def run_scheduler():
     """
     Sets up and runs the scheduler in a loop.
     """
-    schedule.every().hour.at(":10").do(run_scraper_background)
+    schedule.every().hour.at(":10").do(run_inventory_scraper_background)
     print("Scheduler started. Will run scraper automatically at 10 minutes past every hour.")
     
     while True:
