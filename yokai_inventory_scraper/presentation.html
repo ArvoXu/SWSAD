@@ -1269,6 +1269,24 @@
                 if (!transactionsRes.ok) throw new Error(`獲取交易數據失敗: ${transactionsRes.statusText}`);
                 window.fullSalesData = await transactionsRes.json();
 
+                // --- NEW CENTRALIZED DATE PARSING ---
+                if (window.fullSalesData) {
+                    console.log('[Debug] loadAllData: Pre-parsing dates for fullSalesData...');
+                    window.fullSalesData.forEach(d => {
+                        if (d.date && typeof d.date === 'string') {
+                            d.jsDate = new Date(d.date); // Simple and robust
+                            if (isNaN(d.jsDate.getTime())) {
+                                console.warn(`[Debug] Failed to parse date, setting to null. Original value:`, d.date);
+                                d.jsDate = null;
+                            }
+                        } else {
+                            d.jsDate = null;
+                        }
+                    });
+                    console.log('[Debug] loadAllData: Date pre-parsing complete.');
+                }
+                // --- END ---
+
                 // --- Logging Start ---
                 console.log('[Debug] Parsed full sales data:', window.fullSalesData);
                 // --- Logging End ---
@@ -1473,7 +1491,6 @@
                     last30DaysSalesData = aggregatedSales;
                 }
             }
-            console.log('[Debug] Aggregated sales data for the last 30 days:', last30DaysSalesData);
             
             // 對數據進行預處理，根據後端提供的 isHidden 標誌過濾數據
             const cleanedData = data.filter(item => !item.isHidden);
@@ -1619,27 +1636,8 @@
                 return;
             }
             
-            // --- NEW, ROBUST DATE PARSING ---
-            console.log('[Debug] Starting date pre-processing. First 5 raw dates from server:', fullSalesData.slice(0, 5).map(d => d.date));
-
-            fullSalesData.forEach(d => {
-                if (d.date && typeof d.date === 'string') {
-                    // The format 'YYYY-MM-DD HH:MM:SS' is consistently parsed as local time
-                    // by modern JS engines. My previous complicated logic was faulty and has been removed.
-                    d.jsDate = new Date(d.date);
-                } else {
-                    d.jsDate = null; // Mark any other cases as invalid
-                }
-                
-                // Add a final check to ensure we don't have an "Invalid Date" object
-                if (d.jsDate && isNaN(d.jsDate.getTime())) {
-                     console.warn(`[Debug] Failed to parse date, setting to null. Original value:`, d.date);
-                     d.jsDate = null;
-                }
-            });
-            
-            console.log('[Debug] Finished date pre-processing. First 5 parsed jsDates (in your local timezone):', fullSalesData.slice(0, 5).map(d => d.jsDate ? d.jsDate.toString() : 'Invalid Date or Null'));
-            // --- END CORRECTED DATE PARSING ---
+            // The date parsing logic has been moved to loadAllData() to ensure it's globally available.
+            // This function can now assume that fullSalesData contains processed jsDate properties.
 
             // 初始化日期選擇器
             datePickerInstance = new Litepicker({
@@ -2464,9 +2462,7 @@
                 }
                 
                 // --- NEW: 銷售排名邏輯 (per-machine, includes sold-out items) ---
-                const storeNameForLookup = store.trim();
-                const machineSalesData = salesData ? salesData[storeNameForLookup] : null;
-                console.log(`[Debug] Rendering card for store: '${store}' (trimmed to '${storeNameForLookup}'). Lookup result:`, machineSalesData ? 'Found' : 'NOT FOUND');
+                const machineSalesData = salesData ? salesData[store] : null;
 
                 // 創建一個庫存產品的查找表，方便快速獲取庫存量
                 const inStockProducts = new Map(products.map(p => [p.name, p.quantity]));
