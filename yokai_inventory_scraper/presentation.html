@@ -1572,13 +1572,30 @@
             }
             
             // 預處理日期
+            let invalidDateCount = 0;
             fullSalesData.forEach(d => {
+                let dateObj;
                 if (typeof d.date === 'number') {
-                    d.jsDate = new Date((d.date - 25569) * 86400000);
+                    dateObj = new Date((d.date - 25569) * 86400000);
                 } else if (typeof d.date === 'string') {
-                    d.jsDate = new Date(d.date);
+                    // 嘗試替換斜線以提高兼容性
+                    dateObj = new Date(d.date.replace(/-/g, '/'));
+                }
+                
+                // 新增：檢查日期是否有效
+                if (dateObj && !isNaN(dateObj)) {
+                    d.jsDate = dateObj;
+                } else {
+                    if (invalidDateCount < 10) { // 只顯示前10筆錯誤以避免刷屏
+                        console.warn('[日期解析警告] 發現無效或無法解析的日期格式，該筆資料將被忽略:', d);
+                    }
+                    invalidDateCount++;
                 }
             });
+
+            if (invalidDateCount > 0) {
+                console.error(`[日期解析錯誤] 共發現 ${invalidDateCount} 筆交易紀錄因日期格式問題被忽略。請檢查 Excel 檔案中的 'Trasaction Date' 欄位。`);
+            }
 
             // 初始化日期選擇器
             datePickerInstance = new Litepicker({
