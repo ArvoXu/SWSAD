@@ -1222,10 +1222,6 @@
 
         // 輔助函數：從本地存儲加載數據（支持分片） - 這部分將被重構
         async function loadAllData() {
-            // --- Logging Start ---
-            console.log('[Debug] Starting loadAllData...');
-            // --- Logging End ---
-
             // 首先嘗試從URL獲取更新時間
             getDataFromUrl();
 
@@ -1689,8 +1685,19 @@
             // 1. 篩選主期間數據 (使用新的輔助函數，已包含0元過濾和日期修正)
             const primaryFilteredData = filterDataByDateRange(fullSalesData, startDate, endDate);
 
+            // --- 新增：針對性除錯日誌 ---
+            console.log(`[銷售分析日誌] 日期範圍: ${startDate.toISOString().split('T')[0]} 到 ${endDate.toISOString().split('T')[0]}`);
+            console.log(`[銷售分析日誌] 在此範圍內找到 ${primaryFilteredData.length} 筆交易紀錄。`);
+            const uniqueStoresInRange = [...new Set(primaryFilteredData.map(d => d.shopName))];
+            console.log(`[銷售分析日誌] 這些交易來自 ${uniqueStoresInRange.length} 個店家:`, uniqueStoresInRange);
+            // --- 日誌結束 ---
+
             // 2. 聚合主期間數據
             const primaryData = aggregateData(primaryFilteredData);
+            
+            // --- 新增：針對性除錯日誌 ---
+            console.log('[銷售分析日誌] 聚合後的店家銷售數據:', primaryData.storeData);
+            // --- 日誌結束 ---
             
             // 存儲聚合後的數據，包括已篩選的原始數據以供KPI使用
             currentChartData = { 
