@@ -542,12 +542,35 @@ def run_scheduler():
     """
     Sets up and runs the scheduler in a loop.
     """
-    schedule.every().hour.at(":10").do(run_inventory_scraper_background)
-    print("Scheduler started. Will run scraper automatically at 10 minutes past every hour.")
+    # Use a more robust interval-based schedule for inventory
+    schedule.every(1).hour.do(run_inventory_scraper_background)
+    print("Scheduler started for inventory: will run every 1 hour.")
+    
+    # Schedule the sales scraper to run daily at midnight UTC
+    schedule.every().day.at("00:00").do(run_sales_scraper_background)
+    print("Scheduler started for sales: will run daily at 00:00 UTC.")
     
     while True:
         schedule.run_pending()
         time.sleep(1) # Sleep for a second to avoid busy-waiting
+
+# --- Endpoints for Manual Testing ---
+@app.route('/test-run-inventory-scraper', methods=['GET'])
+def test_run_inventory_scraper():
+    """A simple endpoint to manually trigger the inventory scraper for testing."""
+    print("Manual trigger for inventory scraper received.")
+    thread = threading.Thread(target=run_inventory_scraper_background)
+    thread.start()
+    return "Inventory scraper job manually triggered for testing."
+
+@app.route('/test-run-sales-scraper', methods=['GET'])
+def test_run_sales_scraper():
+    """A simple endpoint to manually trigger the sales scraper for testing."""
+    print("Manual trigger for sales scraper received.")
+    thread = threading.Thread(target=run_sales_scraper_background)
+    thread.start()
+    return "Sales scraper job manually triggered for testing."
+
 
 # --- Main Execution ---
 if __name__ == '__main__':
