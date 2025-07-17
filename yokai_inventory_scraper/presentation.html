@@ -1071,7 +1071,6 @@
                     <ul>
                         <li><i class="fas fa-box"></i>圓餅圖中的灰色部分代表機台剩餘可用空間</li>
                         <li><i class="fas fa-percentage"></i>使用量百分比顯示當前庫存佔總容量的比例</li>
-                        <li><i class="fas fa-clock"></i>補貨和清潔時間可幫助追蹤維護狀況</li>
                     </ul>
                 </div>
             </div>
@@ -1460,7 +1459,7 @@
                     endDate.setHours(23, 59, 59, 999);
 
                     const formatDate = (date) => `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;
-                    salesDateRangeText = `顯示過去30天 (${formatDate(startDate)} - ${formatDate(endDate)}) 的銷售數據。`;
+                    salesDateRangeText = `顯示過去一個月 (${formatDate(startDate)} - ${formatDate(endDate)}) 的銷售數據。`;
 
                     // 3. Filter transactions within this window
                     const recentSales = window.fullSalesData.filter(d => 
@@ -1534,12 +1533,12 @@
             
             // 將storeGroups轉換為數組以便排序
             let storeGroupsArray = Object.entries(storeGroups).map(([key, value]) => {
-                // 獲取銷售額
-                const noteData = storeNotesAndAddresses[key] || { address: '', note: '', sales: 0 };
+                // 獲取銷售額 - 改為使用動態計算的過去一個月銷售額
+                const machineSalesTotal = last30DaysSalesData[value.store] ? last30DaysSalesData[value.store].totalSales : 0;
                 return {
                     key,
                     ...value,
-                    salesAmount: noteData.sales || 0
+                    salesAmount: machineSalesTotal
                 };
             });
             
@@ -1737,7 +1736,7 @@
                 });
             });
 
-            // 預設顯示最近30天的數據
+            // 預設顯示最近一個月的數據
             const endDate = new Date();
             const startDate = new Date();
             startDate.setDate(endDate.getDate() - 29);
@@ -2447,7 +2446,6 @@
                     <div class="chart-card-info">
                         <div>使用量: ${totalQuantity}/${maxCapacity} (${usagePercentage}%)</div>
                         <div>補貨: ${lastUpdatedText}</div>
-                        <div>清潔: ${lastCleanedText}</div>
                     </div>
                 `;
                 
@@ -2458,7 +2456,6 @@
                 let detailHtml = `
                     <div class="detail-dates">
                         <div>補貨: ${lastUpdatedText}</div>
-                        <div>清潔: ${lastCleanedText}</div>
                     </div>
                 `;
                 
@@ -2507,7 +2504,7 @@
                     const product = productsWithSales[i];
                     if (product) {
                         // 如果有對應排名的產品
-                        let tooltipParts = [`過去30天銷量為 ${product.sales}`];
+                        let tooltipParts = [`過去一個月銷量為 ${product.sales}`];
                         let quantityDisplay = product.quantity;
 
                         if (product.quantity === 0) {
@@ -2524,7 +2521,7 @@
                         `;
                     } else {
                         // 如果沒有對應排名的產品，顯示空位
-                        const tooltip = `該機台過去30天只銷售 ${productsWithSales.length} 樣產品`;
+                        const tooltip = `該機台過去一個月只銷售 ${productsWithSales.length} 樣產品`;
                         detailHtml += `
                             <div class="detail-item">
                                 <div>${medals[i]} -</div>
@@ -2539,7 +2536,7 @@
                 if (productsWithSales.length > 3) {
                      productsWithSales.slice(3).forEach(product => {
                         let quantityDisplay = product.quantity;
-                        let tooltipParts = [`過去30天銷量為 ${product.sales}`];
+                        let tooltipParts = [`過去一個月銷量為 ${product.sales}`];
 
                         if (product.quantity === 0) {
                             quantityDisplay = '⚠️';
@@ -2562,7 +2559,7 @@
                         <div class="detail-item">
                             <div>${product.name}</div>
                             <div>${product.quantity}</div>
-                            <span class="detail-tooltip">該產品於過去30天未有銷售紀錄</span>
+                            <span class="detail-tooltip">該產品於過去一個月未有銷售紀錄</span>
                         </div>
                     `;
                 });
