@@ -1222,6 +1222,10 @@
 
         // 輔助函數：從本地存儲加載數據（支持分片） - 這部分將被重構
         async function loadAllData() {
+            // --- Logging Start ---
+            console.log('[Debug] Starting loadAllData...');
+            // --- Logging End ---
+
             // 首先嘗試從URL獲取更新時間
             getDataFromUrl();
 
@@ -1571,10 +1575,11 @@
                 return;
             }
             
-            // 預處理日期 - 現在接收的是時間戳，直接轉換
+            // 預處理日期
             fullSalesData.forEach(d => {
-                // 接收數字格式的時間戳並轉換為 Date 物件
-                if (typeof d.date === 'number' && d.date > 0) {
+                if (typeof d.date === 'number') {
+                    d.jsDate = new Date((d.date - 25569) * 86400000);
+                } else if (typeof d.date === 'string') {
                     d.jsDate = new Date(d.date);
                 }
             });
@@ -1684,19 +1689,17 @@
             // 1. 篩選主期間數據 (使用新的輔助函數，已包含0元過濾和日期修正)
             const primaryFilteredData = filterDataByDateRange(fullSalesData, startDate, endDate);
 
-            // --- 新增：針對性除錯日誌 ---
-            console.log(`[銷售分析日誌] 日期範圍: ${startDate.toISOString().split('T')[0]} 到 ${endDate.toISOString().split('T')[0]}`);
-            console.log(`[銷售分析日誌] 在此範圍內找到 ${primaryFilteredData.length} 筆交易紀錄。`);
-            const uniqueStoresInRange = [...new Set(primaryFilteredData.map(d => d.shopName))];
-            console.log(`[銷售分析日誌] 這些交易來自 ${uniqueStoresInRange.length} 個店家:`, uniqueStoresInRange);
+            // --- 新增詳細日誌 ---
+            console.log('[Debug] processAndRenderCharts:');
+            console.log(`[Debug] Date Range: ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`);
+            console.log(`[Debug] Filtered data count: ${primaryFilteredData.length} (out of ${fullSalesData.length})`);
+            if (primaryFilteredData.length > 0) {
+                 console.log('[Debug] First item in filtered data:', primaryFilteredData[0]);
+            }
             // --- 日誌結束 ---
 
             // 2. 聚合主期間數據
             const primaryData = aggregateData(primaryFilteredData);
-            
-            // --- 新增：針對性除錯日誌 ---
-            console.log('[銷售分析日誌] 聚合後的店家銷售數據:', primaryData.storeData);
-            // --- 日誌結束 ---
             
             // 存儲聚合後的數據，包括已篩選的原始數據以供KPI使用
             currentChartData = { 
@@ -1714,11 +1717,11 @@
             const storeData = {};
             const productData = {};
             const paymentData = {};
+            const uniqueShops = new Set(); 
 
             filteredData.forEach(d => {
                 const amount = parseFloat(d.amount) || 0;
                 
-                // 使用本地日期，避免時區問題
                 const y = d.jsDate.getFullYear();
                 const m = String(d.jsDate.getMonth() + 1).padStart(2, '0');
                 const day = String(d.jsDate.getDate()).padStart(2, '0');
@@ -1727,8 +1730,12 @@
                 if (!dailyData[fullDate]) dailyData[fullDate] = 0;
                 dailyData[fullDate] += amount;
 
-                if (!storeData[d.shopName]) storeData[d.shopName] = 0;
-                storeData[d.shopName] += amount;
+                if (d.shopName) { // 增加一個檢查確保 shopName 存在
+                    const shopName = String(d.shopName).trim(); // 標準化店鋪名稱
+                    if (!storeData[shopName]) storeData[shopName] = 0;
+                    storeData[shopName] += amount;
+                    uniqueShops.add(shopName);
+                }
 
                 if (!productData[d.product]) productData[d.product] = 0;
                 productData[d.product] += amount;
@@ -1736,6 +1743,10 @@
                 if (!paymentData[d.payType]) paymentData[d.payType] = 0;
                 paymentData[d.payType]++;
             });
+
+            console.log(`[Debug] aggregateData: Found ${uniqueShops.size} unique shops.`);
+            console.log('[Debug] Final aggregated storeData for chart:', storeData);
+            
             return { dailyData, storeData, productData, paymentData };
         }
 
@@ -2710,18 +2721,23 @@
             }
 
             try {
+                console.log('[Debug] DOMContentLoaded: Starting data load process...');
                 await loadAllData(); // 使用新的異步加載函數
                 
                 // 檢查數據是否存在
                 if (window.inventoryData) {
+                    console.log('[Debug] DOMContentLoaded: Data loaded. Calling displayCharts and setupSalesTrendTab...');
                 // 設置庫存視圖
                     displayCharts(window.inventoryData, window.salesData, window.selectedSalesMonth);
                 // 設置銷售趨勢視圖
                 setupSalesTrendTab(window.fullSalesData);
+                    console.log('[Debug] DOMContentLoaded: Render functions called.');
                 } else {
+                    console.error('[Debug] DOMContentLoaded: window.inventoryData is missing after loadAllData.');
                     throw new Error('數據未成功加載。');
                 }
             } catch (error) {
+                console.error('[Debug] DOMContentLoaded: Caught an error during initialization.', error);
                 document.getElementById('chartContainer').innerHTML = '<p>沒有數據可顯示，請返回主頁面重新生成</p>';
                 document.getElementById('summaryText').textContent = '無法載入數據';
                 const loadingDiv = document.querySelector('.loading');

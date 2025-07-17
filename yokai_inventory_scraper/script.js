@@ -419,7 +419,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!file) return;
         // 直接處理文件，不再需要月份選擇
         processSalesFile(file);
-    }
+        }
 
     monthDialogCloseButton.onclick = () => monthSelectionDialog.style.display = 'none';
     cancelMonthButton.onclick = () => monthSelectionDialog.style.display = 'none';
@@ -428,10 +428,10 @@ document.addEventListener('DOMContentLoaded', function () {
         const reader = new FileReader();
         reader.onload = async (e) => {
             try {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, { type: 'array' });
-                const firstSheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[firstSheetName];
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
                 
                 const rawData = XLSX.utils.sheet_to_json(worksheet, {
                     raw: false,
@@ -439,35 +439,20 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
 
                 // 修正：欄位名稱必須與 Excel 中的完全一致，即使有拼寫錯誤
-                const fullSalesData = rawData.map(row => {
-                    let dateForUpload = null;
-                    const dateStr = row['Trasaction Date'];
-                    if (typeof dateStr === 'string') {
-                        const parts = dateStr.match(/(\d{4})-(\d{2})-(\d{2})\s(\d{2}):(\d{2}):(\d{2})/);
-                        if (parts) {
-                            const dateObj = new Date(parts[1], parts[2] - 1, parts[3], parts[4], parts[5], parts[6]);
-                            dateForUpload = dateObj.getTime(); // 轉換為 Unix 時間戳 (毫秒)
-                        }
-                    } else if (typeof dateStr === 'number') { // 處理 Excel 數字日期
-                        const dateObj = new Date((dateStr - 25569) * 86400000);
-                        dateForUpload = dateObj.getTime();
-                    }
+                const fullSalesData = rawData.map(row => ({
+                    shopName: row['Shop name'],
+                    product: row['Product'],
+                    date: row['Trasaction Date'], // 改回匹配 Excel 的 'Trasaction Date'
+                    amount: row['Total Transaction Amount'],
+                    payType: row['Pay type']
+                })).filter(item => item.shopName && item.date && item.amount);
 
-                    return {
-                        shopName: row['Shop name'],
-                        product: row['Product'],
-                        date: dateForUpload, // 上傳時間戳
-                        amount: row['Total Transaction Amount'],
-                        payType: row['Pay type']
-                    };
-                }).filter(item => item.shopName && item.date && item.amount);
-
-                if (fullSalesData.length === 0) {
+        if (fullSalesData.length === 0) {
                     alert('無法從 Excel 檔案中解析出有效的銷售數據。請檢查欄位名稱是否正確 (例如: "Shop name", "Trasaction Date" 等) 且資料格式是否無誤。');
                     salesFileInput.value = '';
-                    return;
-                }
-
+            return;
+        }
+        
                 // 核心修改：直接上傳完整的交易紀錄
                 await uploadTransactions(fullSalesData);
 
