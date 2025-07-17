@@ -1473,6 +1473,7 @@
                     last30DaysSalesData = aggregatedSales;
                 }
             }
+            console.log('[Debug] Aggregated sales data for the last 30 days:', last30DaysSalesData);
             
             // 對數據進行預處理，根據後端提供的 isHidden 標誌過濾數據
             const cleanedData = data.filter(item => !item.isHidden);
@@ -2464,6 +2465,7 @@
                 
                 // --- NEW: 銷售排名邏輯 (per-machine, includes sold-out items) ---
                 const machineSalesData = salesData ? salesData[store] : null;
+                console.log(`[Debug] Rendering card for '${store}'. Trying to find this key in sales data. Result:`, salesData[store] ? 'FOUND' : 'NOT FOUND');
 
                 // 創建一個庫存產品的查找表，方便快速獲取庫存量
                 const inStockProducts = new Map(products.map(p => [p.name, p.quantity]));
