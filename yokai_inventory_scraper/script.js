@@ -439,13 +439,28 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
 
                 // 修正：欄位名稱必須與 Excel 中的完全一致，即使有拼寫錯誤
-                const fullSalesData = rawData.map(row => ({
-                    shopName: row['Shop name'],
-                    product: row['Product'],
-                    date: row['Trasaction Date'], // 改回匹配 Excel 的 'Trasaction Date'
-                    amount: row['Total Transaction Amount'],
-                    payType: row['Pay type']
-                })).filter(item => item.shopName && item.date && item.amount);
+                const fullSalesData = rawData.map(row => {
+                    let dateForUpload = null;
+                    const dateStr = row['Trasaction Date'];
+                    if (typeof dateStr === 'string') {
+                        const parts = dateStr.match(/(\d{4})-(\d{2})-(\d{2})\s(\d{2}):(\d{2}):(\d{2})/);
+                        if (parts) {
+                            const dateObj = new Date(parts[1], parts[2] - 1, parts[3], parts[4], parts[5], parts[6]);
+                            dateForUpload = dateObj.getTime(); // 轉換為 Unix 時間戳 (毫秒)
+                        }
+                    } else if (typeof dateStr === 'number') { // 處理 Excel 數字日期
+                        const dateObj = new Date((dateStr - 25569) * 86400000);
+                        dateForUpload = dateObj.getTime();
+                    }
+
+                    return {
+                        shopName: row['Shop name'],
+                        product: row['Product'],
+                        date: dateForUpload, // 上傳時間戳
+                        amount: row['Total Transaction Amount'],
+                        payType: row['Pay type']
+                    };
+                }).filter(item => item.shopName && item.date && item.amount);
 
                 if (fullSalesData.length === 0) {
                     alert('無法從 Excel 檔案中解析出有效的銷售數據。請檢查欄位名稱是否正確 (例如: "Shop name", "Trasaction Date" 等) 且資料格式是否無誤。');

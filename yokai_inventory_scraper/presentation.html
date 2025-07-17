@@ -1571,17 +1571,11 @@
                 return;
             }
             
-            // 預處理日期
+            // 預處理日期 - 現在接收的是時間戳，直接轉換
             fullSalesData.forEach(d => {
-                if (typeof d.date === 'string') {
-                    // 手動、可靠地解析 'YYYY-MM-DD HH:mm:ss' 格式
-                    const parts = d.date.match(/(\d{4})-(\d{2})-(\d{2})\s(\d{2}):(\d{2}):(\d{2})/);
-                    if (parts) {
-                        // parts[2] - 1 是因為 JavaScript 的月份是從 0 開始的
-                        d.jsDate = new Date(parts[1], parts[2] - 1, parts[3], parts[4], parts[5], parts[6]);
-                    }
-                } else if (typeof d.date === 'number') {
-                     d.jsDate = new Date((d.date - 25569) * 86400000);
+                // 接收數字格式的時間戳並轉換為 Date 物件
+                if (typeof d.date === 'number' && d.date > 0) {
+                    d.jsDate = new Date(d.date);
                 }
             });
 
