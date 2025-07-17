@@ -1579,8 +1579,9 @@
             fullSalesData.forEach(d => {
                 if (typeof d.date === 'number') {
                     d.jsDate = new Date((d.date - 25569) * 86400000);
-                } else if (typeof d.date === 'string') {
-                    d.jsDate = new Date(d.date);
+                } else if (d.date && typeof d.date === 'string') {
+                    // 強制將日期字符串解析為 UTC 時間，避免時區問題
+                    d.jsDate = new Date(d.date.endsWith('Z') ? d.date : d.date + 'Z');
                 }
             });
 
