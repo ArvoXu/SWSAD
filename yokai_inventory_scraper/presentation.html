@@ -1557,12 +1557,27 @@
             const adjustedEndDate = new Date(endDate);
             adjustedEndDate.setHours(23, 59, 59, 999);
 
+            // --- NEW LOGGING ---
+            console.log(`[Debug] filterDataByDateRange: Filtering between (local time) ${startDate.toString()} AND ${adjustedEndDate.toString()}`);
+            let logCount = 0;
+            const LOG_LIMIT = 5;
+            // --- END NEW LOGGING ---
+
             return data.filter(d => {
                 const amount = parseFloat(d.amount) || 0;
                 // 新增：過濾掉0元或負數的交易
                 if (amount <= 0) return false;
                 
-                return d.jsDate && d.jsDate >= startDate && d.jsDate <= adjustedEndDate;
+                const isWithinRange = d.jsDate && d.jsDate >= startDate && d.jsDate <= adjustedEndDate;
+
+                // --- NEW LOGGING ---
+                if (logCount < LOG_LIMIT && d.jsDate) {
+                    console.log(`[Debug] Comparing Item Date: ${d.jsDate.toString()} ... Is it in range? ${isWithinRange}`);
+                    logCount++;
+                }
+                // --- END NEW LOGGING ---
+                
+                return isWithinRange;
             });
         }
 
@@ -1575,15 +1590,31 @@
                 return;
             }
             
+            // --- NEW LOGGING & DATE PARSING ---
+            console.log('[Debug] Starting date pre-processing. First 5 raw dates from server:', fullSalesData.slice(0, 5).map(d => d.date));
+
             // 預處理日期
             fullSalesData.forEach(d => {
-                if (typeof d.date === 'number') {
+                if (d.date && typeof d.date === 'string') {
+                    // CRITICAL FIX: YYYY-MM-DD strings are parsed as UTC midnight.
+                    // To treat them as local midnight, we must manually construct the date.
+                    // This prevents timezone-related off-by-one errors.
+                    const datePart = d.date.split('T')[0];
+                    const [year, month, day] = datePart.split('-').map(Number);
+                    if(year && month && day) {
+                         // new Date(year, month-1, day) creates a date in the local timezone.
+                         d.jsDate = new Date(year, month - 1, day);
+                    } else {
+                        // Fallback for unexpected formats
+                        d.jsDate = new Date(d.date);
+                    }
+                } else if (typeof d.date === 'number') { // For excel dates
                     d.jsDate = new Date((d.date - 25569) * 86400000);
-                } else if (d.date && typeof d.date === 'string') {
-                    // 恢復：將日期字符串直接解析為本地時間，以匹配日期選擇器的時區
-                    d.jsDate = new Date(d.date);
                 }
             });
+
+            console.log('[Debug] Finished date pre-processing. First 5 parsed jsDates (in your local timezone):', fullSalesData.slice(0, 5).map(d => d.jsDate ? d.jsDate.toString() : 'Invalid Date'));
+            // --- END NEW LOGGING & DATE PARSING ---
 
             // 初始化日期選擇器
             datePickerInstance = new Litepicker({
@@ -1692,10 +1723,15 @@
 
             // --- 新增詳細日誌 ---
             console.log('[Debug] processAndRenderCharts:');
-            console.log(`[Debug] Date Range: ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`);
-            console.log(`[Debug] Filtered data count: ${primaryFilteredData.length} (out of ${fullSalesData.length})`);
+            // Use a timezone-neutral format for logging to avoid confusion
+            const toLocalISOString = (date) => new Date(date.getTime() - (date.getTimezoneOffset() * 60000)).toISOString().slice(0, 10);
+            console.log(`[Debug] Date Range Selected (Local): ${toLocalISOString(startDate)} to ${toLocalISOString(endDate)}`);
+            console.log(`[Debug] Total items from server: ${fullSalesData.length}`);
+            console.log(`[Debug] Filtered data count for this range: ${primaryFilteredData.length}`);
             if (primaryFilteredData.length > 0) {
                  console.log('[Debug] First item in filtered data:', primaryFilteredData[0]);
+            } else {
+                 console.log('[Debug] No data matched the selected date range.');
             }
             // --- 日誌結束 ---
 
