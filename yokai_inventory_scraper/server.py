@@ -579,9 +579,8 @@ def serve_static_files(path):
     # This will serve other files like script.js
     if path != 'presentation.html':
         return send_from_directory(script_dir, path)
-    else:
-        # Redirect to the clean URL if someone tries to access the .html version directly
-        return redirect('/presentation')
+    # Redirect to the clean URL if someone tries to access the .html version directly
+    return redirect('/presentation')
 
 
 # --- Scheduler Setup ---
@@ -621,11 +620,15 @@ def test_run_sales_scraper():
 
 # --- Main Execution ---
 if __name__ == '__main__':
-    # Run the scheduler in a separate thread
-    scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
-    scheduler_thread.start()
-    
-    # Start the Flask app
-    # Render will use gunicorn, but for local testing, this is fine.
-    # The host '0.0.0.0' makes it accessible on your local network.
-    app.run(host='0.0.0.0', port=5001, debug=False) 
+    # This block is for local development testing only.
+    # When deployed on Render with Gunicorn, this block will not be executed.
+    # The scheduler thread is started below in the global scope.
+    print("Starting Flask development server for local testing...")
+    app.run(host='0.0.0.0', port=5001, debug=False)
+
+# --- Start the scheduler thread when the application module is loaded ---
+# This ensures it runs even when started by Gunicorn on Render.
+print("Starting the background scheduler thread...")
+scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
+scheduler_thread.start()
+print("Background scheduler thread has been started.") 
