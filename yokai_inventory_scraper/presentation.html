@@ -1222,6 +1222,10 @@
 
         // 輔助函數：從本地存儲加載數據（支持分片） - 這部分將被重構
         async function loadAllData() {
+            // --- Logging Start ---
+            console.log('[Debug] Starting loadAllData...');
+            // --- Logging End ---
+
             // 首先嘗試從URL獲取更新時間
             getDataFromUrl();
 
@@ -1239,7 +1243,7 @@
             }
 
             // --- API-driven data loading ---
-            console.log('正在從伺服器 API 獲取數據...');
+            console.log('[Debug] Fetching data from server API...');
             try {
                 // 並行獲取庫存和交易數據
                 const [inventoryRes, transactionsRes] = await Promise.all([
@@ -1247,12 +1251,27 @@
                     fetch('/api/transactions')
                 ]);
 
+                // --- Logging Start ---
+                console.log('[Debug] API Response Status:', { inventory: inventoryRes.status, transactions: transactionsRes.status });
+                if (!inventoryRes.ok) console.error('[Debug] Inventory response not OK:', await inventoryRes.text());
+                if (!transactionsRes.ok) console.error('[Debug] Transactions response not OK:', await transactionsRes.text());
+                // --- Logging End ---
+
                 if (!inventoryRes.ok) throw new Error(`獲取庫存數據失敗: ${inventoryRes.statusText}`);
                 const inventoryResult = await inventoryRes.json();
+                
+                // --- Logging Start ---
+                console.log('[Debug] Parsed inventory data:', inventoryResult);
+                // --- Logging End ---
+
                 if (!inventoryResult.success) throw new Error(inventoryResult.message);
                 
                 if (!transactionsRes.ok) throw new Error(`獲取交易數據失敗: ${transactionsRes.statusText}`);
                 window.fullSalesData = await transactionsRes.json();
+
+                // --- Logging Start ---
+                console.log('[Debug] Parsed full sales data:', window.fullSalesData);
+                // --- Logging End ---
 
                 // 處理庫存數據
                 const inventoryData = inventoryResult.data;
@@ -1277,6 +1296,10 @@
                     }
                 });
                 window.storeNotesAndAddresses = notes;
+                // --- Logging Start ---
+                console.log('[Debug] Generated notes and addresses:', window.storeNotesAndAddresses);
+                // --- Logging End ---
+
                 if(latestProcessTime > 0) {
                      window.updateTime = new Date(latestProcessTime).toLocaleString('zh-TW');
                 }
@@ -1284,10 +1307,10 @@
                 window.salesData = null; 
                 window.selectedSalesMonth = null;
                 
-                console.log('成功從 API 獲取所有數據');
+                console.log('[Debug] loadAllData finished successfully.');
 
             } catch (error) {
-                console.error('從 API 獲取數據時出錯:', error);
+                console.error('[Debug] Error inside loadAllData:', error);
                 // 可以在此處顯示錯誤訊息給用戶
                 document.getElementById('chartContainer').innerHTML = `<p style="color: red;">加載數據失敗: ${error.message}</p>`;
                 throw error; // 拋出錯誤以停止後續執行
@@ -1390,6 +1413,9 @@
         
         // 顯示圓餅圖
         function displayCharts(data, salesData, selectedSalesMonth) {
+            // --- Logging Start ---
+            console.log('[Debug] displayCharts called with data:', data);
+            // --- Logging End ---
             const chartContainer = document.getElementById('chartContainer');
             chartContainer.innerHTML = '';
             
@@ -1541,6 +1567,9 @@
         }
 
         function setupSalesTrendTab(fullSalesData) {
+            // --- Logging Start ---
+            console.log('[Debug] setupSalesTrendTab called with data:', fullSalesData);
+            // --- Logging End ---
             if (!fullSalesData || fullSalesData.length === 0) {
                 document.getElementById('sales-tab').innerHTML = '<p style="text-align: center;">沒有銷售數據可供分析。</p>';
                 return;
@@ -2671,18 +2700,23 @@
             }
 
             try {
+                console.log('[Debug] DOMContentLoaded: Starting data load process...');
                 await loadAllData(); // 使用新的異步加載函數
                 
                 // 檢查數據是否存在
                 if (window.inventoryData) {
+                    console.log('[Debug] DOMContentLoaded: Data loaded. Calling displayCharts and setupSalesTrendTab...');
                 // 設置庫存視圖
                     displayCharts(window.inventoryData, window.salesData, window.selectedSalesMonth);
                 // 設置銷售趨勢視圖
                 setupSalesTrendTab(window.fullSalesData);
-            } else {
+                    console.log('[Debug] DOMContentLoaded: Render functions called.');
+                } else {
+                    console.error('[Debug] DOMContentLoaded: window.inventoryData is missing after loadAllData.');
                     throw new Error('數據未成功加載。');
                 }
             } catch (error) {
+                console.error('[Debug] DOMContentLoaded: Caught an error during initialization.', error);
                 document.getElementById('chartContainer').innerHTML = '<p>沒有數據可顯示，請返回主頁面重新生成</p>';
                 document.getElementById('summaryText').textContent = '無法載入數據';
                 const loadingDiv = document.querySelector('.loading');
