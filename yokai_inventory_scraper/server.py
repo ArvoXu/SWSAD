@@ -241,6 +241,7 @@ def update_store_data(store_key):
 def add_transactions():
     """
     Receives a list of transactions, clears existing ones, and saves the new ones.
+    Handles transactions for stores not yet in the database.
     """
     transactions_data = request.get_json()
     if not isinstance(transactions_data, list):
@@ -250,35 +251,64 @@ def add_transactions():
     try:
         # Clear existing transactions
         db.query(Transaction).delete()
+        logging.info("Cleared existing transactions.")
         
         new_transactions = []
         
-        # Cache stores to avoid querying in a loop
+        # Get all existing stores and create a map from name to the FIRST store object found for that name.
         all_stores = db.query(Store).all()
-        store_map = {s.store_key.split('-')[0]: s for s in all_stores}
+        store_name_map = {}
+        for s in all_stores:
+            # The store name is the part of the key before the last hyphen
+            name_parts = s.store_key.rsplit('-', 1)
+            name = name_parts[0]
+            if name not in store_name_map:
+                store_name_map[name] = s
 
         for item in transactions_data:
-            shop_name = item.get('shopName')
-            if not shop_name:
+            shop_name_raw = item.get('shopName')
+            if not shop_name_raw or not item.get('date'):
                 continue
-
-            # Find the first store that matches the shop name.
-            # This is an assumption because sales data does not contain machine_id.
-            store = store_map.get(shop_name)
             
-            if store:
-                new_transactions.append(Transaction(
-                    store_key=store.store_key,
-                    transaction_time=parse_date(item.get('date')),
-                    amount=int(float(item.get('amount', 0))),
-                    product_name=item.get('product'),
-                    payment_type=item.get('payType')
-                ))
+            # Clean up the shop name from Excel
+            shop_name = shop_name_raw.strip()
+
+            # Find an existing store record for this shop name
+            store = store_name_map.get(shop_name)
+            
+            # If no store exists, create a new provisional one
+            if not store:
+                logging.info(f"Shop '{shop_name}' not found in DB. Creating a new provisional store.")
+                # We need a machine_id for the key. Let's use a placeholder.
+                new_store_key = f"{shop_name}-provisional_sales"
+                
+                # Check if this provisional key already exists to be safe
+                existing_provisional = db.query(Store).filter(Store.store_key == new_store_key).first()
+                if existing_provisional:
+                    store = existing_provisional
+                else:
+                    store = Store(store_key=new_store_key)
+                    db.add(store)
+                    db.flush() # Flush to get the object ready for relationship, but don't commit yet.
+                
+                # Add the newly created store to our map to avoid creating it again in this run
+                store_name_map[shop_name] = store
+
+            # Now that we're sure `store` exists...
+            new_transactions.append(Transaction(
+                store_key=store.store_key,
+                transaction_time=parse_date(item.get('date')),
+                amount=int(float(item.get('amount', 0))),
+                product_name=item.get('product'),
+                payment_type=item.get('payType')
+            ))
 
         if new_transactions:
             db.bulk_save_objects(new_transactions)
+            logging.info(f"Preparing to save {len(new_transactions)} new transactions.")
         
         db.commit()
+        logging.info("Successfully committed transactions.")
         return jsonify({"success": True, "message": f"Successfully added {len(new_transactions)} transactions."})
 
     except Exception as e:
@@ -300,11 +330,12 @@ def get_transactions():
         transactions = db.query(Transaction).all()
         
         # Create a map of store_key to store_name for quick lookup
-        stores = {s.store_key: s.store_key.split('-')[0] for s in db.query(Store).all()}
+        # The store name is the part of the key before the last hyphen
+        stores = {s.store_key: s.store_key.rsplit('-', 1)[0] for s in db.query(Store).all()}
 
         result = [
             {
-                "shopName": stores.get(t.store_key, "Unknown"),
+                "shopName": stores.get(t.store_key, t.store_key), # Fallback to store_key if not in map
                 "date": t.transaction_time.isoformat(),
                 "amount": t.amount,
                 "product": t.product_name,
