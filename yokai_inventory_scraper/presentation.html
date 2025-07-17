@@ -1557,25 +1557,12 @@
             const adjustedEndDate = new Date(endDate);
             adjustedEndDate.setHours(23, 59, 59, 999);
 
-            // --- NEW LOGGING ---
-            console.log(`[Debug] filterDataByDateRange: Filtering between (local time) ${startDate.toString()} AND ${adjustedEndDate.toString()}`);
-            let logCount = 0;
-            const LOG_LIMIT = 5;
-            // --- END NEW LOGGING ---
-
             return data.filter(d => {
                 const amount = parseFloat(d.amount) || 0;
                 // 新增：過濾掉0元或負數的交易
                 if (amount <= 0) return false;
                 
                 const isWithinRange = d.jsDate && d.jsDate >= startDate && d.jsDate <= adjustedEndDate;
-
-                // --- NEW LOGGING ---
-                if (logCount < LOG_LIMIT && d.jsDate) {
-                    console.log(`[Debug] Comparing Item Date: ${d.jsDate.toString()} ... Is it in range? ${isWithinRange}`);
-                    logCount++;
-                }
-                // --- END NEW LOGGING ---
                 
                 return isWithinRange;
             });
@@ -1590,31 +1577,36 @@
                 return;
             }
             
-            // --- NEW LOGGING & DATE PARSING ---
+            // --- NEW, ROBUST DATE PARSING ---
             console.log('[Debug] Starting date pre-processing. First 5 raw dates from server:', fullSalesData.slice(0, 5).map(d => d.date));
 
-            // 預處理日期
             fullSalesData.forEach(d => {
                 if (d.date && typeof d.date === 'string') {
-                    // CRITICAL FIX: YYYY-MM-DD strings are parsed as UTC midnight.
-                    // To treat them as local midnight, we must manually construct the date.
-                    // This prevents timezone-related off-by-one errors.
-                    const datePart = d.date.split('T')[0];
-                    const [year, month, day] = datePart.split('-').map(Number);
-                    if(year && month && day) {
-                         // new Date(year, month-1, day) creates a date in the local timezone.
-                         d.jsDate = new Date(year, month - 1, day);
-                    } else {
-                        // Fallback for unexpected formats
+                    // The server sends ISO format. Check if it includes a time component.
+                    if (d.date.includes('T')) {
+                        // It has time, parse as-is. JS new Date() handles ISO strings with time as local time.
                         d.jsDate = new Date(d.date);
+                    } else {
+                        // It's a date-only string (e.g., "YYYY-MM-DD").
+                        // We must parse it manually to avoid it being interpreted as UTC midnight, which causes timezone shifts.
+                        const [year, month, day] = d.date.split('-').map(Number);
+                        // Check if parsing was successful before creating a date
+                        if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+                            // new Date(year, month-1, day) creates a date in the local timezone.
+                            d.jsDate = new Date(year, month - 1, day);
+                        } else {
+                            d.jsDate = null; // Mark as invalid if parsing fails
+                        }
                     }
                 } else if (typeof d.date === 'number') { // For excel dates
                     d.jsDate = new Date((d.date - 25569) * 86400000);
+                } else {
+                    d.jsDate = null; // Mark any other cases as invalid
                 }
             });
-
+            
             console.log('[Debug] Finished date pre-processing. First 5 parsed jsDates (in your local timezone):', fullSalesData.slice(0, 5).map(d => d.jsDate ? d.jsDate.toString() : 'Invalid Date'));
-            // --- END NEW LOGGING & DATE PARSING ---
+            // --- END NEW DATE PARSING ---
 
             // 初始化日期選擇器
             datePickerInstance = new Litepicker({
