@@ -1582,31 +1582,22 @@
 
             fullSalesData.forEach(d => {
                 if (d.date && typeof d.date === 'string') {
-                    // The server sends ISO format. Check if it includes a time component.
-                    if (d.date.includes('T')) {
-                        // It has time, parse as-is. JS new Date() handles ISO strings with time as local time.
-                        d.jsDate = new Date(d.date);
-                    } else {
-                        // It's a date-only string (e.g., "YYYY-MM-DD").
-                        // We must parse it manually to avoid it being interpreted as UTC midnight, which causes timezone shifts.
-                        const [year, month, day] = d.date.split('-').map(Number);
-                        // Check if parsing was successful before creating a date
-                        if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
-                            // new Date(year, month-1, day) creates a date in the local timezone.
-                            d.jsDate = new Date(year, month - 1, day);
-                        } else {
-                            d.jsDate = null; // Mark as invalid if parsing fails
-                        }
-                    }
-                } else if (typeof d.date === 'number') { // For excel dates
-                    d.jsDate = new Date((d.date - 25569) * 86400000);
+                    // The format 'YYYY-MM-DD HH:MM:SS' is consistently parsed as local time
+                    // by modern JS engines. My previous complicated logic was faulty and has been removed.
+                    d.jsDate = new Date(d.date);
                 } else {
                     d.jsDate = null; // Mark any other cases as invalid
                 }
+                
+                // Add a final check to ensure we don't have an "Invalid Date" object
+                if (d.jsDate && isNaN(d.jsDate.getTime())) {
+                     console.warn(`[Debug] Failed to parse date, setting to null. Original value:`, d.date);
+                     d.jsDate = null;
+                }
             });
             
-            console.log('[Debug] Finished date pre-processing. First 5 parsed jsDates (in your local timezone):', fullSalesData.slice(0, 5).map(d => d.jsDate ? d.jsDate.toString() : 'Invalid Date'));
-            // --- END NEW DATE PARSING ---
+            console.log('[Debug] Finished date pre-processing. First 5 parsed jsDates (in your local timezone):', fullSalesData.slice(0, 5).map(d => d.jsDate ? d.jsDate.toString() : 'Invalid Date or Null'));
+            // --- END CORRECTED DATE PARSING ---
 
             // 初始化日期選擇器
             datePickerInstance = new Litepicker({
