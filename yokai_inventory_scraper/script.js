@@ -417,61 +417,44 @@ document.addEventListener('DOMContentLoaded', function () {
     function handleSalesFile(event) {
         const file = event.target.files[0];
         if (!file) return;
-
-        populateMonthSelector(); // 恢復月份選擇器
-        monthSelectionDialog.style.display = 'block';
-
-        confirmMonthButton.onclick = () => {
-            const selectedMonth = monthSelect.value;
-            if (!selectedMonth) {
-                alert('請選擇一個月份');
-            return;
-            }
-            monthSelectionDialog.style.display = 'none';
-            processSalesFile(file, selectedMonth);
-        };
-        }
+        // 直接處理文件，不再需要月份選擇
+        processSalesFile(file);
+    }
 
     monthDialogCloseButton.onclick = () => monthSelectionDialog.style.display = 'none';
     cancelMonthButton.onclick = () => monthSelectionDialog.style.display = 'none';
     
-    async function processSalesFile(file, selectedMonth) {
+    async function processSalesFile(file) {
         const reader = new FileReader();
         reader.onload = async (e) => {
             try {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, { type: 'array' });
-            const firstSheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[firstSheetName];
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
                 
                 const rawData = XLSX.utils.sheet_to_json(worksheet, {
                     raw: false,
                     defval: null
                 });
 
+                // 修正：將欄位名稱從 'Trasaction Date' 改為 'Transaction Date'
                 const fullSalesData = rawData.map(row => ({
                     shopName: row['Shop name'],
                     product: row['Product'],
-                    date: row['Transaction Date'],
+                    date: row['Transaction Date'], // 修正拼寫錯誤
                     amount: row['Total Transaction Amount'],
                     payType: row['Pay type']
                 })).filter(item => item.shopName && item.date && item.amount);
 
                 if (fullSalesData.length === 0) {
-                    alert('無法從 Excel 檔案中解析出有效的銷售數據。請檢查欄位名稱是否正確。');
+                    alert('無法從 Excel 檔案中解析出有效的銷售數據。請檢查欄位名稱是否正確 (例如: "Shop name", "Transaction Date" 等) 且資料格式是否無誤。');
                     salesFileInput.value = '';
                     return;
                 }
 
-                // 任務一：上傳完整的交易紀錄
+                // 核心修改：直接上傳完整的交易紀錄
                 await uploadTransactions(fullSalesData);
-
-                // 任務二：根據選擇的月份計算銷售額並更新
-                const salesDataForMonth = processSalesDataForMonth(fullSalesData, selectedMonth);
-                await updateManualSales(salesDataForMonth);
-                
-                // 完成後刷新頁面數據
-                await fetchAndDisplayData();
 
             } catch (error) {
                 console.error('處理銷售文件時出錯:', error);
@@ -493,7 +476,7 @@ document.addEventListener('DOMContentLoaded', function () {
             });
             const result = await response.json();
             if (!result.success) throw new Error(result.message);
-            alert('銷售數據已成功上傳並永久保存！');
+            alert('銷售數據已成功上傳並永久保存！現在您可以進入「展示階段」查看。');
         } catch (error) {
             console.error('上傳交易數據失敗:', error);
             alert('上傳失敗: ' + error.message);
@@ -501,48 +484,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // --- 恢復以下兩個函數 ---
-    function processSalesDataForMonth(fullSalesData, yyyymm) {
-        const salesByStore = {};
-        fullSalesData.forEach(row => {
-            if (!row.date || !row.shopName || !row.amount) return;
-            try {
-            let date;
-            if (typeof row.date === 'number') {
-                    date = new Date((row.date - 25569) * 86400000); // Excel date to JS date
-                } else {
-                    date = new Date(row.date.replace(/-/g, '/')); // More robust date parsing
-                }
-
-                const rowMonth = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0');
-                if (rowMonth === yyyymm) {
-                    const storeName = row.shopName.trim();
-                    if (!salesByStore[storeName]) {
-                        salesByStore[storeName] = 0;
-                    }
-                    salesByStore[storeName] += parseFloat(row.amount);
-                }
-            } catch (e) {
-                // Ignore rows with invalid dates
-            }
-        });
-        return salesByStore;
-    }
-
-    async function updateManualSales(salesData) {
-        const storeKeys = Object.keys(storeGroupsArray.reduce((acc, g) => {
-            acc[g.store] = g.key;
-            return acc;
-        }, {}));
-
-        for (const storeName in salesData) {
-            const storeKey = storeGroupsArray.find(g => g.store === storeName)?.key;
-            if (storeKey) {
-                const payload = { manualSales: Math.round(salesData[storeName]) };
-                await updateStoreData(storeKey, payload, `更新 ${storeName} 銷售額`, true); // silent = true
-            }
-        }
-        alert('所有機台的月銷售額已更新，用於庫存頁面排名。');
-    }
+    // 移除已棄用的舊函數
+    // function processSalesDataForMonth(...) {}
+    // async function updateManualSales(...) {}
 
 }); 
