@@ -9,3 +9,5 @@ pytz
 SQLAlchemy
 psycopg2-binary
 python-dateutil
+pandas
+openpyxl
