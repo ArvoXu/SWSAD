@@ -1412,7 +1412,7 @@
         }
         
         // 顯示圓餅圖
-        function displayCharts(data, salesData, selectedSalesMonth) {
+        function displayCharts(data) {
             // --- Logging Start ---
             console.log('[Debug] displayCharts called with data:', data);
             // --- Logging End ---
@@ -1422,6 +1422,56 @@
             if (!data || data.length === 0) {
                 chartContainer.innerHTML = '<p>沒有數據可顯示</p>';
                 return;
+            }
+
+            // --- NEW: Calculate last 30 days sales data ---
+            let last30DaysSalesData = {};
+            let salesDateRangeText = '未加載銷售數據，無法計算排名。';
+
+            if (window.fullSalesData && window.fullSalesData.length > 0) {
+                const validDates = window.fullSalesData.map(d => d.jsDate).filter(Boolean);
+                if (validDates.length > 0) {
+                    // 1. Find the latest transaction date
+                    const latestDate = new Date(Math.max(...validDates));
+                    
+                    // 2. Calculate the 30-day window
+                    const endDate = new Date(latestDate);
+                    const startDate = new Date(latestDate);
+                    startDate.setDate(startDate.getDate() - 29); // 30 days inclusive
+                    startDate.setHours(0, 0, 0, 0);
+                    endDate.setHours(23, 59, 59, 999);
+
+                    const formatDate = (date) => `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;
+                    salesDateRangeText = `顯示過去30天 (${formatDate(startDate)} - ${formatDate(endDate)}) 的銷售數據。`;
+
+                    // 3. Filter transactions within this window
+                    const recentSales = window.fullSalesData.filter(d => 
+                        d.jsDate && d.jsDate >= startDate && d.jsDate <= endDate
+                    );
+
+                    // 4. Aggregate the data
+                    const aggregatedSales = {};
+                    recentSales.forEach(sale => {
+                        if (!sale.shopName || !sale.product) return;
+
+                        const shopName = String(sale.shopName).trim();
+                        const productName = String(sale.product).trim();
+
+                        if (!aggregatedSales[shopName]) {
+                            aggregatedSales[shopName] = {};
+                        }
+                        if (!aggregatedSales[shopName][productName]) {
+                            aggregatedSales[shopName][productName] = { count: 0, lastSoldDate: '1970-01-01' };
+                        }
+
+                        aggregatedSales[shopName][productName].count++;
+                        const saleDateStr = sale.jsDate.toISOString().split('T')[0];
+                        if (saleDateStr > aggregatedSales[shopName][productName].lastSoldDate) {
+                            aggregatedSales[shopName][productName].lastSoldDate = saleDateStr;
+                        }
+                    });
+                    last30DaysSalesData = aggregatedSales;
+                }
             }
             
             // 對數據進行預處理，根據後端提供的 isHidden 標誌過濾數據
@@ -1494,7 +1544,7 @@
                     });
                 }
                 
-                renderStoreCards(dataToRender, storeNotesAndAddresses, salesData, selectedSalesMonth);
+                renderStoreCards(dataToRender, storeNotesAndAddresses, last30DaysSalesData);
                 updateSortButtonsState(currentInventorySort.key ? `sortBy${currentInventorySort.key}` : null);
             }
             
@@ -1528,11 +1578,7 @@
             summaryText.innerHTML = `共有 ${storeGroupsArray.length} 個機台的庫存數據，總計 ${cleanedData.length} 項產品數據<br>更新時間: ${updateTime}`;
 
             const salesSummaryText = document.getElementById('salesSummaryText');
-            if (selectedSalesMonth && salesData) {
-                salesSummaryText.textContent = `正在顯示基於 ${selectedSalesMonth} 的銷售數據排名。`;
-            } else {
-                salesSummaryText.textContent = '未加載銷售數據，無法顯示排名。';
-            }
+            salesSummaryText.textContent = salesDateRangeText;
         }
         
         // --- 新的銷售趨勢圖表邏輯 ---
@@ -2362,7 +2408,7 @@
         }
         
         // 渲染機台卡片
-        function renderStoreCards(storeGroupsArray, storeNotesAndAddresses, salesData, selectedSalesMonth) {
+        function renderStoreCards(storeGroupsArray, storeNotesAndAddresses, salesData) {
             const chartContainer = document.getElementById('chartContainer');
             chartContainer.innerHTML = '';
             
@@ -2452,7 +2498,7 @@
                     const product = productsWithSales[i];
                     if (product) {
                         // 如果有對應排名的產品
-                        let tooltipParts = [`上月銷量為 ${product.sales}`];
+                        let tooltipParts = [`過去30天銷量為 ${product.sales}`];
                         let quantityDisplay = product.quantity;
 
                         if (product.quantity === 0) {
@@ -2469,7 +2515,7 @@
                         `;
                     } else {
                         // 如果沒有對應排名的產品，顯示空位
-                        const tooltip = `該機台上月只銷售 ${productsWithSales.length} 樣產品`;
+                        const tooltip = `該機台過去30天只銷售 ${productsWithSales.length} 樣產品`;
                         detailHtml += `
                             <div class="detail-item">
                                 <div>${medals[i]} -</div>
@@ -2484,7 +2530,7 @@
                 if (productsWithSales.length > 3) {
                      productsWithSales.slice(3).forEach(product => {
                         let quantityDisplay = product.quantity;
-                        let tooltipParts = [`上月銷量為 ${product.sales}`];
+                        let tooltipParts = [`過去30天銷量為 ${product.sales}`];
 
                         if (product.quantity === 0) {
                             quantityDisplay = '⚠️';
@@ -2507,7 +2553,7 @@
                         <div class="detail-item">
                             <div>${product.name}</div>
                             <div>${product.quantity}</div>
-                            <span class="detail-tooltip">該產品於上月未有銷售紀錄</span>
+                            <span class="detail-tooltip">該產品於過去30天未有銷售紀錄</span>
                         </div>
                     `;
                 });
@@ -2743,7 +2789,7 @@
                 if (window.inventoryData) {
                     console.log('[Debug] DOMContentLoaded: Data loaded. Calling displayCharts and setupSalesTrendTab...');
                 // 設置庫存視圖
-                    displayCharts(window.inventoryData, window.salesData, window.selectedSalesMonth);
+                    displayCharts(window.inventoryData);
                 // 設置銷售趨勢視圖
                 setupSalesTrendTab(window.fullSalesData);
                     console.log('[Debug] DOMContentLoaded: Render functions called.');
