@@ -666,20 +666,14 @@ def serve_static_files(path):
 def run_scheduler():
     """
     Sets up and runs the scheduler in a loop.
-    Schedules the inventory scraper to run at every 5-minute mark for precision.
     """
     # Schedule the inventory scraper to run at 1 minute past the hour.
     schedule.every().hour.at(":01").do(run_inventory_scraper_background)
     logging.info("Scheduler started for inventory: will run every hour at 1 minute past.")
 
-    # Schedule the sales scraper to run at every 5-minute mark for testing.
-    for minute in range(0, 60, 5):
-        schedule.every().hour.at(f":{minute:02d}").do(run_sales_scraper_background)
-    logging.info("Scheduler started for sales: will run every 5 minutes on the 5-minute mark (e.g., 10:05, 10:10).")
-    
-    # Schedule the sales scraper to run daily at midnight UTC
-    # schedule.every().day.at("00:00").do(run_sales_scraper_background)
-    # logging.info("Scheduler started for sales: will run daily at 00:00 UTC.")
+    # Schedule the sales scraper to run daily at 23:55 Taiwan Time (UTC+8), which is 15:55 UTC.
+    schedule.every().day.at("15:55").do(run_sales_scraper_background)
+    logging.info("Scheduler started for sales: will run daily at 15:55 UTC (23:55 Taiwan Time).")
     
     while True:
         schedule.run_pending()
