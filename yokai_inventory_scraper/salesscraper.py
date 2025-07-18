@@ -92,17 +92,32 @@ def run_sales_scraper():
         export_button.click()
         
         logging.info("Waiting for download to complete...")
-        download_wait_time = 60 
+        download_wait_time = 120  # Increased to 2 minutes
         time_waited = 0
+        
         while time_waited < download_wait_time:
-            if any(fname.endswith('.xlsx') for fname in os.listdir(download_dir)):
-                downloaded_files = [f for f in os.listdir(download_dir) if f.endswith('.xlsx')]
-                logging.info(f"Download complete. File found: {downloaded_files[0]}")
-                return os.path.join(download_dir, downloaded_files[0])
-            time.sleep(1)
-            time_waited += 1
+            # Check for completed .xlsx files
+            completed_files = [f for f in os.listdir(download_dir) if f.endswith('.xlsx')]
+            if completed_files:
+                logging.info(f"Download complete. File found: {completed_files[0]}")
+                return os.path.join(download_dir, completed_files[0])
+
+            # Check for in-progress downloads, which can have a .crdownload extension
+            partial_files = [f for f in os.listdir(download_dir) if f.endswith('.crdownload')]
+            if partial_files:
+                logging.info(f"Download in progress, found partial file: {partial_files[0]}. Continuing to wait...")
+            else:
+                # If no partial and no complete files, log what is there (if anything)
+                all_files = os.listdir(download_dir)
+                if all_files:
+                    logging.info(f"No .xlsx or .crdownload file found. Current files in dir: {all_files}. Waiting...")
+                else:
+                    logging.info("Download directory is empty. Waiting for download to start...")
+
+            time.sleep(2) # Poll every 2 seconds to reduce log spam
+            time_waited += 2
             
-        raise Exception("Download timed out. No file was downloaded.")
+        raise Exception(f"Download timed out after {download_wait_time} seconds. No file was downloaded.")
 
     except Exception as e:
         logging.error(f"An error occurred in sales scraper: {e}", exc_info=True)
