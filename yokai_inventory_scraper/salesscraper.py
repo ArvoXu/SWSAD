@@ -51,46 +51,71 @@ def run_sales_scraper():
         driver.get(URL)
         wait = WebDriverWait(driver, 30)
         
-        logging.info("Logging in...")
+        logging.info("Step 1: Logging in...")
+        logging.info("Waiting for username field...")
         username_field = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='User name']")))
+        logging.info("Username field found. Sending keys...")
         username_field.send_keys(username)
+        
+        logging.info("Waiting for password field...")
         password_field = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Password']")))
+        logging.info("Password field found. Sending keys...")
         password_field.send_keys(password)
+
+        logging.info("Waiting for login button...")
         login_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Login') or contains(., 'Sign in')]")))
+        logging.info("Login button found. Clicking...")
         login_button.click()
         logging.info("Login successful.")
 
-        logging.info("Navigating to Order Management...")
+        logging.info("Step 2: Navigating to Order Management...")
+        logging.info("Waiting for 'Order management' submenu...")
         order_management_menu = wait.until(EC.element_to_be_clickable((By.XPATH, "//div[contains(@class, 'el-submenu__title')][.//span[normalize-space()='Order management']]")))
+        logging.info("'Order management' submenu found. Clicking...")
         order_management_menu.click()
+
+        logging.info("Waiting for 'Order management' menu item...")
         order_management_item = wait.until(EC.element_to_be_clickable((By.XPATH, "//li[contains(@class, 'el-menu-item') and normalize-space()='Order management']")))
+        logging.info("'Order management' menu item found. Clicking...")
         order_management_item.click()
         logging.info("Navigation complete.")
         
-        logging.info("Setting date range...")
+        logging.info("Step 3: Setting date range...")
+        logging.info("Waiting for start date input...")
         start_date_input = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Select start date']")))
+        logging.info("Start date input found. Clearing and setting date...")
         start_date_input.clear()
         start_date_input.send_keys("2025-01-01")
 
+        logging.info("Waiting for end date input...")
         end_date_input = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Select end date']")))
+        logging.info("End date input found. Clearing and setting date...")
         end_date_input.clear()
         end_date_input.send_keys("2026-01-01")
         logging.info("Date range set.")
         
         # Adding a small delay for search button to become interactable if needed
         time.sleep(1)
+        logging.info("Step 4: Searching for data...")
+        logging.info("Waiting for search button...")
         search_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[.//span[normalize-space()='Search']]")))
+        logging.info("Search button found. Clicking...")
         search_button.click()
         logging.info("Search initiated to load data...")
         
         # Wait for a table row to appear, indicating data has loaded.
+        logging.info("Waiting for data table to load...")
         wait.until(EC.presence_of_element_located((By.XPATH, "//tbody/tr")))
         logging.info("Data loaded in the table.")
 
+        # Give a couple of seconds for any final JS to execute after data load
         logging.info("Pausing for 2 seconds before clicking export...")
         time.sleep(2)
 
+        logging.info("Step 5: Exporting data...")
+        logging.info("Waiting for export button to be clickable...")
         export_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[.//span[normalize-space()='Export as excel']]")))
+        logging.info("Export button found.")
         
         # --- Click & Verify Loop ---
         max_click_attempts = 3
@@ -105,7 +130,9 @@ def run_sales_scraper():
             while time_waited_for_start < verification_wait_time:
                 time.sleep(2)
                 time_waited_for_start += 2
-                if os.listdir(download_dir): # Check if ANYTHING appeared
+                files_in_dir = os.listdir(download_dir)
+                logging.info(f"Verifying download start... Waited {time_waited_for_start}s. Files in dir: {files_in_dir if files_in_dir else 'None'}")
+                if files_in_dir: # Check if ANYTHING appeared
                     logging.info("Download has started. Proceeding to wait for completion.")
                     click_successful = True
                     break
