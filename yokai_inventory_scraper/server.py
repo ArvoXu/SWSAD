@@ -8,6 +8,7 @@ import time
 import threading
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import OperationalError
 import subprocess
 import logging
 import traceback
@@ -148,7 +149,7 @@ def run_inventory_scraper_background():
 def run_sales_scraper_background():
     """
     Runs the sales scraper in a background thread, processes the downloaded file,
-    and updates the database.
+    and updates the database with a retry mechanism.
     """
     global sales_scraper_state
     
@@ -167,69 +168,80 @@ def run_sales_scraper_background():
         
         # 2. Process the downloaded Excel file
         if downloaded_file_path:
-            # Read the excel file into a pandas DataFrame
             df = pd.read_excel(downloaded_file_path)
-            
-            # Map DataFrame columns to the keys expected by add_transactions
             df.rename(columns={
                 'Shop name': 'shopName',
                 'Product': 'product',
-                'Trasaction Date': 'date', # Matching the original manual upload key
+                'Trasaction Date': 'date',
                 'Total Transaction Amount': 'amount',
                 'Pay type': 'payType'
             }, inplace=True)
-            
-            # Convert DataFrame to list of dictionaries
             transactions_data = df.to_dict('records')
             
-            # 3. Call the existing function to add transactions to the DB
-            db: Session = next(get_db())
-            try:
-                # This block is a simplified version of the logic in add_transactions endpoint
-                db.query(Transaction).delete()
-                
-                all_stores = db.query(Store).all()
-                store_name_map = {}
-                for s in all_stores:
-                    name_parts = s.store_key.rsplit('-', 1)
-                    name = name_parts[0]
-                    if name not in store_name_map:
-                        store_name_map[name] = s
+            # 3. Add transactions to the DB with retry logic
+            max_retries = 3
+            retry_delay_seconds = 5
+            for attempt in range(max_retries):
+                db: Session = next(get_db())
+                try:
+                    # This block is a simplified version of the logic in add_transactions endpoint
+                    db.query(Transaction).delete()
+                    
+                    all_stores = db.query(Store).all()
+                    store_name_map = {}
+                    for s in all_stores:
+                        name_parts = s.store_key.rsplit('-', 1)
+                        name = name_parts[0]
+                        if name not in store_name_map:
+                            store_name_map[name] = s
 
-                new_transactions = []
-                for item in transactions_data:
-                    shop_name_raw = item.get('shopName')
-                    if not shop_name_raw or pd.isna(item.get('date')):
-                        continue
-                    
-                    shop_name = str(shop_name_raw).strip()
-                    store = store_name_map.get(shop_name)
-                    
-                    if not store:
-                        new_store_key = f"{shop_name}-provisional_sales"
-                        store = db.query(Store).filter(Store.store_key == new_store_key).first()
+                    new_transactions = []
+                    for item in transactions_data:
+                        shop_name_raw = item.get('shopName')
+                        if not shop_name_raw or pd.isna(item.get('date')):
+                            continue
+                        
+                        shop_name = str(shop_name_raw).strip()
+                        store = store_name_map.get(shop_name)
+                        
                         if not store:
-                            store = Store(store_key=new_store_key)
-                            db.add(store)
-                            db.flush()
-                        store_name_map[shop_name] = store
+                            new_store_key = f"{shop_name}-provisional_sales"
+                            store = db.query(Store).filter(Store.store_key == new_store_key).first()
+                            if not store:
+                                store = Store(store_key=new_store_key)
+                                db.add(store)
+                                db.flush()
+                            store_name_map[shop_name] = store
 
-                    new_transactions.append(Transaction(
-                        store_key=store.store_key,
-                        transaction_time=pd.to_datetime(item.get('date')),
-                        amount=int(float(item.get('amount', 0))),
-                        product_name=str(item.get('product')),
-                        payment_type=str(item.get('payType'))
-                    ))
+                        new_transactions.append(Transaction(
+                            store_key=store.store_key,
+                            transaction_time=pd.to_datetime(item.get('date')),
+                            amount=int(float(item.get('amount', 0))),
+                            product_name=str(item.get('product')),
+                            payment_type=str(item.get('payType'))
+                        ))
 
-                if new_transactions:
-                    db.bulk_save_objects(new_transactions)
-                
-                db.commit()
-                output = f"Sales scraper finished successfully. Processed {len(new_transactions)} transactions."
-                status = "success"
-            finally:
-                db.close()
+                    if new_transactions:
+                        db.bulk_save_objects(new_transactions)
+                    
+                    db.commit()
+                    output = f"Sales scraper finished successfully. Processed {len(new_transactions)} transactions."
+                    status = "success"
+                    db.close()
+                    break # Exit retry loop on success
+                except OperationalError as e:
+                    db.rollback()
+                    db.close()
+                    logging.error(f"Sales DB error (Attempt {attempt + 1}/{max_retries}): {e}")
+                    if attempt + 1 >= max_retries:
+                        output = f"Sales scraper failed after {max_retries} attempts: {e}"
+                        status = "error"
+                        raise
+                    time.sleep(retry_delay_seconds)
+                finally:
+                    # Ensure db is closed if it's still open
+                    if 'db' in locals() and db.is_active:
+                         db.close()
         else:
             output = "Sales scraper ran but did not return a file path."
             status = "error"
@@ -238,7 +250,7 @@ def run_sales_scraper_background():
         output = f"An error occurred in background sales scraper: {str(e)}"
         status = "error"
     finally:
-        # 4. Clean up the downloaded file and temporary directory
+        # 4. Clean up downloaded file and temp directory
         if downloaded_file_path:
             download_dir = os.path.dirname(downloaded_file_path)
             try:
@@ -396,83 +408,87 @@ def update_store_data(store_key):
 def add_transactions():
     """
     Receives a list of transactions, clears existing ones, and saves the new ones.
-    Handles transactions for stores not yet in the database.
+    Includes a retry mechanism for database operations.
     """
     transactions_data = request.get_json()
     if not isinstance(transactions_data, list):
         return jsonify({"success": False, "message": "Invalid data format. Expected a list of transactions."}), 400
 
-    db: Session = next(get_db())
-    try:
-        # Clear existing transactions
-        db.query(Transaction).delete()
-        logging.info("Cleared existing transactions.")
-        
-        new_transactions = []
-        
-        # Get all existing stores and create a map from name to the FIRST store object found for that name.
-        all_stores = db.query(Store).all()
-        store_name_map = {}
-        for s in all_stores:
-            # The store name is the part of the key before the last hyphen
-            name_parts = s.store_key.rsplit('-', 1)
-            name = name_parts[0]
-            if name not in store_name_map:
-                store_name_map[name] = s
-
-        for item in transactions_data:
-            shop_name_raw = item.get('shopName')
-            if not shop_name_raw or not item.get('date'):
-                continue
+    max_retries = 3
+    retry_delay_seconds = 5
+    for attempt in range(max_retries):
+        db: Session = next(get_db())
+        try:
+            # Clear existing transactions
+            db.query(Transaction).delete()
+            logging.info("Cleared existing transactions.")
             
-            # Clean up the shop name from Excel
-            shop_name = shop_name_raw.strip()
-
-            # Find an existing store record for this shop name
-            store = store_name_map.get(shop_name)
+            new_transactions = []
             
-            # If no store exists, create a new provisional one
-            if not store:
-                logging.info(f"Shop '{shop_name}' not found in DB. Creating a new provisional store.")
-                # We need a machine_id for the key. Let's use a placeholder.
-                new_store_key = f"{shop_name}-provisional_sales"
+            all_stores = db.query(Store).all()
+            store_name_map = {}
+            for s in all_stores:
+                name_parts = s.store_key.rsplit('-', 1)
+                name = name_parts[0]
+                if name not in store_name_map:
+                    store_name_map[name] = s
+
+            for item in transactions_data:
+                shop_name_raw = item.get('shopName')
+                if not shop_name_raw or not item.get('date'):
+                    continue
                 
-                # Check if this provisional key already exists to be safe
-                existing_provisional = db.query(Store).filter(Store.store_key == new_store_key).first()
-                if existing_provisional:
-                    store = existing_provisional
-                else:
-                    store = Store(store_key=new_store_key)
-                    db.add(store)
-                    db.flush() # Flush to get the object ready for relationship, but don't commit yet.
+                shop_name = shop_name_raw.strip()
+                store = store_name_map.get(shop_name)
                 
-                # Add the newly created store to our map to avoid creating it again in this run
-                store_name_map[shop_name] = store
+                if not store:
+                    logging.info(f"Shop '{shop_name}' not found in DB. Creating a new provisional store.")
+                    new_store_key = f"{shop_name}-provisional_sales"
+                    
+                    existing_provisional = db.query(Store).filter(Store.store_key == new_store_key).first()
+                    if existing_provisional:
+                        store = existing_provisional
+                    else:
+                        store = Store(store_key=new_store_key)
+                        db.add(store)
+                        db.flush()
+                    
+                    store_name_map[shop_name] = store
 
-            # Now that we're sure `store` exists...
-            new_transactions.append(Transaction(
-                store_key=store.store_key,
-                transaction_time=parse_date(item.get('date')),
-                amount=int(float(item.get('amount', 0))),
-                product_name=item.get('product'),
-                payment_type=item.get('payType')
-            ))
+                new_transactions.append(Transaction(
+                    store_key=store.store_key,
+                    transaction_time=parse_date(item.get('date')),
+                    amount=int(float(item.get('amount', 0))),
+                    product_name=item.get('product'),
+                    payment_type=item.get('payType')
+                ))
 
-        if new_transactions:
-            db.bulk_save_objects(new_transactions)
-            logging.info(f"Preparing to save {len(new_transactions)} new transactions.")
-        
-        db.commit()
-        logging.info("Successfully committed transactions.")
-        return jsonify({"success": True, "message": f"Successfully added {len(new_transactions)} transactions."})
+            if new_transactions:
+                db.bulk_save_objects(new_transactions)
+                logging.info(f"Preparing to save {len(new_transactions)} new transactions.")
+            
+            db.commit()
+            logging.info("Successfully committed transactions.")
+            db.close()
+            return jsonify({"success": True, "message": f"Successfully added {len(new_transactions)} transactions."})
 
-    except Exception as e:
-        db.rollback()
-        logging.error(f"Error adding transactions: {e}")
-        traceback.print_exc()
-        return jsonify({"success": False, "message": str(e)}), 500
-    finally:
-        db.close()
+        except OperationalError as e:
+            db.rollback()
+            db.close()
+            logging.error(f"DB Error on attempt {attempt + 1}: {e}")
+            if attempt + 1 >= max_retries:
+                logging.error("Max retries reached. Aborting.")
+                return jsonify({"success": False, "message": f"Database error after {max_retries} attempts: {e}"}), 500
+            time.sleep(retry_delay_seconds)
+        except Exception as e:
+            db.rollback()
+            db.close()
+            logging.error(f"Error adding transactions: {e}")
+            traceback.print_exc()
+            return jsonify({"success": False, "message": str(e)}), 500
+        finally:
+            if 'db' in locals() and db.is_active:
+                db.close()
 
 
 @app.route('/api/transactions', methods=['GET'])

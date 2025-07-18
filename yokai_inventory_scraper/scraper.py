@@ -10,6 +10,7 @@ import pytz
 import re
 import json
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import OperationalError
 from dateutil.parser import parse as parse_date
 
 # --- Custom Imports from our project ---
@@ -231,36 +232,46 @@ def parse_inventory_from_text(raw_text):
 
 def save_to_database(data: list):
     """
-    Saves the structured data to the database using SQLAlchemy, completely replacing old inventory data.
+    Saves the structured data to the database using SQLAlchemy, with a retry mechanism
+    for transient network errors.
     """
     if not data:
         print("No data to save to database.")
         return
 
-    db: Session = SessionLocal()
-    try:
-        # Begin a transaction
-        db.begin()
+    max_retries = 3
+    retry_delay_seconds = 5
 
-        # Clear the table to ensure a fresh snapshot of the inventory
-        num_deleted = db.query(Inventory).delete()
-        print(f"Cleared {num_deleted} old records from the inventory table.")
+    for attempt in range(max_retries):
+        db: Session = SessionLocal()
+        try:
+            db.begin()
 
-        # Prepare data for insertion
-        inventory_objects = [Inventory(**item) for item in data]
+            num_deleted = db.query(Inventory).delete()
+            print(f"Cleared {num_deleted} old records from the inventory table.")
 
-        # Use bulk_save_objects for efficient bulk insertion
-        db.bulk_save_objects(inventory_objects)
+            inventory_objects = [Inventory(**item) for item in data]
+            db.bulk_save_objects(inventory_objects)
 
-        # Commit the transaction to make the changes permanent
-        db.commit()
-        print(f"Successfully saved {len(inventory_objects)} new records to the database.")
+            db.commit()
+            print(f"Successfully saved {len(inventory_objects)} new records to the database.")
+            return  # Success, exit the function
 
-    except Exception as e:
-        print(f"Database error during save: {e}")
-        db.rollback() # Roll back changes on error
-    finally:
-        db.close()
+        except OperationalError as e:
+            db.rollback()
+            print(f"Database connection error (Attempt {attempt + 1}/{max_retries}): {e}")
+            if attempt + 1 < max_retries:
+                print(f"Retrying in {retry_delay_seconds} seconds...")
+                time.sleep(retry_delay_seconds)
+            else:
+                print("Max retries reached. Giving up.")
+                raise e
+        except Exception as e:
+            print(f"An unexpected database error occurred: {e}")
+            db.rollback()
+            raise e
+        finally:
+            db.close()
 
 
 def save_to_json(data, filename):
