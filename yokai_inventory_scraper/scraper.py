@@ -309,7 +309,7 @@ def run_scraper(headless=True):
     try:
         driver.get(URL)
         # Increase the wait time from 10 to 30 seconds to handle slower server response times
-        wait = WebDriverWait(driver, 20)
+        wait = WebDriverWait(driver, 30)
 
         # --- Login ---
         print("Logging in...")

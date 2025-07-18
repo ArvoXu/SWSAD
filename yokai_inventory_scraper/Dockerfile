@@ -55,9 +55,27 @@ COPY requirements.txt .
 # Install any needed packages specified in requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application's code into the container
+# - Gunicorn is our production WSGI server.
+# - psycopg2-binary for PostgreSQL.
+# - beautifulsoup4 if needed for parsing HTML.
+# - pandas for data manipulation.
+# - openpyxl for Excel file support.
+# - lxml for faster XML/HTML parsing.
+# - python-dotenv to load environment variables from .env files.
+# - selenium for web scraping.
+# - schedule for task scheduling.
+# - SQLAlchemy for database ORM.
+# - Flask-Cors for handling Cross-Origin Resource Sharing.
+RUN pip install --no-cache-dir gunicorn psycopg2-binary beautifulsoup4 pandas openpyxl lxml python-dotenv selenium schedule SQLAlchemy Flask-Cors
+
+# Copy the rest of the application code
 COPY . .
+
+# Run database migrations/initializations
+# This command ensures the database is ready before the server starts.
+RUN python -c "from database import init_db; init_db()"
 
 # Define the command to run the application
 # Use gunicorn for production, and bind to the port specified by Render's $PORT env var
-CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "--workers", "1", "--threads", "8", "--timeout", "300", "server:app"] 
+# We use --workers 1 to ensure the scheduler only runs in one process.
+CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "--workers", "1", "server:app"] 

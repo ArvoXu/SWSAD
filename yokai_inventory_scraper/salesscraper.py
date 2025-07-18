@@ -48,7 +48,7 @@ def run_sales_scraper():
     try:
         username, password = get_credentials()
         driver.get(URL)
-        wait = WebDriverWait(driver, 20)
+        wait = WebDriverWait(driver, 30)
         
         print("Logging in...")
         username_field = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='User name']")))

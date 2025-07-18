@@ -589,8 +589,8 @@ def run_scheduler():
     Sets up and runs the scheduler in a loop.
     """
     # Use a more robust interval-based schedule for inventory
-    schedule.every(1).hour.do(run_inventory_scraper_background)
-    print("Scheduler started for inventory: will run every 1 hour.")
+    schedule.every().hour.at(":05").do(run_inventory_scraper_background)
+    print("Scheduler started for inventory: will run every hour at 5 minutes past.")
     
     # Schedule the sales scraper to run daily at midnight UTC
     schedule.every().day.at("00:00").do(run_sales_scraper_background)
