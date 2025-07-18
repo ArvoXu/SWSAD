@@ -147,17 +147,8 @@ def run_inventory_scraper_background():
         scraper_state['status'] = status
         scraper_state['last_run_output'] = output
         
-    # Log the update to the database
-    db_log: Session = next(get_db())
-    try:
-        log_entry = UpdateLog(scraper_type='inventory', status=status, details=output)
-        db_log.add(log_entry)
-        db_log.commit()
-    except Exception as e:
-        logging.error(f"Failed to write to update_logs: {e}")
-        db_log.rollback()
-    finally:
-        db_log.close()
+    # Log the update to the database with a retry mechanism
+    log_db_update(scraper_type='inventory', status=status, details=output)
 
 
 def run_sales_scraper_background():
@@ -281,15 +272,34 @@ def run_sales_scraper_background():
             sales_scraper_state['status'] = status
             sales_scraper_state['last_run_output'] = output
             
-        # Log the update to the database
+        # Log the update to the database with a retry mechanism
+        log_db_update(scraper_type='sales', status=status, details=output)
+
+
+def log_db_update(scraper_type, status, details):
+    """Logs an update record to the database with a retry mechanism."""
+    max_retries = 3
+    retry_delay = 5
+    for attempt in range(max_retries):
         db_log: Session = next(get_db())
         try:
-            log_entry = UpdateLog(scraper_type='sales', status=status, details=output)
+            log_entry = UpdateLog(scraper_type=scraper_type, status=status, details=details)
             db_log.add(log_entry)
             db_log.commit()
-        except Exception as e:
-            logging.error(f"Failed to write to update_logs: {e}")
+            logging.info(f"Successfully logged '{status}' for '{scraper_type}' scraper.")
+            return
+        except OperationalError as e:
             db_log.rollback()
+            logging.error(f"Failed to write to update_logs (Attempt {attempt + 1}/{max_retries}): {e}")
+            if attempt + 1 >= max_retries:
+                logging.error(f"Giving up on logging after {max_retries} attempts.")
+            else:
+                logging.info(f"Retrying log write in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+        except Exception as e:
+            db_log.rollback()
+            logging.error(f"An unexpected error occurred while writing to update_logs: {e}", exc_info=True)
+            return # Don't retry on unexpected errors
         finally:
             db_log.close()
 

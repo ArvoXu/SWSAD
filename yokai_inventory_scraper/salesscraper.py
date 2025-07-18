@@ -87,9 +87,13 @@ def run_sales_scraper():
         wait.until(EC.presence_of_element_located((By.XPATH, "//tbody/tr")))
         logging.info("Data loaded in the table.")
 
-        logging.info("Clicking export button...")
+        # Give a couple of seconds for any final JS to execute after data load
+        logging.info("Pausing for 2 seconds before clicking export...")
+        time.sleep(2)
+
+        logging.info("Clicking export button using JavaScript...")
         export_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[.//span[normalize-space()='Export as excel']]")))
-        export_button.click()
+        driver.execute_script("arguments[0].click();", export_button)
         
         logging.info("Waiting for download to complete...")
         download_wait_time = 120  # Increased to 2 minutes
