@@ -87,16 +87,39 @@ def run_sales_scraper():
         wait.until(EC.presence_of_element_located((By.XPATH, "//tbody/tr")))
         logging.info("Data loaded in the table.")
 
-        # Give a couple of seconds for any final JS to execute after data load
         logging.info("Pausing for 2 seconds before clicking export...")
         time.sleep(2)
 
-        logging.info("Clicking export button using JavaScript...")
         export_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[.//span[normalize-space()='Export as excel']]")))
-        driver.execute_script("arguments[0].click();", export_button)
+        
+        # --- Click & Verify Loop ---
+        max_click_attempts = 3
+        click_successful = False
+        for attempt in range(max_click_attempts):
+            logging.info(f"Attempting to click export button (Attempt {attempt + 1}/{max_click_attempts})...")
+            driver.execute_script("arguments[0].click();", export_button)
+            
+            # Verify if the download started within a short timeframe (e.g., 6 seconds)
+            verification_wait_time = 6
+            time_waited_for_start = 0
+            while time_waited_for_start < verification_wait_time:
+                time.sleep(2)
+                time_waited_for_start += 2
+                if os.listdir(download_dir): # Check if ANYTHING appeared
+                    logging.info("Download has started. Proceeding to wait for completion.")
+                    click_successful = True
+                    break
+            
+            if click_successful:
+                break
+            else:
+                logging.warning(f"Click attempt {attempt + 1} did not start a download. Retrying...")
+
+        if not click_successful:
+            raise Exception("Failed to start download after multiple click attempts.")
         
         logging.info("Waiting for download to complete...")
-        download_wait_time = 120  # Increased to 2 minutes
+        download_wait_time = 60  # Reverted to 60 seconds as requested
         time_waited = 0
         
         while time_waited < download_wait_time:
