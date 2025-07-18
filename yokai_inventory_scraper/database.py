@@ -16,8 +16,9 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if DATABASE_URL:
     # Render's PostgreSQL setup might require a specific dialect name.
     # The URL from Render should start with 'postgresql://'
-    # SQLAlchemy will handle the connection pooling automatically for PostgreSQL.
-    engine = create_engine(DATABASE_URL)
+    # We add `sslmode=require` to enforce a secure connection, which can prevent
+    # intermittent SSL-related errors on cloud platforms.
+    engine = create_engine(DATABASE_URL, connect_args={"sslmode": "require"})
 else:
     # For local development and testing, use SQLite.
     # NullPool is recommended for SQLite to avoid issues with thread safety in web apps.
