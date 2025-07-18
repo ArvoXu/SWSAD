@@ -108,18 +108,20 @@ def run_sales_scraper():
                 export_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[.//span[normalize-space()='Export as excel']]")))
                 export_button.click()
                 
-                loading_mask_xpath = "//div[contains(@class, 'el-loading-mask')]"
+                # Use the precise XPath for the loading text based on user feedback
+                loading_text_xpath = "//p[contains(@class, 'el-loading-text') and text()='Data is downloading...']"
                 try:
-                    logging.info("Waiting for 'downloading' message to appear...")
-                    WebDriverWait(driver, 5).until(EC.visibility_of_element_located((By.XPATH, loading_mask_xpath)))
-                    logging.info("'Downloading' message appeared. Now waiting for it to disappear...")
+                    logging.info("Waiting for 'Data is downloading...' message to appear...")
+                    # Wait up to 10 seconds for the message to show up
+                    WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.XPATH, loading_text_xpath)))
+                    logging.info("'Data is downloading...' message appeared. Now waiting for it to disappear...")
                     
                     # Wait up to 90 seconds for the server to prepare the file
-                    WebDriverWait(driver, 90).until(EC.invisibility_of_element_located((By.XPATH, loading_mask_xpath)))
-                    logging.info("'Downloading' message disappeared. File should be starting to download.")
+                    WebDriverWait(driver, 90).until(EC.invisibility_of_element_located((By.XPATH, loading_text_xpath)))
+                    logging.info("'Data is downloading...' message disappeared. File should be starting to download.")
                 except TimeoutException:
                     # This happens if the loading mask doesn't appear or doesn't disappear in time
-                    logging.warning("Did not see the expected 'downloading' message sequence.")
+                    logging.warning("Did not see the expected 'Data is downloading...' message sequence.")
                     # We will proceed to check the file system anyway, as the download might happen without the mask.
 
                 # Step 5: Poll for the downloaded file
