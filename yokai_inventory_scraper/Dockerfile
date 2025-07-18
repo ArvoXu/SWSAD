@@ -78,4 +78,5 @@ RUN python -c "from database import init_db; init_db()"
 # Define the command to run the application
 # Use gunicorn for production, and bind to the port specified by Render's $PORT env var
 # We use --workers 1 to ensure the scheduler only runs in one process.
-CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "--workers", "1", "server:app"] 
+# We set --log-level error to suppress access logs and only show errors.
+CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "--workers", "1", "--log-level", "error", "server:app"] 
