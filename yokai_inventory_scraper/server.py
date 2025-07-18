@@ -18,7 +18,7 @@ import shutil
 
 
 # --- Custom Imports ---
-from database import init_db, get_db, Inventory, Store, Transaction
+from database import init_db, get_db, Inventory, Store, Transaction, UpdateLog
 from scraper import run_scraper as run_inventory_scraper_function, parse_inventory_from_text, save_to_database, save_to_json
 from salesscraper import run_sales_scraper
 
@@ -128,9 +128,10 @@ def run_inventory_scraper_background():
             save_to_json(json_serializable_data, output_json_path)
             
             # The data is already parsed with datetime objects, so we can save it directly
+            items_saved_count = len(structured_data)
             save_to_database(structured_data)
             
-            output = "Scraper finished successfully."
+            output = f"Scraper finished successfully. Processed {items_saved_count} items."
             status = "success"
         else:
             output = "Scraper ran but returned no data."
@@ -145,6 +146,18 @@ def run_inventory_scraper_background():
     with state_lock:
         scraper_state['status'] = status
         scraper_state['last_run_output'] = output
+        
+    # Log the update to the database
+    db_log: Session = next(get_db())
+    try:
+        log_entry = UpdateLog(scraper_type='inventory', status=status, details=output)
+        db_log.add(log_entry)
+        db_log.commit()
+    except Exception as e:
+        logging.error(f"Failed to write to update_logs: {e}")
+        db_log.rollback()
+    finally:
+        db_log.close()
 
 
 def run_sales_scraper_background():
@@ -226,7 +239,8 @@ def run_sales_scraper_background():
                         db.bulk_save_objects(new_transactions)
                     
                     db.commit()
-                    output = f"Sales scraper finished successfully. Processed {len(new_transactions)} transactions."
+                    processed_count = len(new_transactions)
+                    output = f"Sales scraper finished successfully. Processed {processed_count} transactions."
                     status = "success"
                     db.close()
                     break # Exit retry loop on success
@@ -264,6 +278,18 @@ def run_sales_scraper_background():
         with sales_state_lock:
             sales_scraper_state['status'] = status
             sales_scraper_state['last_run_output'] = output
+            
+        # Log the update to the database
+        db_log: Session = next(get_db())
+        try:
+            log_entry = UpdateLog(scraper_type='sales', status=status, details=output)
+            db_log.add(log_entry)
+            db_log.commit()
+        except Exception as e:
+            logging.error(f"Failed to write to update_logs: {e}")
+            db_log.rollback()
+        finally:
+            db_log.close()
 
 
 # --- API Endpoints ---
@@ -365,6 +391,28 @@ def get_data():
         
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
+    finally:
+        db.close()
+
+@app.route('/api/update-logs', methods=['GET'])
+def get_update_logs():
+    """Returns the last 50 update log entries, newest first."""
+    db: Session = next(get_db())
+    try:
+        logs = db.query(UpdateLog).order_by(UpdateLog.ran_at.desc()).limit(50).all()
+        result = [
+            {
+                "scraperType": log.scraper_type,
+                "ranAt": log.ran_at.isoformat(),
+                "status": log.status,
+                "details": log.details
+            }
+            for log in logs
+        ]
+        return jsonify(result)
+    except Exception as e:
+        logging.error(f"Error getting update logs: {e}", exc_info=True)
+        return jsonify({"error": "Could not retrieve update logs"}), 500
     finally:
         db.close()
 
@@ -607,15 +655,18 @@ def run_scheduler():
     Sets up and runs the scheduler in a loop.
     Schedules the inventory scraper to run at every 5-minute mark for precision.
     """
-    # Schedule the inventory scraper to run precisely at minutes divisible by 5
+    # Schedule the inventory scraper to run at 1 minute past the hour.
+    schedule.every().hour.at(":01").do(run_inventory_scraper_background)
+    logging.info("Scheduler started for inventory: will run every hour at 1 minute past.")
+
+    # Schedule the sales scraper to run at every 5-minute mark for testing.
     for minute in range(0, 60, 5):
-        schedule.every().hour.at(f":{minute:02d}").do(run_inventory_scraper_background)
-    
-    logging.info("Scheduler started for inventory: will run every 5 minutes on the 5-minute mark (e.g., 10:05, 10:10).")
+        schedule.every().hour.at(f":{minute:02d}").do(run_sales_scraper_background)
+    logging.info("Scheduler started for sales: will run every 5 minutes on the 5-minute mark (e.g., 10:05, 10:10).")
     
     # Schedule the sales scraper to run daily at midnight UTC
-    schedule.every().day.at("00:00").do(run_sales_scraper_background)
-    logging.info("Scheduler started for sales: will run daily at 00:00 UTC.")
+    # schedule.every().day.at("00:00").do(run_sales_scraper_background)
+    # logging.info("Scheduler started for sales: will run daily at 00:00 UTC.")
     
     while True:
         schedule.run_pending()

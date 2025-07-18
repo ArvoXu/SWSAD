@@ -510,4 +510,40 @@ document.addEventListener('DOMContentLoaded', function () {
     // function processSalesDataForMonth(...) {}
     // async function updateManualSales(...) {}
 
+    async function loadUpdateLogs() {
+        const logList = document.getElementById('updateLogList');
+        logList.innerHTML = '<p>正在加載紀錄...</p>';
+
+        try {
+            const response = await fetch('/api/update-logs');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const logs = await response.json();
+
+            if (logs.length === 0) {
+                logList.innerHTML = '<p>尚無更新紀錄。</p>';
+                return;
+            }
+
+            logList.innerHTML = logs.map(log => {
+                const ranAt = new Date(log.ranAt).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
+                const typeText = log.scraperType === 'inventory' ? '庫存' : '銷售';
+                const statusClass = log.status === 'success' ? 'log-success' : 'log-error';
+                const statusIcon = log.status === 'success' ? '✅' : '❌';
+                
+                return `
+                    <div class="log-entry ${statusClass}" style="margin-bottom: 8px; padding: 5px; border-left: 3px solid ${log.status === 'success' ? 'var(--success-color)' : 'var(--danger-color)'}; background-color: #333;">
+                        <div><strong>${typeText}更新</strong> - <span style="font-size: 0.9em; color: var(--text-secondary);">${ranAt}</span></div>
+                        <div>${statusIcon} ${log.details}</div>
+                    </div>
+                `;
+            }).join('');
+
+        } catch (error) {
+            console.error('Failed to load update logs:', error);
+            logList.innerHTML = '<p style="color: var(--danger-color);">加載更新紀錄失敗。</p>';
+        }
+    }
+
 }); 

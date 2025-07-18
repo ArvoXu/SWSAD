@@ -101,6 +101,18 @@ class Transaction(Base):
     store = relationship("Store", back_populates="transactions")
 
 
+class UpdateLog(Base):
+    """
+    Stores a record of each scraper run, whether it was for inventory or sales.
+    """
+    __tablename__ = 'update_logs'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    scraper_type = Column(String, nullable=False, index=True)  # 'inventory' or 'sales'
+    ran_at = Column(DateTime(timezone=True), default=lambda: datetime.now(pytz.utc))
+    status = Column(String, nullable=False)  # 'success' or 'error'
+    details = Column(Text, nullable=True)  # e.g., 'Updated 62 items' or error message
+
+
 def init_db():
     """
     Creates all the tables in the database.
