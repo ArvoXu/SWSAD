@@ -2,6 +2,7 @@ import time
 import os
 import sys
 import uuid
+import logging
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -26,7 +27,7 @@ def run_sales_scraper():
     """
     download_dir = os.path.join(os.getcwd(), 'temp_downloads', str(uuid.uuid4()))
     os.makedirs(download_dir, exist_ok=True)
-    print(f"Created temporary download directory: {download_dir}")
+    logging.info(f"Created temporary download directory: {download_dir}")
 
     options = webdriver.ChromeOptions()
     options.add_argument("--headless")
@@ -50,23 +51,23 @@ def run_sales_scraper():
         driver.get(URL)
         wait = WebDriverWait(driver, 30)
         
-        print("Logging in...")
+        logging.info("Logging in...")
         username_field = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='User name']")))
         username_field.send_keys(username)
         password_field = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Password']")))
         password_field.send_keys(password)
         login_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Login') or contains(., 'Sign in')]")))
         login_button.click()
-        print("Login successful.")
+        logging.info("Login successful.")
 
-        print("Navigating to Order Management...")
+        logging.info("Navigating to Order Management...")
         order_management_menu = wait.until(EC.element_to_be_clickable((By.XPATH, "//div[contains(@class, 'el-submenu__title')][.//span[normalize-space()='Order management']]")))
         order_management_menu.click()
         order_management_item = wait.until(EC.element_to_be_clickable((By.XPATH, "//li[contains(@class, 'el-menu-item') and normalize-space()='Order management']")))
         order_management_item.click()
-        print("Navigation complete.")
+        logging.info("Navigation complete.")
         
-        print("Setting date range...")
+        logging.info("Setting date range...")
         start_date_input = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Select start date']")))
         start_date_input.clear()
         start_date_input.send_keys("2025-01-01")
@@ -74,58 +75,63 @@ def run_sales_scraper():
         end_date_input = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Select end date']")))
         end_date_input.clear()
         end_date_input.send_keys("2026-01-01")
-        print("Date range set.")
+        logging.info("Date range set.")
         
         # Adding a small delay for search button to become interactable if needed
         time.sleep(1)
         search_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[.//span[normalize-space()='Search']]")))
         search_button.click()
-        print("Search initiated to load data...")
+        logging.info("Search initiated to load data...")
         
         # Wait for a table row to appear, indicating data has loaded.
         wait.until(EC.presence_of_element_located((By.XPATH, "//tbody/tr")))
-        print("Data loaded in the table.")
+        logging.info("Data loaded in the table.")
 
-        print("Clicking export button...")
+        logging.info("Clicking export button...")
         export_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[.//span[normalize-space()='Export as excel']]")))
         export_button.click()
         
-        print("Waiting for download to complete...")
+        logging.info("Waiting for download to complete...")
         download_wait_time = 30 
         time_waited = 0
         while time_waited < download_wait_time:
             if any(fname.endswith('.xlsx') for fname in os.listdir(download_dir)):
                 downloaded_files = [f for f in os.listdir(download_dir) if f.endswith('.xlsx')]
-                print(f"Download complete. File found: {downloaded_files[0]}")
+                logging.info(f"Download complete. File found: {downloaded_files[0]}")
                 return os.path.join(download_dir, downloaded_files[0])
             time.sleep(1)
             time_waited += 1
             
         raise Exception("Download timed out. No file was downloaded.")
 
+    except Exception as e:
+        logging.error(f"An error occurred in sales scraper: {e}", exc_info=True)
+        # Re-raise the exception so the calling function in server.py knows about the failure.
+        raise
     finally:
         driver.quit()
-        print("Browser closed.")
+        logging.info("Browser closed.")
 
 if __name__ == '__main__':
     # Add dotenv loading for local testing
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
     try:
         dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
         if os.path.exists(dotenv_path):
-            print(f"Loading environment variables from {dotenv_path} for local run.")
+            logging.info(f"Loading environment variables from {dotenv_path} for local run.")
             load_dotenv(dotenv_path=dotenv_path)
     except ImportError:
-        print("python-dotenv not installed. Relying on system environment variables.")
+        logging.warning("python-dotenv not installed. Relying on system environment variables.")
 
     try:
         downloaded_file_path = run_sales_scraper()
-        print(f"\n--- Success! ---")
-        print(f"Script finished. File downloaded to: {downloaded_file_path}")
+        logging.info(f"\n--- Success! ---")
+        logging.info(f"Script finished. File downloaded to: {downloaded_file_path}")
         # In a real scenario, you would now process this file.
         # For testing, we can just print the path.
         # os.remove(downloaded_file_path)
         # os.rmdir(os.path.dirname(downloaded_file_path))
     except Exception as e:
-        print(f"\n--- Error ---")
-        print(f"An error occurred: {e}")
+        logging.error(f"\n--- Error ---")
+        logging.error(f"An error occurred: {e}", exc_info=True)
         sys.exit(1)

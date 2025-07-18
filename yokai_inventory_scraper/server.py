@@ -34,10 +34,10 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 # This needs to happen before any other part of the app uses them
 dotenv_path = os.path.join(script_dir, '.env')
 if os.path.exists(dotenv_path):
-    print(f"Loading environment variables from: {dotenv_path}")
+    logging.info(f"Loading environment variables from: {dotenv_path}")
     load_dotenv(dotenv_path=dotenv_path)
 else:
-    print(f".env file not found at {dotenv_path}. Relying on system-set environment variables.")
+    logging.info(f".env file not found at {dotenv_path}. Relying on system-set environment variables.")
 
 
 # --- Flask App Setup ---
@@ -78,9 +78,9 @@ sales_state_lock = threading.Lock()
 # --- Database Initialization ---
 # Ensure the database and table exist before the app starts serving requests.
 # This is crucial for the first run on a new server deployment.
-print(f"Initializing database at: {script_dir}")
+logging.info(f"Initializing database at: {script_dir}")
 init_db() # This command creates the tables in our PostgreSQL or SQLite database if they don't exist.
-print("Database initialization complete.")
+logging.info("Database initialization complete.")
 
 
 def run_inventory_scraper_background():
@@ -93,13 +93,13 @@ def run_inventory_scraper_background():
     
     with state_lock:
         if scraper_state['status'] == 'running':
-            print(f"[{datetime.now()}] Scraper start requested, but a job is already in progress. Aborting.")
+            logging.warning(f"[{datetime.now()}] Scraper start requested, but a job is already in progress. Aborting.")
             return
         
         # Update state to 'running'
         scraper_state['status'] = 'running'
         scraper_state['last_run_output'] = ''
-        print(f"[{datetime.now()}] Scraper status set to 'running'. Starting job.")
+        logging.info(f"[{datetime.now()}] Scraper status set to 'running'. Starting job.")
 
     try:
         # We need to call the actual scraper logic here.
@@ -139,6 +139,7 @@ def run_inventory_scraper_background():
     except Exception as e:
         output = f"An error occurred in background scraper: {str(e)}"
         status = "error"
+        logging.error(output, exc_info=True)
     
     # Update state with the final result
     with state_lock:
@@ -155,11 +156,11 @@ def run_sales_scraper_background():
     
     with sales_state_lock:
         if sales_scraper_state['status'] == 'running':
-            print(f"[{datetime.now()}] Sales scraper start requested, but a job is already in progress. Aborting.")
+            logging.warning(f"[{datetime.now()}] Sales scraper start requested, but a job is already in progress. Aborting.")
             return
         sales_scraper_state['status'] = 'running'
         sales_scraper_state['last_run_output'] = ''
-        print(f"[{datetime.now()}] Sales scraper status set to 'running'. Starting job.")
+        logging.info(f"[{datetime.now()}] Sales scraper status set to 'running'. Starting job.")
 
     downloaded_file_path = None
     try:
@@ -249,15 +250,16 @@ def run_sales_scraper_background():
     except Exception as e:
         output = f"An error occurred in background sales scraper: {str(e)}"
         status = "error"
+        logging.error(output, exc_info=True)
     finally:
         # 4. Clean up downloaded file and temp directory
         if downloaded_file_path:
             download_dir = os.path.dirname(downloaded_file_path)
             try:
                 shutil.rmtree(download_dir)
-                print(f"Successfully cleaned up temporary directory: {download_dir}")
+                logging.info(f"Successfully cleaned up temporary directory: {download_dir}")
             except OSError as e:
-                print(f"Error removing directory {download_dir}: {e.strerror}")
+                logging.error(f"Error removing directory {download_dir}: {e.strerror}")
                 
         with sales_state_lock:
             sales_scraper_state['status'] = status
@@ -275,7 +277,7 @@ def trigger_scraper():
         if scraper_state['status'] == 'running':
             return jsonify({'success': False, 'message': 'Scraper is already running.'}), 409
 
-    print(f"[{datetime.now()}] Received request to run scraper in background.")
+    logging.info(f"[{datetime.now()}] Received request to run scraper in background.")
     # Run the scraper in a separate thread
     thread = threading.Thread(target=run_inventory_scraper_background)
     thread.start()
@@ -299,7 +301,7 @@ def trigger_sales_scraper():
         if sales_scraper_state['status'] == 'running':
             return jsonify({'success': False, 'message': 'Sales scraper is already running.'}), 409
 
-    print(f"[{datetime.now()}] Received request to run sales scraper in background.")
+    logging.info(f"[{datetime.now()}] Received request to run sales scraper in background.")
     thread = threading.Thread(target=run_sales_scraper_background)
     thread.start()
     
@@ -609,11 +611,11 @@ def run_scheduler():
     for minute in range(0, 60, 5):
         schedule.every().hour.at(f":{minute:02d}").do(run_inventory_scraper_background)
     
-    print("Scheduler started for inventory: will run every 5 minutes on the 5-minute mark (e.g., 10:05, 10:10).")
+    logging.info("Scheduler started for inventory: will run every 5 minutes on the 5-minute mark (e.g., 10:05, 10:10).")
     
     # Schedule the sales scraper to run daily at midnight UTC
     schedule.every().day.at("00:00").do(run_sales_scraper_background)
-    print("Scheduler started for sales: will run daily at 00:00 UTC.")
+    logging.info("Scheduler started for sales: will run daily at 00:00 UTC.")
     
     while True:
         schedule.run_pending()
@@ -623,7 +625,7 @@ def run_scheduler():
 @app.route('/test-run-inventory-scraper', methods=['GET'])
 def test_run_inventory_scraper():
     """A simple endpoint to manually trigger the inventory scraper for testing."""
-    print("Manual trigger for inventory scraper received.")
+    logging.info("Manual trigger for inventory scraper received.")
     thread = threading.Thread(target=run_inventory_scraper_background)
     thread.start()
     return "Inventory scraper job manually triggered for testing."
@@ -631,7 +633,7 @@ def test_run_inventory_scraper():
 @app.route('/test-run-sales-scraper', methods=['GET'])
 def test_run_sales_scraper():
     """A simple endpoint to manually trigger the sales scraper for testing."""
-    print("Manual trigger for sales scraper received.")
+    logging.info("Manual trigger for sales scraper received.")
     thread = threading.Thread(target=run_sales_scraper_background)
     thread.start()
     return "Sales scraper job manually triggered for testing."
@@ -642,12 +644,12 @@ if __name__ == '__main__':
     # This block is for local development testing only.
     # When deployed on Render with Gunicorn, this block will not be executed.
     # The scheduler thread is started below in the global scope.
-    print("Starting Flask development server for local testing...")
+    logging.info("Starting Flask development server for local testing...")
     app.run(host='0.0.0.0', port=5001, debug=False)
 
 # --- Start the scheduler thread when the application module is loaded ---
 # This ensures it runs even when started by Gunicorn on Render.
-print("Starting the background scheduler thread...")
+logging.info("Starting the background scheduler thread...")
 scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
 scheduler_thread.start()
-print("Background scheduler thread has been started.") 
+logging.info("Background scheduler thread has been started.") 

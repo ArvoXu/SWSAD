@@ -9,6 +9,7 @@ from datetime import datetime
 import pytz
 import re
 import json
+import logging
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import OperationalError
 from dateutil.parser import parse as parse_date
@@ -38,7 +39,7 @@ def scrape_all_inventory_text():
     and returns it as a single raw text string.
     Runs in headless mode for server deployment.
     """
-    print("Initializing browser in headless mode...")
+    logging.info("Initializing browser in headless mode...")
     
     # --- Chrome Options for Headless Execution on a Server ---
     options = webdriver.ChromeOptions()
@@ -56,22 +57,22 @@ def scrape_all_inventory_text():
         wait = WebDriverWait(driver, 10)
 
         # --- Login ---
-        print("Logging in...")
+        logging.info("Logging in...")
         username, password = get_credentials()
-        print(f"找到輸入框，正在輸入帳號: {username[:4]}****") # 出於安全，只顯示部分帳號
+        logging.info(f"找到輸入框，正在輸入帳號: {username[:4]}****") # 出於安全，只顯示部分帳號
         username_field = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='User name']")))
         username_field.send_keys(username)
         password_field = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Password']")))
         password_field.send_keys(password)
         login_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Login') or contains(., 'Sign in')]")))
         login_button.click()
-        print("Login successful.")
+        logging.info("Login successful.")
 
         # --- 等待一下下 ---
         time.sleep(3) # 等待 3 秒，你可以根據需要調整秒數
 
         # --- Navigate to Inventory ---
-        print("Navigating to Store Management...")
+        logging.info("Navigating to Store Management...")
         store_management_link = wait.until(EC.element_to_be_clickable((By.XPATH, "//li[.//span[contains(text(), 'Store management')]]")))
         store_management_link.click()
 
@@ -80,74 +81,74 @@ def scrape_all_inventory_text():
         total_stores_processed = 0
 
         while True:
-            print(f"--- Preparing to process Page {page_number} ---")
+            logging.info(f"--- Preparing to process Page {page_number} ---")
             rows_xpath = "//div[contains(@class, 'el-table__body-wrapper')]//tr"
             wait.until(EC.presence_of_all_elements_located((By.XPATH, rows_xpath)))
 
             num_rows_on_page = len(driver.find_elements(By.XPATH, rows_xpath))
             if num_rows_on_page == 0:
-                print("No stores found on the page, assuming end of scraping.")
+                logging.info("No stores found on the page, assuming end of scraping.")
                 break
-            print(f"Found {num_rows_on_page} stores on page {page_number}.")
+            logging.info(f"Found {num_rows_on_page} stores on page {page_number}.")
 
             for i in range(num_rows_on_page):
                 total_stores_processed += 1
-                print(f"Processing store #{total_stores_processed} (Page {page_number}, Row {i+1})...")
+                logging.info(f"Processing store #{total_stores_processed} (Page {page_number}, Row {i+1})...")
                 
                 inquiry_buttons = wait.until(EC.presence_of_all_elements_located((By.XPATH, "//button[.//span[contains(text(), 'Inventory inquiry')]]")))
                 if i < len(inquiry_buttons):
                     driver.execute_script("arguments[0].click();", inquiry_buttons[i])
                 else:
-                    print(f"  > Error: Could not find button for row {i+1}. Skipping.")
+                    logging.error(f"  > Error: Could not find button for row {i+1}. Skipping.")
                     continue
 
                 inventory_container = wait.until(EC.visibility_of_element_located((By.XPATH, "//div[@data-v-d0a9a5c0 and @class='container']")))
                 inventory_text = inventory_container.text
-                print("  > Scraped inventory data.")
+                logging.info("  > Scraped inventory data.")
 
                 # Accumulate text instead of writing to file
                 all_scraped_text += f"--- Store #{total_stores_processed} ---\n{inventory_text}\n{'-'*20}\n\n"
 
                 close_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//li[contains(@class, 'tags-li') and contains(@class, 'active')]//i[contains(@class, 'el-icon-close')]")))
                 close_button.click()
-                print("  > Closed inventory tab.")
+                logging.info("  > Closed inventory tab.")
                 wait.until(EC.presence_of_element_located((By.XPATH, rows_xpath)))
 
                 if page_number > 1:
-                    print(f"  > Navigating back to page {page_number}...")
+                    logging.info(f"  > Navigating back to page {page_number}...")
                     target_page_button_xpath = f"//ul[contains(@class, 'el-pager')]//li[text()='{page_number}']"
                     target_page_button = wait.until(EC.element_to_be_clickable((By.XPATH, target_page_button_xpath)))
                     target_page_button.click()
                     time.sleep(0.5)
-                    print(f"  > Returned to page {page_number}.")
+                    logging.info(f"  > Returned to page {page_number}.")
 
             # --- Go to next page ---
             try:
                 next_page_to_click = page_number + 1
-                print(f"\nFinished page {page_number}. Attempting to move to page {next_page_to_click}...")
+                logging.info(f"\nFinished page {page_number}. Attempting to move to page {next_page_to_click}...")
                 next_page_button_xpath = f"//ul[contains(@class, 'el-pager')]//li[text()='{next_page_to_click}']"
                 next_page_button = wait.until(EC.element_to_be_clickable((By.XPATH, next_page_button_xpath)))
                 next_page_button.click()
                 time.sleep(2)
                 page_number += 1
             except Exception:
-                print(f"\nCould not find button for page {next_page_to_click}. Assuming it's the last page.")
+                logging.info(f"\nCould not find button for page {next_page_to_click}. Assuming it's the last page.")
                 break
         
-        print(f"\nScraping complete. Processed {total_stores_processed} stores in total.")
+        logging.info(f"\nScraping complete. Processed {total_stores_processed} stores in total.")
         
         # Replace text in the accumulated string before returning
-        print("\nReplacing 'Last replenishment time' with '上次補貨時間' in memory...")
+        logging.info("\nReplacing 'Last replenishment time' with '上次補貨時間' in memory...")
         all_scraped_text = all_scraped_text.replace("Last replenishment time", "上次補貨時間")
-        print("Replacement complete.")
+        logging.info("Replacement complete.")
         
         return all_scraped_text
 
     except Exception as e:
-        print(f"An error occurred during scraping: {e}")
+        logging.error(f"An error occurred during scraping: {e}", exc_info=True)
         return "" # Return empty string on error
     finally:
-        print("Closing the browser.")
+        logging.info("Closing the browser.")
         driver.quit()
 
 
@@ -156,7 +157,7 @@ def parse_inventory_from_text(raw_text):
     Parses the raw inventory text string, which is grouped by store,
     into a structured list of dictionaries.
     """
-    print("\nStarting to parse data in Python...")
+    logging.info("\nStarting to parse data in Python...")
     final_result = []
     
     # Define the target timezone
@@ -166,7 +167,7 @@ def parse_inventory_from_text(raw_text):
     store_blocks = raw_text.split('--- Store #')[1:]
     
     if not store_blocks:
-        print("Warning: Could not find any store blocks in the raw text.")
+        logging.warning("Warning: Could not find any store blocks in the raw text.")
         return []
 
     for block in store_blocks:
@@ -197,7 +198,7 @@ def parse_inventory_from_text(raw_text):
 
         # Process data in chunks of 4 lines
         if len(data_lines) % 4 != 0:
-            print(f"Warning: Data lines count ({len(data_lines)}) is not a multiple of 4 for a store block. Skipping block.")
+            logging.warning(f"Warning: Data lines count ({len(data_lines)}) is not a multiple of 4 for a store block. Skipping block.")
             continue
             
         for i in range(0, len(data_lines), 4):
@@ -207,7 +208,7 @@ def parse_inventory_from_text(raw_text):
             quantity_str = data_lines[i+3]
             
             if not quantity_str.isdigit():
-                print(f"Warning: Expected a number for quantity but got '{quantity_str}'. Skipping entry.")
+                logging.warning(f"Warning: Expected a number for quantity but got '{quantity_str}'. Skipping entry.")
                 continue
 
             # Parse process_time string back to a datetime object
@@ -223,10 +224,10 @@ def parse_inventory_from_text(raw_text):
             })
 
     if not final_result:
-        print("Warning: Failed to parse any product items from the raw data.")
+        logging.warning("Warning: Failed to parse any product items from the raw data.")
         return []
 
-    print(f"Parsing complete. Found {len(final_result)} product items.")
+    logging.info(f"Parsing complete. Found {len(final_result)} product items.")
     return final_result
 
 
@@ -236,7 +237,7 @@ def save_to_database(data: list):
     for transient network errors.
     """
     if not data:
-        print("No data to save to database.")
+        logging.info("No data to save to database.")
         return
 
     max_retries = 3
@@ -248,26 +249,26 @@ def save_to_database(data: list):
             db.begin()
 
             num_deleted = db.query(Inventory).delete()
-            print(f"Cleared {num_deleted} old records from the inventory table.")
+            logging.info(f"Cleared {num_deleted} old records from the inventory table.")
 
             inventory_objects = [Inventory(**item) for item in data]
             db.bulk_save_objects(inventory_objects)
 
             db.commit()
-            print(f"Successfully saved {len(inventory_objects)} new records to the database.")
+            logging.info(f"Successfully saved {len(inventory_objects)} new records to the database.")
             return  # Success, exit the function
 
         except OperationalError as e:
             db.rollback()
-            print(f"Database connection error (Attempt {attempt + 1}/{max_retries}): {e}")
+            logging.error(f"Database connection error (Attempt {attempt + 1}/{max_retries}): {e}")
             if attempt + 1 < max_retries:
-                print(f"Retrying in {retry_delay_seconds} seconds...")
+                logging.info(f"Retrying in {retry_delay_seconds} seconds...")
                 time.sleep(retry_delay_seconds)
             else:
-                print("Max retries reached. Giving up.")
+                logging.error("Max retries reached. Giving up.")
                 raise e
         except Exception as e:
-            print(f"An unexpected database error occurred: {e}")
+            logging.error(f"An unexpected database error occurred: {e}", exc_info=True)
             db.rollback()
             raise e
         finally:
@@ -277,15 +278,15 @@ def save_to_database(data: list):
 def save_to_json(data, filename):
     """Saves the structured data to a JSON file."""
     if not data:
-        print("No data to save.")
+        logging.info("No data to save.")
         return
         
     try:
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
-        print(f"\nStructured data successfully saved to {filename}")
+        logging.info(f"\nStructured data successfully saved to {filename}")
     except Exception as e:
-        print(f"Error saving data to {filename}: {e}")
+        logging.error(f"Error saving data to {filename}: {e}", exc_info=True)
 
 
 def run_scraper(headless=True):
@@ -293,12 +294,12 @@ def run_scraper(headless=True):
     啟動爬蟲的主函數。
     :param headless: 是否以無頭模式運行瀏覽器。
     """
-    print("正在啟動爬蟲...")
+    logging.info("正在啟動爬蟲...")
     
     try:
         username, password = get_credentials()
     except ValueError as e:
-        print(e, file=sys.stderr)
+        logging.error(e, file=sys.stderr)
         sys.exit(1) # 終止腳本
 
     # --- Modern Selenium Setup ---
@@ -319,22 +320,22 @@ def run_scraper(headless=True):
 
     try:
         driver.get(URL)
-        # Increase the wait time from 10 to 30 seconds to handle slower server response times
+        # Increase the wait time from 30 to 30 seconds to handle slower server response times
         wait = WebDriverWait(driver, 30)
 
         # --- Login ---
-        print("Logging in...")
-        print(f"找到輸入框，正在輸入帳號: {username[:4]}****") # 出於安全，只顯示部分帳號
+        logging.info("Logging in...")
+        logging.info(f"找到輸入框，正在輸入帳號: {username[:4]}****") # 出於安全，只顯示部分帳號
         username_field = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='User name']")))
         username_field.send_keys(username)
         password_field = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Password']")))
         password_field.send_keys(password)
         login_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Login') or contains(., 'Sign in')]")))
         login_button.click()
-        print("Login successful.")
+        logging.info("Login successful.")
 
         # --- Navigate to Inventory ---
-        print("Navigating to Store Management...")
+        logging.info("Navigating to Store Management...")
         store_management_link = wait.until(EC.element_to_be_clickable((By.XPATH, "//li[.//span[contains(text(), 'Store management')]]")))
         store_management_link.click()
 
@@ -343,78 +344,80 @@ def run_scraper(headless=True):
         total_stores_processed = 0
 
         while True:
-            print(f"--- Preparing to process Page {page_number} ---")
+            logging.info(f"--- Preparing to process Page {page_number} ---")
             rows_xpath = "//div[contains(@class, 'el-table__body-wrapper')]//tr"
             wait.until(EC.presence_of_all_elements_located((By.XPATH, rows_xpath)))
 
             num_rows_on_page = len(driver.find_elements(By.XPATH, rows_xpath))
             if num_rows_on_page == 0:
-                print("No stores found on the page, assuming end of scraping.")
+                logging.info("No stores found on the page, assuming end of scraping.")
                 break
-            print(f"Found {num_rows_on_page} stores on page {page_number}.")
+            logging.info(f"Found {num_rows_on_page} stores on page {page_number}.")
 
             for i in range(num_rows_on_page):
                 total_stores_processed += 1
-                print(f"Processing store #{total_stores_processed} (Page {page_number}, Row {i+1})...")
+                logging.info(f"Processing store #{total_stores_processed} (Page {page_number}, Row {i+1})...")
                 
                 inquiry_buttons = wait.until(EC.presence_of_all_elements_located((By.XPATH, "//button[.//span[contains(text(), 'Inventory inquiry')]]")))
                 if i < len(inquiry_buttons):
                     driver.execute_script("arguments[0].click();", inquiry_buttons[i])
                 else:
-                    print(f"  > Error: Could not find button for row {i+1}. Skipping.")
+                    logging.error(f"  > Error: Could not find button for row {i+1}. Skipping.")
                     continue
 
                 inventory_container = wait.until(EC.visibility_of_element_located((By.XPATH, "//div[@data-v-d0a9a5c0 and @class='container']")))
                 inventory_text = inventory_container.text
-                print("  > Scraped inventory data.")
+                logging.info("  > Scraped inventory data.")
 
                 # Accumulate text instead of writing to file
                 all_scraped_text += f"--- Store #{total_stores_processed} ---\n{inventory_text}\n{'-'*20}\n\n"
 
                 close_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//li[contains(@class, 'tags-li') and contains(@class, 'active')]//i[contains(@class, 'el-icon-close')]")))
                 close_button.click()
-                print("  > Closed inventory tab.")
+                logging.info("  > Closed inventory tab.")
                 wait.until(EC.presence_of_element_located((By.XPATH, rows_xpath)))
 
                 if page_number > 1:
-                    print(f"  > Navigating back to page {page_number}...")
+                    logging.info(f"  > Navigating back to page {page_number}...")
                     target_page_button_xpath = f"//ul[contains(@class, 'el-pager')]//li[text()='{page_number}']"
                     target_page_button = wait.until(EC.element_to_be_clickable((By.XPATH, target_page_button_xpath)))
                     target_page_button.click()
                     time.sleep(0.5)
-                    print(f"  > Returned to page {page_number}.")
+                    logging.info(f"  > Returned to page {page_number}.")
 
             # --- Go to next page ---
             try:
                 next_page_to_click = page_number + 1
-                print(f"\nFinished page {page_number}. Attempting to move to page {next_page_to_click}...")
+                logging.info(f"\nFinished page {page_number}. Attempting to move to page {next_page_to_click}...")
                 next_page_button_xpath = f"//ul[contains(@class, 'el-pager')]//li[text()='{next_page_to_click}']"
                 next_page_button = wait.until(EC.element_to_be_clickable((By.XPATH, next_page_button_xpath)))
                 next_page_button.click()
                 time.sleep(2)
                 page_number += 1
             except Exception:
-                print(f"\nCould not find button for page {next_page_to_click}. Assuming it's the last page.")
+                logging.info(f"\nCould not find button for page {next_page_to_click}. Assuming it's the last page.")
                 break
         
-        print(f"\nScraping complete. Processed {total_stores_processed} stores in total.")
+        logging.info(f"\nScraping complete. Processed {total_stores_processed} stores in total.")
         
         # Replace text in the accumulated string before returning
-        print("\nReplacing 'Last replenishment time' with '上次補貨時間' in memory...")
+        logging.info("\nReplacing 'Last replenishment time' with '上次補貨時間' in memory...")
         all_scraped_text = all_scraped_text.replace("Last replenishment time", "上次補貨時間")
-        print("Replacement complete.")
+        logging.info("Replacement complete.")
         
         return all_scraped_text
 
     except Exception as e:
-        print(f"An error occurred during scraping: {e}")
+        logging.error(f"An error occurred during scraping: {e}", exc_info=True)
         return "" # Return empty string on error
     finally:
-        print("Closing the browser.")
+        logging.info("Closing the browser.")
         driver.quit()
 
 
 if __name__ == "__main__":
+    # Setup basic logging for local testing
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
     try:
         # 這裡的代碼只在直接運行 scraper.py 時執行，方便本地測試
         # 在伺服器環境中，server.py 會導入 run_scraper 函數並調用它
@@ -425,13 +428,13 @@ if __name__ == "__main__":
             # 我們假設 .env 文件與 scraper.py 在同一個目錄
             dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
             if os.path.exists(dotenv_path):
-                print(f"正在從 {dotenv_path} 加載環境變數...")
+                logging.info(f"正在從 {dotenv_path} 加載環境變數...")
                 load_dotenv(dotenv_path=dotenv_path)
             else:
-                print(".env 文件未找到，將依賴於系統已設置的環境變數。")
+                logging.info(".env 文件未找到，將依賴於系統已設置的環境變數。")
 
         except ImportError:
-            print("警告: python-dotenv 未安裝。本地測試時請確保手動設置環境變數。")
+            logging.warning("警告: python-dotenv 未安裝。本地測試時請確保手動設置環境變數。")
         
         # 1. Execute the web scraper to get raw text
         # We set headless=True for any automated run, local test or server.
@@ -463,4 +466,4 @@ if __name__ == "__main__":
             save_to_database(structured_data)
             
     except Exception as e:
-        print(f"An error occurred in the main execution block: {e}")
+        logging.error(f"An error occurred in the main execution block: {e}", exc_info=True)
