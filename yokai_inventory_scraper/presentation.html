@@ -2428,7 +2428,7 @@
                 
                 // --- NEW: Get the last 30 days sales for this specific store ---
                 const machineSalesTotal = salesData[store] ? salesData[store].totalSales : 0;
-
+                
                 // 創建卡片
                 const cardDiv = document.createElement('div');
                 cardDiv.className = 'chart-card';
@@ -2799,7 +2799,7 @@
                 // 設置銷售趨勢視圖
                 setupSalesTrendTab(window.fullSalesData);
                     console.log('[Debug] DOMContentLoaded: Render functions called.');
-                } else {
+            } else {
                     console.error('[Debug] DOMContentLoaded: window.inventoryData is missing after loadAllData.');
                     throw new Error('數據未成功加載。');
                 }

@@ -587,11 +587,13 @@ def serve_static_files(path):
 def run_scheduler():
     """
     Sets up and runs the scheduler in a loop.
+    Schedules the inventory scraper to run at every 5-minute mark for precision.
     """
-    # For testing, we'll set it to every 5 minutes.
-    # For production, it's better to use: schedule.every().hour.at(":05").do(run_inventory_scraper_background)
-    schedule.every(5).minutes.do(run_inventory_scraper_background)
-    print("Scheduler started for inventory: will run every 5 minutes for testing.")
+    # Schedule the inventory scraper to run precisely at minutes divisible by 5
+    for minute in range(0, 60, 5):
+        schedule.every().hour.at(f":{minute:02d}").do(run_inventory_scraper_background)
+    
+    print("Scheduler started for inventory: will run every 5 minutes on the 5-minute mark (e.g., 10:05, 10:10).")
     
     # Schedule the sales scraper to run daily at midnight UTC
     schedule.every().day.at("00:00").do(run_sales_scraper_background)
@@ -599,7 +601,7 @@ def run_scheduler():
     
     while True:
         schedule.run_pending()
-        time.sleep(1) # Sleep for a second to avoid busy-waiting
+        time.sleep(1)
 
 # --- Endpoints for Manual Testing ---
 @app.route('/test-run-inventory-scraper', methods=['GET'])
