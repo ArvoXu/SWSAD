@@ -7,6 +7,7 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
 from dotenv import load_dotenv
 
 # --- Configurable Variables ---
@@ -24,6 +25,7 @@ def run_sales_scraper():
     """
     Launches a headless browser, logs in, downloads the sales report,
     and returns the path to the downloaded Excel file.
+    Implements a full-process retry mechanism.
     """
     download_dir = os.path.join(os.getcwd(), 'temp_downloads', str(uuid.uuid4()))
     os.makedirs(download_dir, exist_ok=True)
@@ -47,6 +49,7 @@ def run_sales_scraper():
     driver = webdriver.Chrome(options=options)
     
     try:
+        # --- Login (only happens once) ---
         username, password = get_credentials()
         driver.get(URL)
         wait = WebDriverWait(driver, 30)
@@ -68,118 +71,98 @@ def run_sales_scraper():
         login_button.click()
         logging.info("Login successful.")
 
-        logging.info("Step 2: Navigating to Order Management...")
-        logging.info("Waiting for 'Order management' submenu...")
-        order_management_menu = wait.until(EC.element_to_be_clickable((By.XPATH, "//div[contains(@class, 'el-submenu__title')][.//span[normalize-space()='Order management']]")))
-        logging.info("'Order management' submenu found. Clicking...")
-        order_management_menu.click()
+        # --- Main process retry loop ---
+        max_attempts = 3
+        for attempt in range(max_attempts):
+            try:
+                logging.info(f"--- Starting Download Attempt {attempt + 1}/{max_attempts} ---")
 
-        logging.info("Waiting for 'Order management' menu item...")
-        order_management_item = wait.until(EC.element_to_be_clickable((By.XPATH, "//li[contains(@class, 'el-menu-item') and normalize-space()='Order management']")))
-        logging.info("'Order management' menu item found. Clicking...")
-        order_management_item.click()
-        logging.info("Navigation complete.")
-        
-        logging.info("Step 3: Setting date range...")
-        logging.info("Waiting for start date input...")
-        start_date_input = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Select start date']")))
-        logging.info("Start date input found. Clearing and setting date...")
-        start_date_input.clear()
-        start_date_input.send_keys("2025-01-01")
+                # Step 2: Navigate to Order Management (inside loop for retries)
+                logging.info("Navigating to Order Management...")
+                order_management_menu = wait.until(EC.element_to_be_clickable((By.XPATH, "//div[contains(@class, 'el-submenu__title')][.//span[normalize-space()='Order management']]")))
+                order_management_menu.click()
+                order_management_item = wait.until(EC.element_to_be_clickable((By.XPATH, "//li[contains(@class, 'el-menu-item') and normalize-space()='Order management']")))
+                order_management_item.click()
+                logging.info("Navigation complete.")
 
-        logging.info("Waiting for end date input...")
-        end_date_input = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Select end date']")))
-        logging.info("End date input found. Clearing and setting date...")
-        end_date_input.clear()
-        end_date_input.send_keys("2026-01-01")
-        logging.info("Date range set.")
-        
-        # Adding a small delay for search button to become interactable if needed
-        time.sleep(1)
-        logging.info("Step 4: Searching for data...")
-        logging.info("Waiting for search button...")
-        search_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[.//span[normalize-space()='Search']]")))
-        logging.info("Search button found. Clicking...")
-        search_button.click()
-        logging.info("Search initiated to load data...")
-        
-        # Wait for a table row to appear, indicating data has loaded.
-        logging.info("Waiting for data table to load...")
-        wait.until(EC.presence_of_element_located((By.XPATH, "//tbody/tr")))
-        logging.info("Data loaded in the table.")
+                # Step 3: Set date range and search
+                logging.info("Setting date range...")
+                start_date_input = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Select start date']")))
+                start_date_input.clear()
+                start_date_input.send_keys("2025-01-01")
+                end_date_input = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Select end date']")))
+                end_date_input.clear()
+                end_date_input.send_keys("2026-01-01")
+                logging.info("Date range set.")
+                
+                logging.info("Searching for data...")
+                search_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[.//span[normalize-space()='Search']]")))
+                search_button.click()
+                
+                logging.info("Waiting for data table to load...")
+                wait.until(EC.presence_of_element_located((By.XPATH, "//tbody/tr")))
+                logging.info("Data loaded in the table.")
 
-        # Give a couple of seconds for any final JS to execute after data load
-        logging.info("Pausing for 2 seconds before clicking export...")
-        time.sleep(2)
+                # Step 4: Click export and verify UI feedback
+                logging.info("Waiting for export button...")
+                export_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[.//span[normalize-space()='Export as excel']]")))
+                export_button.click()
+                
+                loading_mask_xpath = "//div[contains(@class, 'el-loading-mask')]"
+                try:
+                    logging.info("Waiting for 'downloading' message to appear...")
+                    WebDriverWait(driver, 5).until(EC.visibility_of_element_located((By.XPATH, loading_mask_xpath)))
+                    logging.info("'Downloading' message appeared. Now waiting for it to disappear...")
+                    
+                    # Wait up to 90 seconds for the server to prepare the file
+                    WebDriverWait(driver, 90).until(EC.invisibility_of_element_located((By.XPATH, loading_mask_xpath)))
+                    logging.info("'Downloading' message disappeared. File should be starting to download.")
+                except TimeoutException:
+                    # This happens if the loading mask doesn't appear or doesn't disappear in time
+                    logging.warning("Did not see the expected 'downloading' message sequence.")
+                    # We will proceed to check the file system anyway, as the download might happen without the mask.
 
-        logging.info("Step 5: Exporting data...")
-        logging.info("Waiting for export button to be clickable...")
-        export_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[.//span[normalize-space()='Export as excel']]")))
-        logging.info("Export button found.")
-        
-        # --- Click & Verify Loop ---
-        max_click_attempts = 3
-        click_successful = False
-        for attempt in range(max_click_attempts):
-            logging.info(f"Attempting to click export button (Attempt {attempt + 1}/{max_click_attempts})...")
-            driver.execute_script("arguments[0].click();", export_button)
-            
-            # Verify if the download started within a short timeframe (e.g., 6 seconds)
-            verification_wait_time = 6
-            time_waited_for_start = 0
-            while time_waited_for_start < verification_wait_time:
-                time.sleep(2)
-                time_waited_for_start += 2
-                files_in_dir = os.listdir(download_dir)
-                logging.info(f"Verifying download start... Waited {time_waited_for_start}s. Files in dir: {files_in_dir if files_in_dir else 'None'}")
-                if files_in_dir: # Check if ANYTHING appeared
-                    logging.info("Download has started. Proceeding to wait for completion.")
-                    click_successful = True
-                    break
-            
-            if click_successful:
-                break
-            else:
-                logging.warning(f"Click attempt {attempt + 1} did not start a download. Retrying...")
+                # Step 5: Poll for the downloaded file
+                return poll_for_download(download_dir, 30) # Poll for 30 seconds
 
-        if not click_successful:
-            raise Exception("Failed to start download after multiple click attempts.")
-        
-        logging.info("Waiting for download to complete...")
-        download_wait_time = 60  # Reverted to 60 seconds as requested
-        time_waited = 0
-        
-        while time_waited < download_wait_time:
-            # Check for completed .xlsx files
-            completed_files = [f for f in os.listdir(download_dir) if f.endswith('.xlsx')]
-            if completed_files:
-                logging.info(f"Download complete. File found: {completed_files[0]}")
-                return os.path.join(download_dir, completed_files[0])
-
-            # Check for in-progress downloads, which can have a .crdownload extension
-            partial_files = [f for f in os.listdir(download_dir) if f.endswith('.crdownload')]
-            if partial_files:
-                logging.info(f"Download in progress, found partial file: {partial_files[0]}. Continuing to wait...")
-            else:
-                # If no partial and no complete files, log what is there (if anything)
-                all_files = os.listdir(download_dir)
-                if all_files:
-                    logging.info(f"No .xlsx or .crdownload file found. Current files in dir: {all_files}. Waiting...")
+            except Exception as e:
+                logging.error(f"Attempt {attempt + 1} failed: {e}")
+                if attempt + 1 < max_attempts:
+                    logging.info("Refreshing the page to retry...")
+                    driver.refresh()
+                    time.sleep(3) # Wait a moment for the page to settle after refresh
                 else:
-                    logging.info("Download directory is empty. Waiting for download to start...")
+                    logging.error("All download attempts have failed.")
+                    raise  # Re-raise the last exception
 
-            time.sleep(2) # Poll every 2 seconds to reduce log spam
-            time_waited += 2
-            
-        raise Exception(f"Download timed out after {download_wait_time} seconds. No file was downloaded.")
-
-    except Exception as e:
-        logging.error(f"An error occurred in sales scraper: {e}", exc_info=True)
-        # Re-raise the exception so the calling function in server.py knows about the failure.
-        raise
     finally:
         driver.quit()
         logging.info("Browser closed.")
+
+
+def poll_for_download(download_dir, timeout_seconds):
+    """Polls the download directory for the completed file."""
+    logging.info(f"Polling download directory for {timeout_seconds} seconds...")
+    time_waited = 0
+    while time_waited < timeout_seconds:
+        # Check for completed .xlsx files
+        completed_files = [f for f in os.listdir(download_dir) if f.endswith('.xlsx')]
+        if completed_files:
+            logging.info(f"Download complete. File found: {completed_files[0]}")
+            return os.path.join(download_dir, completed_files[0])
+
+        # Check for in-progress downloads
+        partial_files = [f for f in os.listdir(download_dir) if f.endswith('.crdownload')]
+        if partial_files:
+            logging.info(f"Download in progress, found partial file: {partial_files[0]}. Continuing to wait...")
+        else:
+            logging.info("Download directory is empty. Waiting for download to start...")
+        
+        time.sleep(2)
+        time_waited += 2
+    
+    raise Exception(f"Download poll timed out after {timeout_seconds} seconds.")
+
 
 if __name__ == '__main__':
     # Add dotenv loading for local testing
