@@ -69,7 +69,7 @@ def scrape_all_inventory_text():
         logging.info("Login successful.")
 
         # --- 等待一下下 ---
-        time.sleep(5) # 等待 3 秒，你可以根據需要調整秒數
+        time.sleep(3) # 等待 3 秒，你可以根據需要調整秒數
 
         # --- Navigate to Inventory ---
         logging.info("Navigating to Store Management...")
@@ -299,7 +299,7 @@ def run_scraper(headless=True):
     try:
         username, password = get_credentials()
     except ValueError as e:
-        logging.error(e)
+        logging.error(e, file=sys.stderr)
         sys.exit(1) # 終止腳本
 
     # --- Modern Selenium Setup ---
@@ -334,36 +334,39 @@ def run_scraper(headless=True):
         login_button.click()
         logging.info("Login successful.")
 
-        # Add a static wait for the page to settle after login.
-        time.sleep(5)
+        # --- Navigate to Inventory ---
+        logging.info("Navigating to Store Management...")
+        store_management_link = wait.until(EC.element_to_be_clickable((By.XPATH, "//li[.//span[contains(text(), 'Store management')]]")))
+        store_management_link.click()
 
-        # --- Navigate to Inventory with Retry ---
-        max_nav_retries = 3
-        for attempt in range(max_nav_retries):
-            try:
-                logging.info(f"Navigating to Store Management (Attempt {attempt + 1}/{max_nav_retries})...")
-                store_management_link = wait.until(EC.element_to_be_clickable((By.XPATH, "//li[.//span[contains(text(), 'Store management')]]")))
-                store_management_link.click()
-                
-                # Wait for the table rows to appear, which indicates the page has loaded.
-                rows_xpath = "//div[contains(@class, 'el-table__body-wrapper')]//tr"
-                wait.until(EC.presence_of_all_elements_located((By.XPATH, rows_xpath)))
-                
-                logging.info("Successfully navigated and store list is visible.")
-                break  # Exit the retry loop on success.
-            except Exception as e:
-                logging.warning(f"Failed to load store list on attempt {attempt + 1}. Error: {e}")
-                if attempt + 1 < max_nav_retries:
-                    logging.info("Refreshing page and retrying...")
-                    driver.refresh()
-                    time.sleep(5) # Wait a bit after refreshing
-                else:
-                    logging.error("Max retries reached for navigation. Aborting scraper run.")
-                    raise # Re-raise the exception to terminate the function
-        
         # --- Full Inventory Scraping Logic with Pagination ---
         page_number = 1
         total_stores_processed = 0
+
+        # --- Retry logic for initial page load ---
+        page_load_retries = 3
+        for attempt in range(page_load_retries):
+            try:
+                logging.info(f"Attempting to load store list (Attempt {attempt + 1}/{page_load_retries})...")
+                rows_xpath = "//div[contains(@class, 'el-table__body-wrapper')]//tr"
+                # Wait for the first row to be present.
+                wait.until(EC.presence_of_element_located((By.XPATH, rows_xpath)))
+                # Also check for the inquiry buttons as a secondary confirmation.
+                wait.until(EC.presence_of_element_located((By.XPATH, "//button[.//span[contains(text(), 'Inventory inquiry')]]")))
+                logging.info("Store list loaded successfully.")
+                break  # If successful, exit the retry loop.
+            except Exception as e:
+                logging.warning(f"Store list failed to load on attempt {attempt + 1}: {e}")
+                if attempt + 1 < page_load_retries:
+                    logging.info("Refreshing page and retrying...")
+                    driver.refresh()
+                    time.sleep(2) # Wait a moment after refresh
+                    # After refresh, we need to re-navigate.
+                    store_management_link = wait.until(EC.element_to_be_clickable((By.XPATH, "//li[.//span[contains(text(), 'Store management')]]")))
+                    store_management_link.click()
+                else:
+                    logging.error("Failed to load store list after multiple retries. Aborting.")
+                    raise # Re-raise the last exception to be caught by the main handler
 
         while True:
             logging.info(f"--- Preparing to process Page {page_number} ---")
