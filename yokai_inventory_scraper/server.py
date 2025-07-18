@@ -596,7 +596,7 @@ def serve_presentation():
 def serve_static_files(path):
     # This will serve other files like script.js
     if path != 'presentation.html':
-        return send_from_directory(script_dir, path)
+    return send_from_directory(script_dir, path)
     # Redirect to the clean URL if someone tries to access the .html version directly
     return redirect('/presentation')
 
@@ -650,6 +650,6 @@ if __name__ == '__main__':
 # --- Start the scheduler thread when the application module is loaded ---
 # This ensures it runs even when started by Gunicorn on Render.
 logging.info("Starting the background scheduler thread...")
-scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
-scheduler_thread.start()
+    scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
+    scheduler_thread.start()
 logging.info("Background scheduler thread has been started.") 
