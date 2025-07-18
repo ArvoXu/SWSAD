@@ -92,7 +92,7 @@ def run_sales_scraper():
         export_button.click()
         
         logging.info("Waiting for download to complete...")
-        download_wait_time = 30 
+        download_wait_time = 60 
         time_waited = 0
         while time_waited < download_wait_time:
             if any(fname.endswith('.xlsx') for fname in os.listdir(download_dir)):

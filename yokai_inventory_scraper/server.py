@@ -242,6 +242,7 @@ def run_sales_scraper_background():
                     processed_count = len(new_transactions)
                     output = f"Sales scraper finished successfully. Processed {processed_count} transactions."
                     status = "success"
+                    logging.info(f"Database operation successful on attempt {attempt + 1}.")
                     db.close()
                     break # Exit retry loop on success
                 except OperationalError as e:
@@ -252,6 +253,7 @@ def run_sales_scraper_background():
                         output = f"Sales scraper failed after {max_retries} attempts: {e}"
                         status = "error"
                         raise
+                    logging.info(f"Retrying in {retry_delay_seconds} seconds...")
                     time.sleep(retry_delay_seconds)
                 finally:
                     # Ensure db is closed if it's still open
@@ -529,6 +531,7 @@ def add_transactions():
             if attempt + 1 >= max_retries:
                 logging.error("Max retries reached. Aborting.")
                 return jsonify({"success": False, "message": f"Database error after {max_retries} attempts: {e}"}), 500
+            logging.info(f"Retrying in {retry_delay_seconds} seconds...")
             time.sleep(retry_delay_seconds)
         except Exception as e:
             db.rollback()

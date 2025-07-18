@@ -411,6 +411,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- Initial Load ---
     fetchAndDisplayData();
+    loadUpdateLogs();
     updateView();
 
     function populateMonthSelector() {
@@ -472,9 +473,9 @@ document.addEventListener('DOMContentLoaded', function () {
         if (fullSalesData.length === 0) {
                     alert('無法從 Excel 檔案中解析出有效的銷售數據。請檢查欄位名稱是否正確 (例如: "Shop name", "Trasaction Date" 等) 且資料格式是否無誤。');
                     salesFileInput.value = '';
-            return;
-        }
-        
+                return;
+            }
+
                 // 核心修改：直接上傳完整的交易紀錄
                 await uploadTransactions(fullSalesData);
 
@@ -523,9 +524,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (logs.length === 0) {
                 logList.innerHTML = '<p>尚無更新紀錄。</p>';
-                return;
-            }
-
+            return;
+        }
+        
             logList.innerHTML = logs.map(log => {
                 const ranAt = new Date(log.ranAt).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
                 const typeText = log.scraperType === 'inventory' ? '庫存' : '銷售';
