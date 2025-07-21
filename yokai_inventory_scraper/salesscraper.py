@@ -95,7 +95,14 @@ def run_sales_scraper(headless=True):
             end_date_input = driver.find_element(By.XPATH, "//input[@placeholder='Select end date']")
             end_date_input.clear()
             end_date_input.send_keys("2026-01-01")
-            logging.info("Date range set. Proceeding directly to export.")
+            
+            logging.info("Date range set. Clicking away to finalize date selection.")
+            # This click simulates a user clicking outside the date picker, which often
+            # triggers the necessary JavaScript event to update the component's state.
+            driver.find_element(By.TAG_NAME, 'body').click()
+            time.sleep(0.5) # Brief pause to allow any JS events to fire.
+
+            logging.info("Proceeding directly to export.")
 
             # Step 4: New robust export logic based on filesystem checks
             export_button_xpath = "//button[.//span[normalize-space()='Export as excel']]"
