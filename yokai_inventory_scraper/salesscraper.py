@@ -113,12 +113,16 @@ def run_sales_scraper(headless=True):
             for i in range(export_click_attempts):
                 logging.info(f"Export attempt {i + 1}/{export_click_attempts}: Clicking export button.")
                 try:
+                    # Add a small, static delay before each attempt to ensure the UI is settled.
+                    time.sleep(1) 
+                    
                     export_button = wait.until(EC.element_to_be_clickable((By.XPATH, export_button_xpath)))
                     # Use JavaScript click as it can be more reliable than Selenium's native click
                     driver.execute_script("arguments[0].click();", export_button)
                     
-                    logging.info(" > Waiting for 'Data is downloading...' message to appear (10s timeout)...")
-                    WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.XPATH, loading_text_xpath)))
+                    logging.info(" > Waiting for 'Data is downloading...' message to appear (30s timeout)...")
+                    # Increased timeout from 10 to 30 seconds for slower cloud environments
+                    WebDriverWait(driver, 30).until(EC.visibility_of_element_located((By.XPATH, loading_text_xpath)))
                     
                     logging.info(" > SUCCESS: 'Data is downloading...' message appeared.")
                     click_successful = True
