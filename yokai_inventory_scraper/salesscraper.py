@@ -75,14 +75,27 @@ def run_sales_scraper(headless=True):
         try:
             logging.info("--- Starting Sales Data Download ---")
 
-            # Step 2: Navigate to Order Management with improved stability
+            # Step 2: Navigate to Order Management with robust, idempotent logic
             logging.info("Navigating to Order Management...")
-            order_management_menu = wait.until(EC.element_to_be_clickable((By.XPATH, "//div[contains(@class, 'el-submenu__title')][.//span[normalize-space()='Order management']]")))
-            order_management_menu.click()
-            
-            # Wait for the sub-menu item to appear and then click it
-            order_management_item = wait.until(EC.element_to_be_clickable((By.XPATH, "//li[contains(@class, 'el-menu-item') and normalize-space()='Order management']")))
-            order_management_item.click()
+            try:
+                # Attempt to click the final menu item directly. This works if the menu is already open.
+                order_management_item_xpath = "//li[contains(@class, 'el-menu-item') and normalize-space()='Order management']"
+                order_management_item = wait.until(EC.element_to_be_clickable((By.XPATH, order_management_item_xpath)))
+                order_management_item.click()
+                logging.info(" > Direct click on menu item successful (menu was likely open).")
+            except TimeoutException:
+                # If direct click fails, the menu is likely closed. Expand it first.
+                logging.info(" > Direct click failed. Expanding menu first...")
+                order_management_menu_xpath = "//div[contains(@class, 'el-submenu__title')][.//span[normalize-space()='Order management']]"
+                order_management_menu = wait.until(EC.element_to_be_clickable((By.XPATH, order_management_menu_xpath)))
+                order_management_menu.click()
+                
+                # Now click the item
+                order_management_item_xpath = "//li[contains(@class, 'el-menu-item') and normalize-space()='Order management']"
+                order_management_item = wait.until(EC.element_to_be_clickable((By.XPATH, order_management_item_xpath)))
+                order_management_item.click()
+                logging.info(" > Expanded menu and clicked item.")
+
             logging.info("Navigation click sent. Waiting for page to load...")
 
             # Step 3: Set date range (Search click is removed as per new strategy)
