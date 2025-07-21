@@ -85,7 +85,7 @@ def run_sales_scraper(headless=True):
             order_management_item.click()
             logging.info("Navigation click sent. Waiting for page to load...")
 
-            # Step 3: Set date range and search (after ensuring page is loaded)
+            # Step 3: Set date range (Search click is removed as per new strategy)
             logging.info("Waiting for date fields to be present...")
             wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Select start date']")))
             logging.info("Date fields found. Setting date range...")
@@ -95,55 +95,55 @@ def run_sales_scraper(headless=True):
             end_date_input = driver.find_element(By.XPATH, "//input[@placeholder='Select end date']")
             end_date_input.clear()
             end_date_input.send_keys("2026-01-01")
-            
-            logging.info("Searching for data...")
-            search_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[.//span[normalize-space()='Search']]")))
-            search_button.click()
-            
-            logging.info("Waiting for data table to load after search...")
-            wait.until(EC.presence_of_element_located((By.XPATH, "//tbody/tr")))
-            logging.info("Data table loaded.")
+            logging.info("Date range set. Proceeding directly to export.")
 
-            # Step 4: New "Click-and-Verify" loop for the export button
+            # Step 4: New robust export logic based on filesystem checks
             export_button_xpath = "//button[.//span[normalize-space()='Export as excel']]"
-            loading_text_xpath = "//p[contains(@class, 'el-loading-text') and text()='Data is downloading...']"
             
-            export_click_attempts = 5
-            click_successful = False
-            for i in range(export_click_attempts):
-                logging.info(f"Export attempt {i + 1}/{export_click_attempts}: Clicking export button.")
+            max_export_attempts = 3
+            for attempt in range(max_export_attempts):
+                logging.info(f"--- Export Attempt {attempt + 1}/{max_export_attempts} ---")
+                
+                # 1. Click the export button
                 try:
-                    # Add a small, static delay before each attempt to ensure the UI is settled.
-                    time.sleep(1) 
-                    
                     export_button = wait.until(EC.element_to_be_clickable((By.XPATH, export_button_xpath)))
-                    # Use JavaScript click as it can be more reliable than Selenium's native click
                     driver.execute_script("arguments[0].click();", export_button)
-                    
-                    logging.info(" > Waiting for 'Data is downloading...' message to appear (30s timeout)...")
-                    # Increased timeout from 10 to 30 seconds for slower cloud environments
-                    WebDriverWait(driver, 30).until(EC.visibility_of_element_located((By.XPATH, loading_text_xpath)))
-                    
-                    logging.info(" > SUCCESS: 'Data is downloading...' message appeared.")
-                    click_successful = True
-                    break # Exit the click-and-verify loop on success
-                except TimeoutException:
-                    logging.warning(f" > Attempt {i + 1} failed. The 'downloading' message did not appear. Retrying...")
-                    time.sleep(2) # Brief pause before the next attempt
+                    logging.info(" > Export button clicked.")
                 except Exception as e:
-                    logging.error(f" > An unexpected error occurred during export attempt {i + 1}: {e}", exc_info=True)
+                    logging.error(f" > Could not click export button on attempt {attempt + 1}: {e}", exc_info=True)
+                    if attempt + 1 < max_export_attempts:
+                        time.sleep(2) # Wait before next major attempt
+                        continue # Go to the next export attempt
+                    else:
+                        raise Exception("Failed to click export button after multiple attempts.")
+
+                # 2. Wait and then check the filesystem to see if the download started
+                logging.info(" > Waiting 3 seconds before checking filesystem...")
+                time.sleep(3)
+
+                max_file_checks = 5
+                download_started = False
+                for check_num in range(max_file_checks):
+                    # If any file (.xlsx or .crdownload) exists, the download has started
+                    if os.listdir(download_dir):
+                        logging.info(" > SUCCESS: File detected in download directory. Download has started.")
+                        download_started = True
+                        break # Exit the filesystem check loop
+                    
+                    logging.info(f" > Filesystem check {check_num + 1}/{max_file_checks}... No file found. Waiting 2 seconds.")
                     time.sleep(2)
 
-            if not click_successful:
-                raise Exception(f"Failed to trigger download after {export_click_attempts} attempts. The 'Data is downloading...' message never appeared.")
-            
-            # If we are here, click was successful. Now wait for the message to disappear.
-            logging.info("Waiting for 'Data is downloading...' message to disappear (90s timeout)...")
-            WebDriverWait(driver, 90).until(EC.invisibility_of_element_located((By.XPATH, loading_text_xpath)))
-            logging.info("'Data is downloading...' message disappeared. File download should be in progress.")
+                if download_started:
+                    # 3. If download has started, poll for completion and return the path
+                    # Give it a generous 60 seconds to complete the download.
+                    return poll_for_download(download_dir, 60)
+                
+                # If we are here, it means no file appeared after all checks
+                logging.warning(f" > Export attempt {attempt + 1} failed. No file appeared in download directory.")
+                # The loop will now proceed to the next major export attempt
 
-            # Step 5: Poll for the downloaded file
-            return poll_for_download(download_dir, 30) # Poll for 30 seconds
+            # If all export attempts fail to create a file, raise a final error.
+            raise Exception(f"Failed to start download after {max_export_attempts} attempts.")
 
         except Exception as e:
             # Catch any exception from the process, log it, and re-raise it
