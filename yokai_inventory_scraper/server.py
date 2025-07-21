@@ -169,7 +169,8 @@ def run_sales_scraper_background():
     downloaded_file_path = None
     try:
         # 1. Run the scraper to download the file
-        downloaded_file_path = run_sales_scraper()
+        # We explicitly set headless=True to ensure it runs without a GUI on the server.
+        downloaded_file_path = run_sales_scraper(headless=True)
         
         # 2. Process the downloaded Excel file
         if downloaded_file_path:
