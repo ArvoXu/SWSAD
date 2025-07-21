@@ -271,7 +271,7 @@ def save_to_database(data: list):
             logging.error(f"An unexpected database error occurred: {e}", exc_info=True)
             db.rollback()
             raise e
-    finally:
+        finally:
             db.close()
 
 
