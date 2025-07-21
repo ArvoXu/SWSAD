@@ -23,9 +23,9 @@ def get_credentials():
 
 def run_sales_scraper():
     """
-    Launches a headless browser, logs in, downloads the sales report,
-    and returns the path to the downloaded Excel file.
-    Implements a full-process retry mechanism.
+    Launches a headless browser, logs in, navigates, and downloads the sales report.
+    This version removes the full-process retry and instead implements a focused
+    "click-and-verify" loop on the export button to ensure the download is triggered.
     """
     download_dir = os.path.join(os.getcwd(), 'temp_downloads', str(uuid.uuid4()))
     os.makedirs(download_dir, exist_ok=True)
@@ -71,71 +71,80 @@ def run_sales_scraper():
         login_button.click()
         logging.info("Login successful.")
 
-        # --- Main process retry loop ---
-        max_attempts = 3
-        for attempt in range(max_attempts):
-            try:
-                logging.info(f"--- Starting Download Attempt {attempt + 1}/{max_attempts} ---")
+        # The main process now runs only once. The page-refresh retry loop is removed.
+        try:
+            logging.info("--- Starting Sales Data Download ---")
 
-                # Step 2: Navigate to Order Management (inside loop for retries)
-                logging.info("Navigating to Order Management...")
-                order_management_menu = wait.until(EC.element_to_be_clickable((By.XPATH, "//div[contains(@class, 'el-submenu__title')][.//span[normalize-space()='Order management']]")))
-                order_management_menu.click()
-                order_management_item = wait.until(EC.element_to_be_clickable((By.XPATH, "//li[contains(@class, 'el-menu-item') and normalize-space()='Order management']")))
-                order_management_item.click()
-                logging.info("Navigation complete.")
+            # Step 2: Navigate to Order Management with improved stability
+            logging.info("Navigating to Order Management...")
+            order_management_menu = wait.until(EC.element_to_be_clickable((By.XPATH, "//div[contains(@class, 'el-submenu__title')][.//span[normalize-space()='Order management']]")))
+            order_management_menu.click()
+            
+            # Wait for the sub-menu item to appear and then click it
+            order_management_item = wait.until(EC.element_to_be_clickable((By.XPATH, "//li[contains(@class, 'el-menu-item') and normalize-space()='Order management']")))
+            order_management_item.click()
+            logging.info("Navigation click sent. Waiting for page to load...")
 
-                # Step 3: Set date range and search
-                logging.info("Setting date range...")
-                start_date_input = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Select start date']")))
-                start_date_input.clear()
-                start_date_input.send_keys("2025-01-01")
-                end_date_input = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Select end date']")))
-                end_date_input.clear()
-                end_date_input.send_keys("2026-01-01")
-                logging.info("Date range set.")
-                
-                logging.info("Searching for data...")
-                search_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[.//span[normalize-space()='Search']]")))
-                search_button.click()
-                
-                logging.info("Waiting for data table to load...")
-                wait.until(EC.presence_of_element_located((By.XPATH, "//tbody/tr")))
-                logging.info("Data loaded in the table.")
+            # Step 3: Set date range and search (after ensuring page is loaded)
+            logging.info("Waiting for date fields to be present...")
+            wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Select start date']")))
+            logging.info("Date fields found. Setting date range...")
+            start_date_input = driver.find_element(By.XPATH, "//input[@placeholder='Select start date']")
+            start_date_input.clear()
+            start_date_input.send_keys("2025-01-01")
+            end_date_input = driver.find_element(By.XPATH, "//input[@placeholder='Select end date']")
+            end_date_input.clear()
+            end_date_input.send_keys("2026-01-01")
+            
+            logging.info("Searching for data...")
+            search_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[.//span[normalize-space()='Search']]")))
+            search_button.click()
+            
+            logging.info("Waiting for data table to load after search...")
+            wait.until(EC.presence_of_element_located((By.XPATH, "//tbody/tr")))
+            logging.info("Data table loaded.")
 
-                # Step 4: Click export and verify UI feedback
-                logging.info("Waiting for export button...")
-                export_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[.//span[normalize-space()='Export as excel']]")))
-                export_button.click()
-                
-                # Use the precise XPath for the loading text based on user feedback
-                loading_text_xpath = "//p[contains(@class, 'el-loading-text') and text()='Data is downloading...']"
+            # Step 4: New "Click-and-Verify" loop for the export button
+            export_button_xpath = "//button[.//span[normalize-space()='Export as excel']]"
+            loading_text_xpath = "//p[contains(@class, 'el-loading-text') and text()='Data is downloading...']"
+            
+            export_click_attempts = 5
+            click_successful = False
+            for i in range(export_click_attempts):
+                logging.info(f"Export attempt {i + 1}/{export_click_attempts}: Clicking export button.")
                 try:
-                    logging.info("Waiting for 'Data is downloading...' message to appear...")
-                    # Wait up to 10 seconds for the message to show up
-                    WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.XPATH, loading_text_xpath)))
-                    logging.info("'Data is downloading...' message appeared. Now waiting for it to disappear...")
+                    export_button = wait.until(EC.element_to_be_clickable((By.XPATH, export_button_xpath)))
+                    # Use JavaScript click as it can be more reliable than Selenium's native click
+                    driver.execute_script("arguments[0].click();", export_button)
                     
-                    # Wait up to 90 seconds for the server to prepare the file
-                    WebDriverWait(driver, 90).until(EC.invisibility_of_element_located((By.XPATH, loading_text_xpath)))
-                    logging.info("'Data is downloading...' message disappeared. File should be starting to download.")
+                    logging.info(" > Waiting for 'Data is downloading...' message to appear (10s timeout)...")
+                    WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.XPATH, loading_text_xpath)))
+                    
+                    logging.info(" > SUCCESS: 'Data is downloading...' message appeared.")
+                    click_successful = True
+                    break # Exit the click-and-verify loop on success
                 except TimeoutException:
-                    # This happens if the loading mask doesn't appear or doesn't disappear in time
-                    logging.warning("Did not see the expected 'Data is downloading...' message sequence.")
-                    # We will proceed to check the file system anyway, as the download might happen without the mask.
+                    logging.warning(f" > Attempt {i + 1} failed. The 'downloading' message did not appear. Retrying...")
+                    time.sleep(2) # Brief pause before the next attempt
+                except Exception as e:
+                    logging.error(f" > An unexpected error occurred during export attempt {i + 1}: {e}", exc_info=True)
+                    time.sleep(2)
 
-                # Step 5: Poll for the downloaded file
-                return poll_for_download(download_dir, 30) # Poll for 30 seconds
+            if not click_successful:
+                raise Exception(f"Failed to trigger download after {export_click_attempts} attempts. The 'Data is downloading...' message never appeared.")
+            
+            # If we are here, click was successful. Now wait for the message to disappear.
+            logging.info("Waiting for 'Data is downloading...' message to disappear (90s timeout)...")
+            WebDriverWait(driver, 90).until(EC.invisibility_of_element_located((By.XPATH, loading_text_xpath)))
+            logging.info("'Data is downloading...' message disappeared. File download should be in progress.")
 
-            except Exception as e:
-                logging.error(f"Attempt {attempt + 1} failed: {e}")
-                if attempt + 1 < max_attempts:
-                    logging.info("Refreshing the page to retry...")
-                    driver.refresh()
-                    time.sleep(3) # Wait a moment for the page to settle after refresh
-                else:
-                    logging.error("All download attempts have failed.")
-                    raise  # Re-raise the last exception
+            # Step 5: Poll for the downloaded file
+            return poll_for_download(download_dir, 30) # Poll for 30 seconds
+
+        except Exception as e:
+            # Catch any exception from the process, log it, and re-raise it
+            logging.error(f"The sales scraper process failed: {e}", exc_info=True)
+            raise  # Re-raise the exception to be handled by the server.py background job runner
 
     finally:
         driver.quit()
