@@ -75,15 +75,15 @@ def run_sales_scraper():
         try:
             logging.info("--- Starting Sales Data Download ---")
 
-            # Step 2: Navigate to Order Management with improved stability
-            logging.info("Navigating to Order Management...")
-            order_management_menu = wait.until(EC.element_to_be_clickable((By.XPATH, "//div[contains(@class, 'el-submenu__title')][.//span[normalize-space()='Order management']]")))
-            order_management_menu.click()
+            # Step 2: Navigate directly to the Sales List page for more stability
+            sales_list_url = "https://manager.yokaiexpress.com/#/standSaleList"
+            logging.info(f"Navigating directly to {sales_list_url}...")
+            driver.get(sales_list_url)
             
-            # Wait for the sub-menu item to appear and then click it
-            order_management_item = wait.until(EC.element_to_be_clickable((By.XPATH, "//li[contains(@class, 'el-menu-item') and normalize-space()='Order management']")))
-            order_management_item.click()
-            logging.info("Navigation click sent. Waiting for page to load...")
+            # Add a brief pause to allow the page's JavaScript to fully load and settle.
+            # This can help ensure download preferences are respected and prevent the "Save As" dialog.
+            logging.info("Giving page 3 seconds to settle...")
+            time.sleep(3)
 
             # Step 3: Set date range and search (after ensuring page is loaded)
             logging.info("Waiting for date fields to be present...")
