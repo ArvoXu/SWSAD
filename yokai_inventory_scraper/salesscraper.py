@@ -23,9 +23,9 @@ def get_credentials():
 
 def run_sales_scraper():
     """
-    Launches a headless browser, logs in, navigates, and downloads the sales report.
-    This version removes the full-process retry and instead implements a focused
-    "click-and-verify" loop on the export button to ensure the download is triggered.
+    Launches a headless browser, logs in, directly navigates to the sales page,
+    and downloads the report. This version completely removes UI-based download
+    verification and relies solely on polling the file system after the click.
     """
     download_dir = os.path.join(os.getcwd(), 'temp_downloads', str(uuid.uuid4()))
     os.makedirs(download_dir, exist_ok=True)
@@ -38,11 +38,12 @@ def run_sales_scraper():
     options.add_argument("--disable-gpu")
     options.add_argument("window-size=1920,1080")
     
+    # These preferences are crucial for preventing the "Save As" dialog
     prefs = {
         "download.default_directory": download_dir,
-        "download.prompt_for_download": False,
+        "download.prompt_for_download": False, # Do not ask where to save
         "download.directory_upgrade": True,
-        "plugins.always_open_pdf_externally": True
+        "safebrowsing.enabled": True # Enable safe browsing
     }
     options.add_experimental_option("prefs", prefs)
 
@@ -71,21 +72,16 @@ def run_sales_scraper():
         login_button.click()
         logging.info("Login successful.")
 
-        # The main process now runs only once. The page-refresh retry loop is removed.
+        # --- Main process, simplified and direct ---
         try:
             logging.info("--- Starting Sales Data Download ---")
 
-            # Step 2: Navigate directly to the Sales List page for more stability
+            # Step 2: Directly navigate to the sales list page
             sales_list_url = "https://manager.yokaiexpress.com/#/standSaleList"
-            logging.info(f"Navigating directly to {sales_list_url}...")
+            logging.info(f"Directly navigating to {sales_list_url}...")
             driver.get(sales_list_url)
-            
-            # Add a brief pause to allow the page's JavaScript to fully load and settle.
-            # This can help ensure download preferences are respected and prevent the "Save As" dialog.
-            logging.info("Giving page 3 seconds to settle...")
-            time.sleep(3)
 
-            # Step 3: Set date range and search (after ensuring page is loaded)
+            # Step 3: Set date range and search
             logging.info("Waiting for date fields to be present...")
             wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Select start date']")))
             logging.info("Date fields found. Setting date range...")
@@ -104,46 +100,27 @@ def run_sales_scraper():
             wait.until(EC.presence_of_element_located((By.XPATH, "//tbody/tr")))
             logging.info("Data table loaded.")
 
-            # Step 4: New "Click-and-Verify" loop for the export button
+            # Step 4: Click export and immediately start polling for the file
+            logging.info("Attempting to click export button...")
             export_button_xpath = "//button[.//span[normalize-space()='Export as excel']]"
-            loading_text_xpath = "//p[contains(@class, 'el-loading-text') and text()='Data is downloading...']"
-            
-            export_click_attempts = 5
-            click_successful = False
-            for i in range(export_click_attempts):
-                logging.info(f"Export attempt {i + 1}/{export_click_attempts}: Clicking export button.")
-                try:
-                    export_button = wait.until(EC.element_to_be_clickable((By.XPATH, export_button_xpath)))
-                    # Use JavaScript click as it can be more reliable than Selenium's native click
-                    driver.execute_script("arguments[0].click();", export_button)
-                    
-                    logging.info(" > Waiting for 'Data is downloading...' message to appear (10s timeout)...")
-                    WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.XPATH, loading_text_xpath)))
-                    
-                    logging.info(" > SUCCESS: 'Data is downloading...' message appeared.")
-                    click_successful = True
-                    break # Exit the click-and-verify loop on success
-                except TimeoutException:
-                    logging.warning(f" > Attempt {i + 1} failed. The 'downloading' message did not appear. Retrying...")
-                    time.sleep(2) # Brief pause before the next attempt
-                except Exception as e:
-                    logging.error(f" > An unexpected error occurred during export attempt {i + 1}: {e}", exc_info=True)
-                    time.sleep(2)
+            export_button = wait.until(EC.element_to_be_clickable((By.XPATH, export_button_xpath)))
+            driver.execute_script("arguments[0].click();", export_button)
+            logging.info("Export button clicked. Now polling for downloaded file...")
 
-            if not click_successful:
-                raise Exception(f"Failed to trigger download after {export_click_attempts} attempts. The 'Data is downloading...' message never appeared.")
-            
-            # If we are here, click was successful. Now wait for the message to disappear.
-            logging.info("Waiting for 'Data is downloading...' message to disappear (90s timeout)...")
-            WebDriverWait(driver, 90).until(EC.invisibility_of_element_located((By.XPATH, loading_text_xpath)))
-            logging.info("'Data is downloading...' message disappeared. File download should be in progress.")
-
-            # Step 5: Poll for the downloaded file
-            return poll_for_download(download_dir, 30) # Poll for 30 seconds
+            # Step 5: Poll for the downloaded file for an extended period
+            # We no longer wait for UI feedback, so we must rely on polling.
+            return poll_for_download(download_dir, 60) # Poll for up to 60 seconds
 
         except Exception as e:
             # Catch any exception from the process, log it, and re-raise it
             logging.error(f"The sales scraper process failed: {e}", exc_info=True)
+            # Take a screenshot on failure for debugging
+            screenshot_path = os.path.join(os.getcwd(), f"error_screenshot_{uuid.uuid4()}.png")
+            try:
+                driver.save_screenshot(screenshot_path)
+                logging.info(f"Saved screenshot of the error page to: {screenshot_path}")
+            except Exception as screenshot_error:
+                logging.error(f"Failed to save screenshot: {screenshot_error}")
             raise  # Re-raise the exception to be handled by the server.py background job runner
 
     finally:
