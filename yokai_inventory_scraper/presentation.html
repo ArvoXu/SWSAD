@@ -110,6 +110,7 @@
         }
 
         .chart-card {
+            position: relative;
             background-color: var(--card-background);
             border-radius: var(--border-radius);
             box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
@@ -1017,6 +1018,283 @@
         .litepicker .container__months .month-item-header {
             justify-content: center;
         }
+
+        /* 補貨建議對話框樣式 */
+        .suggestion-modal-content {
+            background-color: var(--card-background);
+            margin: 8% auto;
+            padding: 24px;
+            border-radius: var(--border-radius);
+            width: 90%;
+            max-width: 700px; /* 增加寬度以容納表格 */
+            border: 1px solid rgba(0,0,0,0.1);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+            position: relative;
+        }
+
+        .suggestion-modal-content h2 {
+            font-size: 20px;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+            color: var(--text-primary);
+            text-align: left;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .strategy-selector {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .strategy-card {
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background-color: var(--background-color);
+        }
+
+        .strategy-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            border-color: var(--primary-color);
+        }
+        
+        .strategy-card.selected {
+            border-color: var(--primary-color);
+            background-color: #e7f3ff;
+            box-shadow: 0 4px 12px rgba(33, 150, 243, 0.2);
+        }
+
+        .strategy-card i {
+            font-size: 24px;
+            color: var(--primary-color);
+            margin-bottom: 10px;
+        }
+
+        .strategy-card h4 {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .strategy-card p {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .suggestion-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            position: relative;
+            margin-bottom: 10px;
+        }
+        
+        .suggestion-result-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        .suggestion-result-table th, .suggestion-result-table td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        .suggestion-result-table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+        .suggestion-result-table td {
+            color: var(--text-primary);
+        }
+        .qty-adjust.positive { color: var(--success-color); font-weight: bold; }
+        .qty-adjust.negative { color: var(--danger-color); font-weight: bold; }
+        .suggestion-result-container {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #eee;
+            border-radius: 8px;
+        }
+
+        .suggestion-trigger-icon {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            font-size: 20px;
+            color: var(--warning-color);
+            cursor: pointer;
+            transition: transform 0.2s ease, color 0.2s ease;
+        }
+        .suggestion-trigger-icon:hover {
+            transform: scale(1.2);
+            color: #FFC107;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0; top: 0; width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.35);
+            backdrop-filter: blur(4px);
+            justify-content: center;
+            align-items: center;
+        }
+        .modal.active {
+            display: flex !important;
+        }
+        .suggestion-modal-content {
+            position: relative;
+            margin: 0 auto;
+            top: 0; left: 0; right: 0; bottom: 0;
+            max-width: 700px;
+            width: 95vw;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.18);
+            z-index: 2100;
+            animation: fadeInModal 0.2s;
+        }
+        @keyframes fadeInModal {
+            from { transform: translateY(40px) scale(0.98); opacity: 0; }
+            to   { transform: translateY(0) scale(1); opacity: 1; }
+        }
+        .suggestion-modal-content .close {
+            position: absolute;
+            top: 12px;
+            right: 18px;
+            left: auto;
+            font-size: 28px;
+            font-weight: 500;
+            color: var(--text-primary);
+            cursor: pointer;
+            z-index: 2200;
+            transition: color 0.2s;
+        }
+        .suggestion-modal-content .close:hover {
+            color: var(--danger-color);
+        }
+        .btn-info {
+            background-color: #17a2b8;
+            border-color: #17a2b8;
+            color: #fff;
+        }
+        .btn-info:hover {
+            background-color: #138496;
+            border-color: #117a8b;
+        }
+        #toggleAdvancedOptionsButton {
+            position: absolute;
+            right: 0;
+            top: 0;
+            min-width: 44px;
+            min-height: 44px;
+        }
+        .advanced-options-card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            padding: 18px 24px;
+            margin: 0 auto 10px auto;
+            max-width: 420px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .advanced-option-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 15px;
+            margin-bottom: 0;
+        }
+        .advanced-option-row i {
+            color: var(--primary-color);
+            font-size: 20px;
+            min-width: 24px;
+            text-align: center;
+        }
+        .adv-label {
+            min-width: 100px;
+            text-align: right;
+            margin-right: 8px;
+            font-weight: 500;
+        }
+        .adv-input {
+            width: 80px;
+            padding: 4px 8px;
+            font-size: 15px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            background: #fff;
+        }
+        .advanced-option-row input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+        }
+        .advanced-options-table table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 8px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            margin: 0 auto 10px auto;
+            max-width: 480px;
+            padding: 12px 0;
+        }
+        .advanced-options-table td {
+            vertical-align: middle;
+            padding: 6px 8px;
+            font-size: 15px;
+        }
+        .advanced-options-table i {
+            color: var(--primary-color);
+            font-size: 20px;
+            min-width: 24px;
+            text-align: center;
+        }
+        .advanced-options-table .adv-label {
+            min-width: 110px;
+            font-weight: 500;
+            text-align: left;
+        }
+        .advanced-options-table .adv-input {
+            width: 80px;
+            padding: 4px 8px;
+            font-size: 15px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            background: #fff;
+        }
+        .advanced-options-table .adv-desc {
+            color: #888;
+            font-size: 13px;
+            min-width: 120px;
+        }
+        .advanced-options-table input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+        }
+        .advanced-options-table td:nth-child(3) {
+            text-align: center;
+        }
+        .advanced-options-table input[type="checkbox"] {
+            display: inline-block;
+            margin: 0 auto;
+            width: 18px;
+            height: 18px;
+        }
     </style>
 </head>
 <body>
@@ -1119,6 +1397,71 @@
         
         <div id="chartContainer">
             <div class="loading"></div>
+        </div>
+    </div>
+
+    <!-- 補貨建議對話框 -->
+    <div id="suggestionDialog" class="modal" style="display: none;">
+        <div class="suggestion-modal-content">
+            <span class="close">&times;</span>
+            <h2 id="suggestionDialogTitle"><i class="fas fa-lightbulb"></i> 補貨建議</h2>
+            
+            <h4>1. 選擇補貨策略</h4>
+            <div class="strategy-selector">
+                <div class="strategy-card selected" data-strategy="stable">
+                    <i class="fas fa-balance-scale-right"></i>
+                    <h4>穩健銷售</h4>
+                    <p>依據過去30天銷售量佔比，等比例分配庫存，確保穩定滿足市場需求。</p>
+                </div>
+                <div class="strategy-card" data-strategy="aggressive">
+                    <i class="fas fa-rocket"></i>
+                    <h4>積極增長</h4>
+                    <p>集中80%庫存於銷量前3名的明星商品，最大化頂尖產品的營收潛力。</p>
+                </div>
+                <div class="strategy-card" data-strategy="exploratory">
+                    <i class="fas fa-search-dollar"></i>
+                    <h4>探索汰換</h4>
+                    <p>優先汰除零銷量商品，並保留20%彈性空間，用於測試新品或補充潛力股。</p>
+                </div>
+            </div>
+
+            <!-- 主要操作區 -->
+            <div class="suggestion-controls">
+                <button id="generateSuggestionButton" class="export-button">
+                    <i class="fas fa-magic"></i> 生成建議
+                </button>
+                <button id="toggleAdvancedOptionsButton" class="btn-info" type="button">
+                    <i class="fas fa-cog"></i>
+                </button>
+            </div>
+            <div class="advanced-options-table" style="display:none;">
+                <table>
+                    <tr>
+                        <td><i class="fas fa-box-open"></i></td>
+                        <td class="adv-label">預留空位</td>
+                        <td><input type="number" id="reserveSlotsInput" value="0" min="0" max="40" class="adv-input"></td>
+                        <td class="adv-desc">保留給新品測試的空位數</td>
+                    </tr>
+                    <tr>
+                        <td><i class="fas fa-plus-circle"></i></td>
+                        <td class="adv-label">不取出現有產品</td>
+                        <td><input type="checkbox" id="onlyAddCheckbox"></td>
+                        <td class="adv-desc">僅補貨，不減少現有庫存</td>
+                    </tr>
+                    <tr>
+                        <td><i class="fas fa-layer-group"></i></td>
+                        <td class="adv-label">最大補貨總數量</td>
+                        <td><input type="number" id="maxTotalQtyInput" value="50" min="1" max="50" class="adv-input"></td>
+                        <td class="adv-desc">補貨後的總庫存上限</td>
+                    </tr>
+                </table>
+            </div>
+            <div id="suggestionWarning" style="color: #dc3545; font-size: 13px; margin: 8px 0 0 0; display: none;"></div>
+
+            <h4>3. 建議結果</h4>
+            <div id="suggestionResultContainer" class="suggestion-result-container">
+                <p style="text-align: center; color: var(--text-secondary); padding: 20px;">請點擊 "生成建議" 以載入結果。</p>
+            </div>
         </div>
     </div>
 
@@ -2436,6 +2779,7 @@
                 
                 // 圓餅圖視圖內容
                 cardDiv.innerHTML = `
+                    <i class="fas fa-wand-magic-sparkles suggestion-trigger-icon" title="智慧補貨建議"></i>
                     <div class="chart-card-title">
                         ${store}<br>${machineId}
                         ${machineSalesTotal > 0 ? `<div class="sales-info">過去一個月銷售額: ${machineSalesTotal.toLocaleString()} 元</div>` : ''}
@@ -2584,6 +2928,12 @@
                         console.error(`創建圓餅圖失敗 ${key}:`, error);
                     }
                 }, 100);
+
+                // 為新創建的卡片上的圖標添加事件監聽器
+                cardDiv.querySelector('.suggestion-trigger-icon').addEventListener('click', (event) => {
+                    event.stopPropagation(); // 防止觸發卡片的其他點擊事件
+                    openSuggestionDialog(key, store, machineId);
+                });
             });
         }
         
@@ -2814,6 +3164,164 @@
             }
         });
 
+        // --- 補貨建議功能 (Replenishment Suggestion) ---
+        const suggestionDialog = document.getElementById('suggestionDialog');
+        // const suggestionButton = document.getElementById('suggestionButton'); // 不再需要全局按鈕
+        const closeSuggestionDialog = suggestionDialog.querySelector('.close');
+        const strategyCards = document.querySelectorAll('.strategy-card');
+        const generateSuggestionButton = document.getElementById('generateSuggestionButton');
+        const suggestionResultContainer = document.getElementById('suggestionResultContainer');
+        const reserveSlotsInput = document.getElementById('reserveSlotsInput');
+        const onlyAddCheckbox = document.getElementById('onlyAddCheckbox');
+        const maxTotalQtyInput = document.getElementById('maxTotalQtyInput');
+        const toggleAdvancedOptionsButton = document.getElementById('toggleAdvancedOptionsButton');
+        const advancedOptionsCard = document.querySelector('.advanced-options-card');
+        const advancedOptionsTable = document.querySelector('.advanced-options-table');
+        const suggestionWarning = document.getElementById('suggestionWarning');
+        
+        let activeSuggestionStoreKey = null;
+        let selectedStrategy = 'stable';
+        let isFirstRequest = true;
+
+        // 打開建議對話框 (修改為針對單一卡片)
+        function openSuggestionDialog(storeKey, storeName, machineId) {
+            activeSuggestionStoreKey = storeKey;
+            document.getElementById('suggestionDialogTitle').innerHTML = `<i class=\"fas fa-lightbulb\"></i> 補貨建議: ${storeName} - ${machineId}`;
+            suggestionDialog.classList.add('active');
+            suggestionResultContainer.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 20px;">請點擊 "生成建議" 以載入結果。</p>';
+            reserveSlotsInput.value = 0;
+            maxTotalQtyInput.value = 50;
+            onlyAddCheckbox.checked = false;
+            advancedOptionsTable.style.display = 'none';
+            suggestionWarning.style.display = 'none';
+            suggestionWarning.textContent = '';
+            strategyCards.forEach(card => card.classList.remove('selected'));
+            document.querySelector('.strategy-card[data-strategy=\"stable\"]').classList.add('selected');
+            selectedStrategy = 'stable';
+            isFirstRequest = true;
+        }
+        
+        // 關閉對話框
+        closeSuggestionDialog.onclick = () => { suggestionDialog.classList.remove('active'); };
+        window.onclick = (event) => {
+            if (event.target == suggestionDialog) {
+                suggestionDialog.classList.remove('active');
+            }
+        };
+
+        // 選擇策略
+        strategyCards.forEach(card => {
+            card.addEventListener('click', () => {
+                strategyCards.forEach(c => c.classList.remove('selected'));
+                card.classList.add('selected');
+                selectedStrategy = card.dataset.strategy;
+            });
+        });
+
+        // 生成建議按鈕點擊事件
+        generateSuggestionButton.addEventListener('click', async () => {
+            if (!activeSuggestionStoreKey) return;
+            if (isFirstRequest) {
+                suggestionResultContainer.innerHTML = '<div class="loading" style="position: static; height: 100px;"></div>';
+            }
+            try {
+                const response = await fetch(`/api/replenishment-suggestion/${activeSuggestionStoreKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        strategy: selectedStrategy,
+                        reserve_slots: reserveSlotsInput.value || 0,
+                        only_add: onlyAddCheckbox.checked,
+                        max_total_qty: maxTotalQtyInput.value || 50
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`伺服器錯誤: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    displaySuggestionResult(result);
+                } else {
+                    throw new Error(result.message || '生成建議失敗');
+                }
+                isFirstRequest = false;
+            } catch (error) {
+                suggestionResultContainer.innerHTML = `<p style="color: red; text-align: center;">錯誤: ${error.message}</p>`;
+            }
+        });
+        
+        // 顯示建議結果的函數
+        function displaySuggestionResult(result) {
+            const { suggestion, message } = result;
+            // 新增：檢查是否有警告訊息
+            if (result.warning) {
+                suggestionWarning.style.display = '';
+                suggestionWarning.textContent = result.warning;
+            } else {
+                suggestionWarning.style.display = 'none';
+                suggestionWarning.textContent = '';
+            }
+            if (message) {
+                 suggestionResultContainer.innerHTML = `<p style="text-align: center; color: var(--text-secondary); padding: 20px;">${message}</p>`;
+                 return;
+            }
+
+            let tableHTML = `
+                <table class="suggestion-result-table">
+                    <thead>
+                        <tr>
+                            <th>產品名稱</th>
+                            <th>30天銷量</th>
+                            <th>目前庫存</th>
+                            <th>建議數量</th>
+                            <th>調整</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            let totalCurrent = 0;
+            let totalSuggested = 0;
+
+            suggestion.forEach(item => {
+                const adjustment = item.suggestedQty - item.currentQty;
+                const adjustClass = adjustment > 0 ? 'positive' : (adjustment < 0 ? 'negative' : '');
+                const adjustSign = adjustment > 0 ? '+' : '';
+                
+                totalCurrent += item.currentQty;
+                totalSuggested += item.suggestedQty;
+
+                tableHTML += `
+                    <tr>
+                        <td>${item.productName}</td>
+                        <td>${item.salesCount30d}</td>
+                        <td>${item.currentQty}</td>
+                        <td>${item.suggestedQty}</td>
+                        <td class="qty-adjust ${adjustClass}">${adjustSign}${adjustment}</td>
+                    </tr>
+                `;
+            });
+
+            tableHTML += `
+                    </tbody>
+                    <tfoot>
+                        <tr style="font-weight: bold; border-top: 2px solid #ddd;">
+                            <td>總計</td>
+                            <td></td>
+                            <td>${totalCurrent}</td>
+                            <td>${totalSuggested}</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            `;
+
+            suggestionResultContainer.innerHTML = tableHTML;
+        }
+
         // 添加教學區塊的展開/收合功能
         document.querySelector('.tutorial-header').addEventListener('click', function() {
             const tutorial = this.parentElement;
@@ -2900,6 +3408,14 @@
                     }
                 });
             }, 300); // 增加延遲確保渲染
+        });
+
+        toggleAdvancedOptionsButton.addEventListener('click', () => {
+            if (advancedOptionsTable.style.display === 'none') {
+                advancedOptionsTable.style.display = '';
+            } else {
+                advancedOptionsTable.style.display = 'none';
+            }
         });
     </script>
 </body>

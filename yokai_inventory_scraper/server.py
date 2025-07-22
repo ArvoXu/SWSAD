@@ -1,6 +1,6 @@
 import sys
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import Flask, jsonify, send_from_directory, request, redirect, render_template, session, flash
 from flask_cors import CORS
 import schedule
@@ -613,6 +613,220 @@ def delete_inventory_data(store_key):
     finally:
         db.close()
 
+
+def distribute_remainder(items, total_slots):
+    """
+    一個輔助函數，用於處理補貨建議數量計算中的小數問題。
+    它會確保所有產品的建議數量加總後剛好等於機台的目標總容量。
+    """
+    # 根據小數部分由大到小排序，小數越大的越優先獲得 +1
+    items.sort(key=lambda x: x['suggestedQty_float'] - int(x['suggestedQty_float']), reverse=True)
+    
+    # 計算所有品項無條件捨去後的總和
+    current_total = sum(int(item['suggestedQty_float']) for item in items)
+    remainder = total_slots - current_total
+    
+    result = []
+    for i, item in enumerate(items):
+        qty = int(item['suggestedQty_float'])
+        # 將餘下的數量逐一分配給排序最前面的品項
+        if i < remainder:
+            qty += 1
+        result.append({'productName': item['productName'], 'suggestedQty': qty, 'sales_count': item.get('sales_count', 0)})
+    
+    return result
+
+@app.route('/api/replenishment-suggestion/<string:store_key>', methods=['POST'])
+def get_replenishment_suggestion(store_key):
+    """
+    生成補貨建議的核心API。
+    接收策略和預留空位，回傳一份詳細的補貨清單。
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({"success": False, "message": "No data provided"}), 400
+
+    strategy = data.get("strategy", "stable")
+    reserve_slots = int(data.get("reserve_slots", 0))
+    only_add = bool(data.get("only_add", False))
+    machine_capacity = int(data.get("max_total_qty", 50))
+    if machine_capacity < 1 or machine_capacity > 50:
+        machine_capacity = 50
+    
+    available_slots = machine_capacity - reserve_slots
+
+    db: Session = next(get_db())
+    try:
+        store_name, machine_id = store_key.split('-', 1)
+        
+        # 1. 獲取目前庫存
+        inventory_items = db.query(Inventory).filter_by(store=store_name, machine_id=machine_id).all()
+        current_inventory = {item.product_name: item.quantity for item in inventory_items}
+
+        # 2. 獲取過去30天的銷售數據 (此處假設同店鋪名的所有機台共享銷售數據)
+        thirty_days_ago = datetime.now() - timedelta(days=30)
+        transactions = db.query(Transaction).filter(
+            Transaction.store_key.startswith(store_name),
+            Transaction.transaction_time >= thirty_days_ago
+        ).all()
+
+        sales_counts = {}
+        for t in transactions:
+            if t.product_name:
+                sales_counts[t.product_name] = sales_counts.get(t.product_name, 0) + 1
+        
+        total_sales_volume = sum(sales_counts.values())
+
+        if total_sales_volume == 0:
+            return jsonify({
+                "success": True,
+                "strategy_used": "no_sales_data",
+                "suggestion": [],
+                "message": "過去30天沒有銷售紀錄，無法生成建議。"
+            })
+
+        # 3. 應用不同策略
+        suggestion_list = []
+        sorted_sales = sorted(sales_counts.items(), key=lambda item: item[1], reverse=True)
+
+        if strategy == 'stable':
+            temp_suggestions = [{'productName': p, 'suggestedQty_float': (c / total_sales_volume) * available_slots, 'sales_count': c} for p, c in sales_counts.items()]
+            suggestion_list = distribute_remainder(temp_suggestions, available_slots)
+        
+        elif strategy == 'aggressive':
+            top_3_products = sorted_sales[:3]
+            other_products = sorted_sales[3:]
+            
+            top_3_sales_volume = sum(c for _, c in top_3_products)
+            other_sales_volume = sum(c for _, c in other_products)
+
+            slots_for_top_3 = round(available_slots * 0.8)
+            slots_for_others = available_slots - slots_for_top_3
+            
+            temp_suggestions = []
+            if top_3_sales_volume > 0:
+                temp_suggestions.extend([{'productName': p, 'suggestedQty_float': (c / top_3_sales_volume) * slots_for_top_3, 'sales_count': c} for p, c in top_3_products])
+            if other_sales_volume > 0 and len(other_products) > 0:
+                temp_suggestions.extend([{'productName': p, 'suggestedQty_float': (c / other_sales_volume) * slots_for_others, 'sales_count': c} for p, c in other_products])
+            
+            suggestion_list = distribute_remainder(temp_suggestions, available_slots)
+
+        elif strategy == 'exploratory':
+            slots_for_existing = round(available_slots * 0.8)
+            # 只考慮有銷量的產品進行分配
+            temp_suggestions = [{'productName': p, 'suggestedQty_float': (c / total_sales_volume) * slots_for_existing, 'sales_count': c} for p, c in sales_counts.items()]
+            suggestion_list = distribute_remainder(temp_suggestions, slots_for_existing)
+
+        # 4. 組合最終結果
+        final_suggestion = []
+        suggestion_map = {item['productName']: item['suggestedQty'] for item in suggestion_list}
+        all_product_names = set(current_inventory.keys()) | set(suggestion_map.keys())
+
+        # 正確邏輯：最大補貨總數量是補貨後的目標庫存量
+        warning = None
+        total_current = sum(current_inventory.get(name, 0) for name in all_product_names)
+        if total_current >= machine_capacity:
+            warning = f"現有庫存總和({total_current})已達最大補貨總數量({machine_capacity})，無需補貨。"
+            for name in all_product_names:
+                final_suggestion.append({
+                    'productName': name,
+                    'currentQty': current_inventory.get(name, 0),
+                    'suggestedQty': current_inventory.get(name, 0),
+                    'salesCount30d': sales_counts.get(name, 0)
+                })
+            final_suggestion.sort(key=lambda x: x['suggestedQty'], reverse=True)
+            return jsonify({
+                "success": True,
+                "store_key": store_key,
+                "strategy_used": strategy,
+                "suggestion": final_suggestion,
+                "warning": warning
+            })
+
+        # 剩餘可補貨空間
+        available_replenish = machine_capacity - total_current
+        # 依策略分配這些空間
+        # 重新計算分配：每個產品的補貨量 = 分配量，建議數量 = 現有庫存 + 分配量
+        # 先依照策略分配比例
+        # 取得有銷量的產品分配比例
+        if strategy == 'stable':
+            total_sales_volume = sum(sales_counts.values())
+            temp_suggestions = []
+            for p, c in sales_counts.items():
+                temp_suggestions.append({'productName': p, 'suggestedQty_float': (c / total_sales_volume) * available_replenish, 'sales_count': c})
+            distributed = distribute_remainder(temp_suggestions, available_replenish)
+        elif strategy == 'aggressive':
+            sorted_sales = sorted(sales_counts.items(), key=lambda item: item[1], reverse=True)
+            top_3_products = sorted_sales[:3]
+            other_products = sorted_sales[3:]
+            top_3_sales_volume = sum(c for _, c in top_3_products)
+            other_sales_volume = sum(c for _, c in other_products)
+            slots_for_top_3 = round(available_replenish * 0.8)
+            slots_for_others = available_replenish - slots_for_top_3
+            temp_suggestions = []
+            if top_3_sales_volume > 0:
+                temp_suggestions.extend([{'productName': p, 'suggestedQty_float': (c / top_3_sales_volume) * slots_for_top_3, 'sales_count': c} for p, c in top_3_products])
+            if other_sales_volume > 0 and len(other_products) > 0:
+                temp_suggestions.extend([{'productName': p, 'suggestedQty_float': (c / other_sales_volume) * slots_for_others, 'sales_count': c} for p, c in other_products])
+            distributed = distribute_remainder(temp_suggestions, available_replenish)
+        elif strategy == 'exploratory':
+            total_sales_volume = sum(sales_counts.values())
+            slots_for_existing = round(available_replenish * 0.8)
+            temp_suggestions = [{'productName': p, 'suggestedQty_float': (c / total_sales_volume) * slots_for_existing, 'sales_count': c} for p, c in sales_counts.items()]
+            distributed = distribute_remainder(temp_suggestions, slots_for_existing)
+        else:
+            distributed = []
+
+        # 將分配結果轉為 dict
+        distributed_map = {item['productName']: item['suggestedQty'] for item in distributed}
+
+        # 組合最終建議：建議數量 = 現有庫存 + 分配到的補貨量
+        for name in all_product_names:
+            current_qty = current_inventory.get(name, 0)
+            add_qty = distributed_map.get(name, 0)
+            suggested_qty = current_qty + add_qty
+            # 只補貨模式下，不建議減少現有庫存
+            if only_add and suggested_qty < current_qty:
+                suggested_qty = current_qty
+            final_suggestion.append({
+                'productName': name,
+                'currentQty': current_qty,
+                'suggestedQty': suggested_qty,
+                'salesCount30d': sales_counts.get(name, 0)
+            })
+        final_suggestion.sort(key=lambda x: x['suggestedQty'], reverse=True)
+
+        # 最終檢查總和，理論上不會超過 machine_capacity
+        total_final = sum(item['suggestedQty'] for item in final_suggestion)
+        if total_final > machine_capacity:
+            warning = f"分配後總庫存({total_final})超過最大補貨總數量({machine_capacity})，已自動調整至上限。"
+            # 依現有庫存排序，依序減少至符合上限
+            over = total_final - machine_capacity
+            for item in sorted(final_suggestion, key=lambda x: x['suggestedQty'], reverse=True):
+                if over <= 0:
+                    break
+                reducible = item['suggestedQty'] - item['currentQty']
+                if reducible > 0:
+                    reduce_by = min(reducible, over)
+                    item['suggestedQty'] -= reduce_by
+                    over -= reduce_by
+            # 再次排序
+            final_suggestion.sort(key=lambda x: x['suggestedQty'], reverse=True)
+
+        return jsonify({
+            "success": True,
+            "store_key": store_key,
+            "strategy_used": strategy,
+            "suggestion": final_suggestion,
+            "warning": warning
+        })
+
+    except Exception as e:
+        db.rollback()
+        logging.error(f"Error in replenishment suggestion for {store_key}: {e}", exc_info=True)
+        return jsonify({"success": False, "message": str(e)}), 500
+    finally:
+        db.close()
 
 # --- Password Protected Routes ---
 @app.route('/login', methods=['GET', 'POST'])
