@@ -1130,8 +1130,8 @@
 
         .suggestion-trigger-icon {
             position: absolute;
-            top: 12px;
-            right: 12px;
+            top: 20px;
+            right: 20px;
             font-size: 20px;
             color: var(--warning-color);
             cursor: pointer;
@@ -1294,6 +1294,19 @@
             margin: 0 auto;
             width: 18px;
             height: 18px;
+        }
+        @media (max-width: 768px) {
+            .suggestion-controls {
+                align-items: stretch;
+                gap: 10px;
+            }
+            #generateSuggestionButton,
+            #toggleAdvancedOptionsButton {
+                width: 100%;
+                min-width: 0;
+                margin-left: 0 !important;
+                position: static !important;
+            }
         }
     </style>
 </head>
