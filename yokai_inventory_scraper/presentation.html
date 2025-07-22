@@ -3196,6 +3196,42 @@
         let selectedStrategy = 'stable';
         let isFirstRequest = true;
 
+        // 新增：檢查爬蟲狀態
+        async function isDataUpdating() {
+            try {
+                const [invRes, salesRes] = await Promise.all([
+                    fetch('/scraper-status'),
+                    fetch('/sales-scraper-status')
+                ]);
+                const invStatus = await invRes.json();
+                const salesStatus = await salesRes.json();
+                return invStatus.status === 'running' || salesStatus.status === 'running';
+            } catch (e) {
+                // 若查詢失敗，預設不鎖定
+                return false;
+            }
+        }
+
+        // 自動輪詢鎖定生成建議按鈕
+        let suggestionStatusInterval = null;
+        function startSuggestionStatusPolling() {
+            suggestionStatusInterval = setInterval(async () => {
+                if (await isDataUpdating()) {
+                    generateSuggestionButton.disabled = true;
+                    generateSuggestionButton.innerHTML = '<i class="fas fa-magic"></i> 資料正在更新...';
+                } else {
+                    generateSuggestionButton.disabled = false;
+                    generateSuggestionButton.innerHTML = '<i class="fas fa-magic"></i> 生成建議';
+                }
+            }, 2000);
+        }
+        function stopSuggestionStatusPolling() {
+            if (suggestionStatusInterval) {
+                clearInterval(suggestionStatusInterval);
+                suggestionStatusInterval = null;
+            }
+        }
+
         // 打開建議對話框 (修改為針對單一卡片)
         function openSuggestionDialog(storeKey, storeName, machineId) {
             activeSuggestionStoreKey = storeKey;
@@ -3212,13 +3248,15 @@
             document.querySelector('.strategy-card[data-strategy=\"stable\"]').classList.add('selected');
             selectedStrategy = 'stable';
             isFirstRequest = true;
+            startSuggestionStatusPolling(); // 新增：開啟時啟動輪詢
         }
         
-        // 關閉對話框
-        closeSuggestionDialog.onclick = () => { suggestionDialog.classList.remove('active'); };
+        // 關閉對話框時停止輪詢
+        closeSuggestionDialog.onclick = () => { suggestionDialog.classList.remove('active'); stopSuggestionStatusPolling(); };
         window.onclick = (event) => {
             if (event.target == suggestionDialog) {
                 suggestionDialog.classList.remove('active');
+                stopSuggestionStatusPolling();
             }
         };
 
@@ -3233,6 +3271,10 @@
 
         // 生成建議按鈕點擊事件
         generateSuggestionButton.addEventListener('click', async () => {
+            if (await isDataUpdating()) {
+                suggestionResultContainer.innerHTML = '<p style="color: orange; text-align: center;">資料正在更新，請稍後嘗試</p>';
+                return;
+            }
             if (!activeSuggestionStoreKey) return;
             if (isFirstRequest) {
                 suggestionResultContainer.innerHTML = '<div class="loading" style="position: static; height: 100px;"></div>';
@@ -3250,11 +3292,13 @@
                 });
 
                 if (!response.ok) {
+                    if (response.status === 503) {
+                        throw new Error('資料正在更新，請稍後嘗試');
+                    }
                     throw new Error(`伺服器錯誤: ${response.statusText}`);
                 }
 
                 const result = await response.json();
-                
                 if (result.success) {
                     displaySuggestionResult(result);
                 } else {
