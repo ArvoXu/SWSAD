@@ -273,11 +273,16 @@
 
         .detail-content {
             display: none;
-            background-color: #f8f9fa;
+            background: rgba(255,255,255,0.22);
             border-radius: calc(var(--border-radius) / 2);
             padding: calc(var(--spacing-unit) * 2);
             margin-top: calc(var(--spacing-unit) * 2);
             width: 100%;
+            box-shadow: 0 2px 8px 0 rgba(33, 150, 243, 0.08), 0 1.5px 4px 0 rgba(103, 58, 183, 0.05);
+            border: 1.2px solid rgba(255,255,255,0.16);
+            backdrop-filter: blur(8px) saturate(120%);
+            -webkit-backdrop-filter: blur(8px) saturate(120%);
+            overflow: hidden;
         }
 
         .chart-card.detail-view .detail-content {
