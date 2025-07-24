@@ -1216,16 +1216,7 @@
         .modal.active {
             display: flex !important;
         }
-        .suggestion-modal-content {
-            position: relative;
-            margin: 0 auto;
-            top: 0; left: 0; right: 0; bottom: 0;
-            max-width: 700px;
-            width: 95vw;
-            box-shadow: 0 8px 32px 0 rgba(33, 150, 243, 0.13), 0 2px 8px 0 rgba(103, 58, 183, 0.08);
-            z-index: 2100;
-            animation: fadeInModal 0.2s;
-        }
+
         @keyframes fadeInModal {
             from { transform: translateY(40px) scale(0.98); opacity: 0; }
             to   { transform: translateY(0) scale(1); opacity: 1; }
