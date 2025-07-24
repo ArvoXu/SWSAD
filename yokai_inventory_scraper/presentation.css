@@ -556,54 +556,53 @@
 
         /* 教學區塊樣式 */
         .tutorial {
-            background-color: var(--card-background);
-            border-radius: var(--border-radius);
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+            background: rgba(255,255,255,0.22);
+            border-radius: 16px;
+            box-shadow: 0 4px 18px 0 rgba(33, 150, 243, 0.10), 0 1.5px 6px 0 rgba(103, 58, 183, 0.07);
             margin-bottom: calc(var(--spacing-unit) * 4);
             overflow: hidden;
             transition: all 0.3s ease;
+            border: 1.5px solid rgba(255,255,255,0.18);
+            backdrop-filter: blur(12px) saturate(130%);
+            -webkit-backdrop-filter: blur(12px) saturate(130%);
         }
-
         .tutorial-header {
             padding: calc(var(--spacing-unit) * 2);
-            background-color: var(--primary-color);
-            color: white;
+            background: rgba(220, 235, 255, 0.32);
+            color: var(--primary-color);
             display: flex;
             align-items: center;
             justify-content: space-between;
             cursor: pointer;
             user-select: none;
+            border-bottom: 1.5px solid rgba(255,255,255,0.13);
+            backdrop-filter: blur(8px) saturate(120%);
+            -webkit-backdrop-filter: blur(8px) saturate(120%);
         }
-
         .tutorial-header:hover {
-            background-color: #1976D2;
+            background: rgba(33,150,243,0.13);
+            color: #1976D2;
         }
-
         .tutorial-title {
             display: flex;
             align-items: center;
             gap: calc(var(--spacing-unit));
             font-weight: 500;
         }
-
         .tutorial-content {
             padding: calc(var(--spacing-unit) * 3);
             display: none;
             background-color: #f8f9fa;
         }
-
         .tutorial.open .tutorial-content {
             display: block;
         }
-
         .tutorial-section {
             margin-bottom: calc(var(--spacing-unit) * 2);
         }
-
         .tutorial-section:last-child {
             margin-bottom: 0;
         }
-
         .tutorial-section h3 {
             color: var(--primary-color);
             margin-bottom: calc(var(--spacing-unit));
@@ -612,7 +611,6 @@
             align-items: center;
             gap: calc(var(--spacing-unit));
         }
-
         .tutorial-section p {
             margin-bottom: calc(var(--spacing-unit));
             color: var(--text-secondary);
@@ -620,13 +618,11 @@
             line-height: 1.6;
             padding-left: calc(var(--spacing-unit) * 3);
         }
-
         .tutorial-section ul {
             list-style: none;
             padding-left: calc(var(--spacing-unit) * 3);
             margin-bottom: calc(var(--spacing-unit));
         }
-
         .tutorial-section li {
             color: var(--text-secondary);
             font-size: 14px;
@@ -636,13 +632,11 @@
             align-items: center;
             gap: calc(var(--spacing-unit));
         }
-
         .tutorial-section li i {
             color: var(--primary-color);
             width: 20px;
             text-align: center;
         }
-
         footer {
             text-align: center;
             margin-top: calc(var(--spacing-unit) * 4);
@@ -755,23 +749,31 @@
             margin-bottom: 20px;
         }
         .tab-link {
-            background: none;
-            border: none;
-            padding: 12px 24px;
-            cursor: pointer;
-            font-size: 16px;
+            background: rgba(255,255,255,0.22);
+            border: 1.5px solid rgba(255,255,255,0.18);
+            border-radius: 12px 12px 0 0;
+            box-shadow: 0 2px 8px 0 rgba(33, 150, 243, 0.10);
             color: var(--text-secondary);
-            border-bottom: 3px solid transparent;
-            transition: all 0.2s ease;
             font-weight: 500;
+            font-size: 16px;
+            padding: 12px 24px;
+            margin-right: 8px;
+            transition: all 0.2s;
+            outline: none;
+            position: relative;
+            z-index: 1;
         }
         .tab-link:hover {
-            color: var(--text-primary);
+            background: rgba(33,150,243,0.13);
+            color: var(--primary-color);
+            box-shadow: 0 4px 12px rgba(33, 150, 243, 0.13);
         }
         .tab-link.active {
-            color: var(--primary-color);
-            border-bottom-color: var(--primary-color);
-            font-weight: 600;
+            background: rgba(33,150,243,0.22);
+            color: #fff;
+            border-color: rgba(33,150,243,0.28);
+            box-shadow: 0 6px 18px 0 rgba(33, 150, 243, 0.18);
+            z-index: 2;
         }
         .tab-content {
             display: none;
@@ -969,29 +971,41 @@
             margin-bottom: 20px;
         }
 
-        .chart-switch-btn {
-            background-color: transparent;
+        .chart-switch-btn, .time-unit-btn {
+            border: 1.5px solid rgba(255,255,255,0.18);
+            border-radius: 12px;
+            background: rgba(255,255,255,0.22);
             color: var(--text-secondary);
-            border: 1px solid #ccc;
-            padding: 10px 20px;
-            border-radius: 20px;
             cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-size: 1.1rem;
+            font-weight: 300;
+            box-shadow: 0 2px 8px 0 rgba(33, 150, 243, 0.10), 0 1.5px 4px 0 rgba(103, 58, 183, 0.07);
+            backdrop-filter: blur(8px) saturate(130%);
+            -webkit-backdrop-filter: blur(8px) saturate(130%);
+            transition: all 0.22s cubic-bezier(.4,2,.6,1);
+            padding: 10px 20px;
+            min-width: 44px;
+            min-height: 44px;
+            outline: none;
+            border-bottom: none;
         }
-        
-        .chart-switch-btn:hover {
-            background-color: #f0f2f5;
-            color: var(--text-primary);
+        .chart-switch-btn:hover, .chart-switch-btn:focus,
+        .time-unit-btn:hover, .time-unit-btn:focus {
+            background: rgba(33,150,243,0.18);
+            color: #fff;
+            transform: translateY(-3px) scale(1.06);
+            box-shadow: 0 6px 18px 0 rgba(33, 150, 243, 0.18), 0 2px 8px 0 rgba(103, 58, 183, 0.10);
+            border-color: rgba(33,150,243,0.22);
         }
-
-        .chart-switch-btn.active {
-            background-color: var(--primary-color);
-            color: white;
-            border-color: var(--primary-color);
-            box-shadow: 0 4px 8px rgba(33, 150, 243, 0.3);
-            transform: translateY(-2px);
+        .chart-switch-btn.active, .time-unit-btn.active {
+            background: rgba(33,150,243,0.22);
+            color: #fff;
+            box-shadow: 0 2px 8px 0 rgba(33, 150, 243, 0.18) inset;
+            border-color: rgba(33,150,243,0.28);
         }
 
         .time-unit-switcher {
@@ -1001,26 +1015,12 @@
             margin-bottom: 20px;
         }
 
+        /* 移除舊的 .time-unit-btn 樣式，避免覆蓋玻璃擬態 */
         .time-unit-btn {
-            background-color: #f0f2f5;
-            color: var(--text-secondary);
-            border: 1px solid transparent;
-            padding: 6px 12px;
-            border-radius: 16px;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: 500;
-            transition: all 0.2s ease;
+            /* 清空原本 background-color、color、border、padding、border-radius、font-size、transition 等屬性 */
         }
-
-        .time-unit-btn:hover {
-            background-color: #e0e2e5;
-        }
-
-        .time-unit-btn.active {
-            background-color: var(--primary-color);
-            color: white;
-        }
+        .time-unit-btn:hover {}
+        .time-unit-btn.active {}
 
         .hidden {
             display: none !important;
@@ -1480,4 +1480,195 @@
     transform: translateY(-3px) scale(1.04);
     box-shadow: 0 6px 18px 0 rgba(33, 150, 243, 0.18), 0 2px 8px 0 rgba(103, 58, 183, 0.10);
     border-color: rgba(33,150,243,0.22);
+}
+
+@media (max-width: 768px) {
+  .chart-switch-btn span,
+  .time-unit-btn span {
+    display: none !important;
+  }
+  .chart-switch-btn,
+  .time-unit-btn {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+    border-radius: 12px;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px 0 rgba(33, 150, 243, 0.10), 0 1.5px 4px 0 rgba(103, 58, 183, 0.07);
+    backdrop-filter: blur(8px) saturate(130%);
+    -webkit-backdrop-filter: blur(8px) saturate(130%);
+    border: 1.5px solid rgba(255,255,255,0.18);
+    background: rgba(255,255,255,0.22);
+    color: var(--text-secondary);
+    transition: all 0.22s cubic-bezier(.4,2,.6,1);
+    outline: none;
+    gap: 0;
+  }
+  .chart-switch-btn i,
+  .time-unit-btn i {
+    margin-right: 0 !important;
+    font-size: 1.3em;
+    display: block;
+  }
+}
+
+@media (max-width: 480px) {
+  #printButton,
+  #saveAsHtmlButton,
+  #captureButton {
+    display: none !important;
+  }
+  .toolbar {
+    flex-direction: column;
+    gap: 10px;
+    align-items: stretch;
+    padding: 10px 4px;
+  }
+  .toolbar-section {
+    width: 100%;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .toolbar-section:first-child {
+    order: 1;
+    margin-bottom: 0;
+  }
+  .toolbar-section:last-child {
+    order: 3;
+    margin-top: 0;
+  }
+  .search-input-presentation {
+    width: 100%;
+    min-width: 0;
+    margin: 0 0 8px 0;
+    display: block;
+    order: 2;
+  }
+  /* 讓toolbar按鈕自動換行且置中 */
+  .toolbar-button {
+    min-width: 44px;
+    width: 44px;
+    margin: 0 4px 4px 0;
+  }
+}
+.sales-controls.glass {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: rgba(240, 248, 255, 0.38);
+  border-radius: 20px;
+  box-shadow: 0 6px 24px 0 rgba(33, 150, 243, 0.10), 0 1.5px 6px 0 rgba(103, 58, 183, 0.08);
+  border: 1.5px solid rgba(255,255,255,0.22);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  padding: 18px 24px;
+  margin-bottom: 24px;
+  min-height: 80px;
+  transform: scale(0.92);
+  padding: 10px 12px;
+  min-height: 60px;
+  font-size: 0.95em;
+}
+.sales-date-group {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: center;
+}
+.date-block {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255,255,255,0.22);
+  border-radius: 10px;
+  padding: 6px 10px;
+  box-shadow: 0 2px 8px 0 rgba(33, 150, 243, 0.10);
+  border: 1.2px solid rgba(255,255,255,0.13);
+  backdrop-filter: blur(8px) saturate(120%);
+  -webkit-backdrop-filter: blur(8px) saturate(120%);
+  min-width: 220px;
+}
+.date-block i {
+  color: #2196F3;
+  font-size: 1em;
+}
+.date-block label {
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-right: 4px;
+  font-size: 0.97em;
+}
+.date-block input {
+  border: 1.2px solid rgba(33,150,243,0.18);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 14px;
+  background: rgba(255,255,255,0.18);
+  color: var(--text-primary);
+  outline: none;
+  transition: box-shadow 0.2s, border-color 0.2s;
+  box-shadow: 0 1.5px 4px 0 rgba(33, 150, 243, 0.07);
+  backdrop-filter: blur(4px) saturate(110%);
+  -webkit-backdrop-filter: blur(4px) saturate(110%);
+}
+.date-block input:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.13);
+}
+.toggle-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: rgba(255,255,255,0.22);
+  border-radius: 10px;
+  padding: 6px 10px;
+  box-shadow: 0 2px 8px 0 rgba(33, 150, 243, 0.10);
+  border: 1.2px solid rgba(255,255,255,0.13);
+  backdrop-filter: blur(8px) saturate(120%);
+  -webkit-backdrop-filter: blur(8px) saturate(120%);
+  min-width: 80px;
+}
+.toggle-label {
+  color: var(--primary-color);
+  font-weight: 600;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.97em;
+}
+.toggle-label i {
+  font-size: 1em;
+}
+@media (max-width: 900px) {
+  .sales-date-group {
+    gap: 8px;
+  }
+  .date-block {
+    min-width: 120px;
+    padding: 5px 5px;
+  }
+}
+@media (max-width: 600px) {
+  .sales-controls.glass {
+    padding: 10px 4px;
+  }
+  .sales-date-group {
+    flex-direction: column;
+    gap: 10px;
+    align-items: stretch;
+  }
+  .date-block, .toggle-block {
+    min-width: 0;
+    width: 100%;
+    justify-content: center;
+  }
 }

@@ -234,37 +234,39 @@
 
         <!-- 圖表切換器 -->
         <div class="chart-switcher">
-            <button class="chart-switch-btn active" data-chart="daily">銷售趨勢</button>
-            <button class="chart-switch-btn" data-chart="store">各分店銷售額</button>
-            <button class="chart-switch-btn" data-chart="product">產品銷售佔比</button>
-            <button class="chart-switch-btn" data-chart="payment">支付方式佔比</button>
+            <button class="chart-switch-btn active" data-chart="daily"><i class="fas fa-chart-line"></i> <span>銷售趨勢</span></button>
+            <button class="chart-switch-btn" data-chart="store"><i class="fas fa-store"></i> <span>各分店銷售額</span></button>
+            <button class="chart-switch-btn" data-chart="product"><i class="fas fa-cubes"></i> <span>產品銷售佔比</span></button>
+            <button class="chart-switch-btn" data-chart="payment"><i class="fas fa-credit-card"></i> <span>支付方式佔比</span></button>
         </div>
 
-        <div class="sales-controls">
-            <div class="control-group">
-                <label for="datePicker" id="primaryPeriodLabel" contenteditable="true">主期間</label>:
+        <div class="sales-controls glass">
+          <div class="sales-date-group">
+            <div class="date-block">
+              <i class="fas fa-calendar-alt"></i>
+              <label id="primaryPeriodLabel" contenteditable="true">主期間</label>
                 <input id="datePicker"/>
             </div>
-            
-            <div class="control-group">
+            <div class="toggle-block">
                 <label class="switch">
                     <input type="checkbox" id="compareToggle">
                     <span class="slider"></span>
                 </label>
-                <label for="compareToggle">對比</label>
+              <span class="toggle-label"><i class="fas fa-exchange-alt"></i> 對比</span>
             </div>
-
-            <div class="control-group" id="compareDatePickerContainer">
-                 <label for="compareDatePicker" id="comparePeriodLabel" contenteditable="true">對比期間</label>:
+            <div class="date-block" id="compareDatePickerContainer">
+              <i class="fas fa-calendar-check"></i>
+              <label id="comparePeriodLabel" contenteditable="true">對比期間</label>
                  <input id="compareDatePicker"/>
+            </div>
             </div>
         </div>
         
         <!-- 時間單位切換器 -->
         <div id="timeUnitSwitcher" class="time-unit-switcher">
-            <button class="time-unit-btn" data-unit="6h">每6小時</button>
-            <button class="time-unit-btn active" data-unit="daily">每日</button>
-            <button class="time-unit-btn" data-unit="2d">每2日</button>
+            <button class="time-unit-btn" data-unit="6h"><i class="fas fa-clock"></i> <span>每6小時</span></button>
+            <button class="time-unit-btn active" data-unit="daily"><i class="fas fa-calendar-day"></i> <span>每日</span></button>
+            <button class="time-unit-btn" data-unit="2d"><i class="fas fa-calendar-alt"></i> <span>每2日</span></button>
         </div>
         
         <!-- 主圖表容器 -->
