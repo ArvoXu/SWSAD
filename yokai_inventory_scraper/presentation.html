@@ -15,6 +15,19 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litepicker/dist/css/litepicker.css"/>
     <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/litepicker.js"></script>
     <link rel="stylesheet" href="presentation.css">
+    <script>
+    // 偵測 iOS/Safari 並加上 is-ios-safari class
+    (function() {
+      var ua = window.navigator.userAgent;
+      var isIOS = /iP(ad|hone|od)/.test(ua);
+      var isSafari = /Safari/.test(ua) && !/Chrome/.test(ua);
+      if (isIOS || isSafari) {
+        document.addEventListener('DOMContentLoaded', function() {
+          document.body.classList.add('is-ios-safari');
+        });
+      }
+    })();
+    </script>
 </head>
 <body>
     <div class="dashboard-header">
