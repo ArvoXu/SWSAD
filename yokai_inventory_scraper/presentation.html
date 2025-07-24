@@ -209,8 +209,6 @@
                 <span class="tooltip">截圖保存</span>
             </button>
         </div>
-        
-        <!-- KPI 儀表板 -->
         <div class="kpi-container">
             <div class="kpi-card">
                 <h4>總銷售額</h4>
@@ -231,47 +229,68 @@
                 </div>
             </div>
         </div>
-
-        <!-- 圖表切換器 -->
+        <div class="sales-controls glass" id="salesControls">
+          <div class="compare-row" style="display:flex; flex-direction:column; gap:18px; align-items:stretch; max-width:700px; margin:0 auto;">
+            <div class="mainline-block glass-card">
+              <div class="block-title">主線設定</div>
+              <div class="block-fields">
+                <div class="date-block">
+                  <i class="fas fa-calendar-alt"></i>
+                  <label>日期</label>
+                  <input id="mainDatePicker"/>
+                </div>
+                <div class="date-block">
+                  <i class="fas fa-store"></i>
+                  <label>分店</label>
+                  <select id="mainStoreSelect"></select>
+                </div>
+                <div class="date-block">
+                  <i class="fas fa-cubes"></i>
+                  <label>產品</label>
+                  <select id="mainProductSelect"></select>
+                </div>
+              </div>
+            </div>
+            <div class="toggle-block">
+              <label class="switch">
+                <input type="checkbox" id="compareToggle">
+                <span class="slider"></span>
+              </label>
+              <span class="toggle-label"><i class="fas fa-exchange-alt"></i> 啟用對比</span>
+            </div>
+            <div class="compareline-block glass-card" id="compareLineBlock" style="display:none;">
+              <div class="block-title">對比線設定</div>
+              <div class="block-fields">
+                <div class="date-block">
+                  <i class="fas fa-calendar-check"></i>
+                  <label>日期</label>
+                  <input id="compareDatePicker"/>
+                </div>
+                <div class="date-block">
+                  <i class="fas fa-store"></i>
+                  <label>分店</label>
+                  <select id="compareStoreSelect"></select>
+                </div>
+                <div class="date-block">
+                  <i class="fas fa-cubes"></i>
+                  <label>產品</label>
+                  <select id="compareProductSelect"></select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- 還原時間單位切換器 -->
+        <div id="timeUnitSwitcher" class="time-unit-switcher"></div>
         <div class="chart-switcher">
             <button class="chart-switch-btn active" data-chart="daily"><i class="fas fa-chart-line"></i> <span>銷售趨勢</span></button>
             <button class="chart-switch-btn" data-chart="store"><i class="fas fa-store"></i> <span>各分店銷售額</span></button>
             <button class="chart-switch-btn" data-chart="product"><i class="fas fa-cubes"></i> <span>產品銷售佔比</span></button>
             <button class="chart-switch-btn" data-chart="payment"><i class="fas fa-credit-card"></i> <span>支付方式佔比</span></button>
         </div>
-
-        <div class="sales-controls glass">
-          <div class="sales-date-group">
-            <div class="date-block">
-              <i class="fas fa-calendar-alt"></i>
-              <label id="primaryPeriodLabel" contenteditable="true">主期間</label>
-                <input id="datePicker"/>
-            </div>
-            <div class="toggle-block">
-                <label class="switch">
-                    <input type="checkbox" id="compareToggle">
-                    <span class="slider"></span>
-                </label>
-              <span class="toggle-label"><i class="fas fa-exchange-alt"></i> 對比</span>
-            </div>
-            <div class="date-block" id="compareDatePickerContainer">
-              <i class="fas fa-calendar-check"></i>
-              <label id="comparePeriodLabel" contenteditable="true">對比期間</label>
-                 <input id="compareDatePicker"/>
-            </div>
-            </div>
-        </div>
-        
-        <!-- 時間單位切換器 -->
-        <div id="timeUnitSwitcher" class="time-unit-switcher">
-            <button class="time-unit-btn" data-unit="6h"><i class="fas fa-clock"></i> <span>每6小時</span></button>
-            <button class="time-unit-btn active" data-unit="daily"><i class="fas fa-calendar-day"></i> <span>每日</span></button>
-            <button class="time-unit-btn" data-unit="2d"><i class="fas fa-calendar-alt"></i> <span>每2日</span></button>
-        </div>
-        
-        <!-- 主圖表容器 -->
         <div class="main-chart-container">
             <canvas id="mainSalesChart"></canvas>
+            <div id="lineLegend" class="line-legend"></div>
         </div>
     </div>
 
@@ -698,145 +717,339 @@
         
         // --- 新的銷售趨勢圖表邏輯 ---
         let mainSalesChartInstance = null;
-        let datePickerInstance = null;
+        let mainDatePickerInstance = null;
         let compareDatePickerInstance = null;
         let isCompareMode = false;
-        let activeSalesChart = 'daily'; // 追蹤當前活動的圖表
-        let activeTimeUnit = 'daily'; // 新增：追蹤當前時間單位
-        let currentChartData = {}; // 存儲已聚合的數據
-        
-        // 新增: 過濾數據的輔助函數
-        function filterDataByDateRange(data, startDate, endDate) {
-            if (!startDate || !endDate) return [];
-            
-            // 修正：將結束日期調整為當天的結束時間，以包含整天
-            const adjustedEndDate = new Date(endDate);
-            adjustedEndDate.setHours(23, 59, 59, 999);
+        let activeSalesChart = 'daily';
+        let activeTimeUnit = 'daily';
+        let currentChartData = {};
 
-            return data.filter(d => {
-                const amount = parseFloat(d.amount) || 0;
-                // 新增：過濾掉0元或負數的交易
-                if (amount <= 0) return false;
-                
-                const isWithinRange = d.jsDate && d.jsDate >= startDate && d.jsDate <= adjustedEndDate;
-                
-                return isWithinRange;
-            });
-        }
+        // 主線/對比線條件
+        let mainLine = { store: '', product: '', start: null, end: null };
+        let compareLine = { store: '', product: '', start: null, end: null };
 
         function setupSalesTrendTab(fullSalesData) {
-            // --- Logging Start ---
-            console.log('[Debug] setupSalesTrendTab called with data:', fullSalesData);
-            // --- Logging End ---
             if (!fullSalesData || fullSalesData.length === 0) {
                 document.getElementById('sales-tab').innerHTML = '<p style="text-align: center;">沒有銷售數據可供分析。</p>';
                 return;
             }
-            
-            // The date parsing logic has been moved to loadAllData() to ensure it's globally available.
-            // This function can now assume that fullSalesData contains processed jsDate properties.
+            // 1. 生成分店/產品選項
+            const storeSet = new Set();
+            const productSet = new Set();
+            fullSalesData.forEach(d => {
+                if (d.shopName) storeSet.add(d.shopName);
+                if (d.product) productSet.add(d.product);
+            });
+            const storeOptions = '<option value="">全部</option>' + Array.from(storeSet).sort().map(s => `<option value="${s}">${s}</option>`).join('');
+            const productOptions = '<option value="">全部</option>' + Array.from(productSet).sort().map(p => `<option value="${p}">${p}</option>`).join('');
+            document.getElementById('mainStoreSelect').innerHTML = storeOptions;
+            document.getElementById('mainProductSelect').innerHTML = productOptions;
+            document.getElementById('compareStoreSelect').innerHTML = storeOptions;
+            document.getElementById('compareProductSelect').innerHTML = productOptions;
 
-            // 初始化日期選擇器
-            datePickerInstance = new Litepicker({
-                element: document.getElementById('datePicker'),
+            // 2. 初始化日期選擇器
+            const today = new Date();
+            const defaultStart = new Date(today);
+            defaultStart.setDate(today.getDate() - 29);
+            mainDatePickerInstance = new Litepicker({
+                element: document.getElementById('mainDatePicker'),
                 singleMode: false,
                 format: 'YYYY-MM-DD',
                 setup: (picker) => {
                     picker.on('selected', (date1, date2) => {
-                        processAndRenderCharts(fullSalesData, date1.dateInstance, date2.dateInstance);
+                        mainLine.start = date1.dateInstance;
+                        mainLine.end = date2.dateInstance;
+                        renderSalesChart(fullSalesData);
                     });
                 }
             });
-
-            // 初始化對比日期選擇器
             compareDatePickerInstance = new Litepicker({
                 element: document.getElementById('compareDatePicker'),
                 singleMode: false,
                 format: 'YYYY-MM-DD',
-                 setup: (picker) => {
+                setup: (picker) => {
                     picker.on('selected', (date1, date2) => {
-                        // 只需要重新渲染，不需要重新聚合數據
-                        renderActiveChart();
+                        compareLine.start = date1.dateInstance;
+                        compareLine.end = date2.dateInstance;
+                        renderSalesChart(fullSalesData);
                     });
                 }
             });
-            
-            // 初始化對比開關
+            mainDatePickerInstance.setDateRange(defaultStart, today);
+            compareDatePickerInstance.setDateRange(defaultStart, today);
+            mainLine.start = defaultStart;
+            mainLine.end = today;
+            compareLine.start = defaultStart;
+            compareLine.end = today;
+
+            // 3. 綁定主線/對比線 select 事件
+            document.getElementById('mainStoreSelect').addEventListener('change', function() {
+                mainLine.store = this.value;
+                renderSalesChart(fullSalesData);
+            });
+            document.getElementById('mainProductSelect').addEventListener('change', function() {
+                mainLine.product = this.value;
+                renderSalesChart(fullSalesData);
+            });
+            document.getElementById('compareStoreSelect').addEventListener('change', function() {
+                compareLine.store = this.value;
+                renderSalesChart(fullSalesData);
+            });
+            document.getElementById('compareProductSelect').addEventListener('change', function() {
+                compareLine.product = this.value;
+                renderSalesChart(fullSalesData);
+            });
+            // 4. 對比開關
             const compareToggle = document.getElementById('compareToggle');
-            const compareContainer = document.getElementById('compareDatePickerContainer');
-            const compareInput = document.getElementById('compareDatePicker');
-            
-            // 初始化禁用狀態
-            compareContainer.classList.add('disabled');
-            compareInput.disabled = true;
-
-            compareToggle.addEventListener('change', (e) => {
-                isCompareMode = e.target.checked;
-                
-                if (isCompareMode) {
-                    compareContainer.classList.remove('disabled');
-                    compareInput.disabled = false;
-                } else {
-                    compareContainer.classList.add('disabled');
-                    compareInput.disabled = true;
-                }
-                
-                // 如果開啟對比且對比日期未設定，則設定一個預設值
-                if (isCompareMode && !compareDatePickerInstance.getStartDate()) {
-                    const primaryStart = datePickerInstance.getStartDate().dateInstance;
-                    const primaryEnd = datePickerInstance.getEndDate().dateInstance;
-                    const duration = (primaryEnd - primaryStart) / (1000 * 60 * 60 * 24);
-                    
-                    const compareEndDate = new Date(primaryStart);
-                    compareEndDate.setDate(compareEndDate.getDate() - 1);
-                    const compareStartDate = new Date(compareEndDate);
-                    compareStartDate.setDate(compareStartDate.getDate() - duration);
-
-                    compareDatePickerInstance.setDateRange(compareStartDate, compareEndDate);
-                }
-                
-                renderActiveChart();
+            const compareBlock = document.getElementById('compareLineBlock');
+            compareToggle.checked = false;
+            isCompareMode = false;
+            compareBlock.style.display = 'none';
+            compareToggle.addEventListener('change', function() {
+                isCompareMode = this.checked;
+                compareBlock.style.display = isCompareMode ? '' : 'none';
+                renderSalesChart(fullSalesData);
             });
-
-            // 初始化圖表切換按鈕
-            document.querySelectorAll('.chart-switch-btn').forEach(button => {
-                button.addEventListener('click', () => {
-                    activeSalesChart = button.dataset.chart;
-                    document.querySelectorAll('.chart-switch-btn').forEach(btn => btn.classList.remove('active'));
-                    button.classList.add('active');
-                    
-                    // 新增：根據圖表類型顯示/隱藏時間單位切換器
-                    const timeUnitSwitcher = document.getElementById('timeUnitSwitcher');
-                    if (activeSalesChart === 'daily') {
-                        timeUnitSwitcher.classList.remove('hidden');
-                    } else {
-                        timeUnitSwitcher.classList.add('hidden');
-                    }
-
-                    renderActiveChart(); // 使用已有的數據重新渲染
-                });
-            });
-
-            // 新增：初始化時間單位切換按鈕
-            document.querySelectorAll('.time-unit-btn').forEach(button => {
-                button.addEventListener('click', () => {
-                    activeTimeUnit = button.dataset.unit;
-                    document.querySelectorAll('.time-unit-btn').forEach(btn => btn.classList.remove('active'));
-                    button.classList.add('active');
-                    renderActiveChart();
-                });
-            });
-
-            // 預設顯示最近一個月的數據
-            const endDate = new Date();
-            const startDate = new Date();
-            startDate.setDate(endDate.getDate() - 29);
-            datePickerInstance.setDateRange(startDate, endDate);
-            
-            // 首次加載時觸發數據處理與圖表渲染
-            processAndRenderCharts(fullSalesData, startDate, endDate);
+            // 5. 預設主線/對比線條件
+            mainLine.store = '';
+            mainLine.product = '';
+            compareLine.store = '';
+            compareLine.product = '';
+            // 6. 首次渲染
+            renderSalesChart(fullSalesData);
+            // 1. 時間單位切換器
+            renderTimeUnitSwitcher();
         }
-        
+
+        // 1. 時間單位切換器
+        function renderTimeUnitSwitcher() {
+            const switcher = document.getElementById('timeUnitSwitcher');
+            if (!switcher) return;
+            switcher.innerHTML = `
+                <button class="time-unit-btn${activeTimeUnit==='6h'?' active':''}" data-unit="6h"><i class="fas fa-clock"></i> <span>每6小時</span></button>
+                <button class="time-unit-btn${activeTimeUnit==='daily'?' active':''}" data-unit="daily"><i class="fas fa-calendar-day"></i> <span>每日</span></button>
+                <button class="time-unit-btn${activeTimeUnit==='2d'?' active':''}" data-unit="2d"><i class="fas fa-calendar-alt"></i> <span>每2日</span></button>
+            `;
+            switcher.querySelectorAll('.time-unit-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    activeTimeUnit = this.dataset.unit;
+                    renderTimeUnitSwitcher();
+                    renderSalesChart(window.fullSalesData);
+                });
+            });
+        }
+
+        // 2. 主線/對比線聚合（根據activeTimeUnit）
+        function aggregateByUnit(data, unit, start, end) {
+            if (!start || !end) return {labels:[], values:[], dateMap:[]};
+            const labels = [], values = [], dateMap = [];
+            let bucketStart = new Date(start);
+            let idx = 1;
+            let lastDateStr = '';
+            while (bucketStart <= end) {
+                let bucketEnd = new Date(bucketStart);
+                let label = '';
+                let nextBucketStart = new Date(bucketStart);
+                switch(unit) {
+                    case '6h': {
+                        const hour = bucketStart.getHours();
+                        let period = '';
+                        if (hour >= 0 && hour < 6) period = '早';
+                        else if (hour >= 6 && hour < 12) period = '早';
+                        else if (hour >= 12 && hour < 18) period = '中';
+                        else period = '晚';
+                        const dateStr = `${bucketStart.getMonth()+1}/${bucketStart.getDate()}`;
+                        if (hour === 0) {
+                            label = dateStr;
+                            lastDateStr = dateStr;
+                        } else {
+                            label = period;
+                        }
+                        bucketEnd.setHours(bucketEnd.getHours()+6,59,59,999);
+                        nextBucketStart.setHours(nextBucketStart.getHours()+6,0,0,0);
+                        break;
+                    }
+                    case '2d':
+                        label = `${bucketStart.getMonth()+1}/${bucketStart.getDate()}`;
+                        bucketEnd.setDate(bucketEnd.getDate()+1);
+                        bucketEnd.setHours(23,59,59,999);
+                        nextBucketStart.setDate(nextBucketStart.getDate()+2);
+                        break;
+                    default:
+                        label = `${bucketStart.getMonth()+1}/${bucketStart.getDate()}`;
+                        bucketEnd.setHours(23,59,59,999);
+                        nextBucketStart.setDate(nextBucketStart.getDate()+1);
+                }
+                const sum = data.filter(d=>d.jsDate>=bucketStart&&d.jsDate<=bucketEnd).reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
+                labels.push(label);
+                values.push(sum);
+                dateMap.push({start:new Date(bucketStart), end:new Date(bucketEnd)});
+                bucketStart = nextBucketStart;
+                idx++;
+                if(bucketStart > end) break;
+            }
+            return {labels, values, dateMap};
+        }
+
+        // 3. renderSalesChart主線/對比線聚合與繪圖
+        function renderSalesChart(fullSalesData) {
+            // 過濾主線
+            const mainFiltered = fullSalesData.filter(d => {
+                if (mainLine.store && d.shopName !== mainLine.store) return false;
+                if (mainLine.product && d.product !== mainLine.product) return false;
+                if (!d.jsDate) return false;
+                return d.jsDate >= mainLine.start && d.jsDate <= mainLine.end;
+            });
+            // 過濾對比線
+            let compareFiltered = [];
+            if (isCompareMode) {
+                compareFiltered = fullSalesData.filter(d => {
+                    if (compareLine.store && d.shopName !== compareLine.store) return false;
+                    if (compareLine.product && d.product !== compareLine.product) return false;
+                    if (!d.jsDate) return false;
+                    return d.jsDate >= compareLine.start && d.jsDate <= compareLine.end;
+                });
+            }
+            // 聚合
+            const mainAgg = aggregateByUnit(mainFiltered, activeTimeUnit, mainLine.start, mainLine.end);
+            const compareAgg = isCompareMode ? aggregateByUnit(compareFiltered, activeTimeUnit, compareLine.start, compareLine.end) : null;
+            const maxLen = mainAgg.labels.length;
+            const labels = mainAgg.labels;
+            // KPI
+            renderKPI(mainFiltered, isCompareMode ? compareFiltered : null);
+            // 1. 銷售趨勢（線圖）
+            if(activeSalesChart==='daily') {
+                const datasets = [
+                    {
+                        label: '主線',
+                        data: [...mainAgg.values, ...Array(maxLen-mainAgg.values.length).fill(0)],
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                        fill: false,
+                        tension: 0.2,
+                        borderWidth: 2,
+                        pointBackgroundColor: 'rgba(54, 162, 235, 1)',
+                        pointRadius: 3,
+                        pointHoverRadius: 5
+                    }
+                ];
+                if (isCompareMode) {
+                    datasets.push({
+                        label: '對比線',
+                        data: [...(compareAgg ? compareAgg.values : []), ...Array(maxLen-(compareAgg?compareAgg.values.length:0)).fill(0)],
+                        borderColor: 'rgba(170, 170, 170, 1)',
+                        backgroundColor: 'rgba(170, 170, 170, 0.2)',
+                        fill: false,
+                        tension: 0.2,
+                        borderDash: [5, 5],
+                        borderWidth: 2,
+                        pointBackgroundColor: 'rgba(170, 170, 170, 1)',
+                        pointRadius: 3,
+                        pointHoverRadius: 5
+                    });
+                }
+                if (mainSalesChartInstance) mainSalesChartInstance.destroy();
+                const ctx = document.getElementById('mainSalesChart').getContext('2d');
+                mainSalesChartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: datasets
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: true, position: 'top' },
+                            tooltip: {
+                                callbacks: {
+                                    title: function(context) {
+                                        const idx = context[0].dataIndex;
+                                        let tip = '';
+                                        if(mainAgg.dateMap[idx]) tip += `主線: ${mainAgg.dateMap[idx].start.toLocaleDateString()}~${mainAgg.dateMap[idx].end.toLocaleDateString()}`;
+                                        if(isCompareMode && compareAgg && compareAgg.dateMap[idx]) tip += `\n對比: ${compareAgg.dateMap[idx].start.toLocaleDateString()}~${compareAgg.dateMap[idx].end.toLocaleDateString()}`;
+                                        return tip;
+                                    }
+                                }
+                            },
+                            glassmorphismBackground: true
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) { return value.toLocaleString() + ' 元'; }
+                                }
+                            }
+                        }
+                    }
+                });
+                // 更新 legend
+                const legendDiv = document.getElementById('lineLegend');
+                function lineDesc(line, color, label) {
+                    let desc = '';
+                    if (line.start && line.end) desc += `${line.start.getFullYear()}/${line.start.getMonth()+1}/${line.start.getDate()} ~ ${line.end.getFullYear()}/${line.end.getMonth()+1}/${line.end.getDate()}`;
+                    if (line.store) desc += `｜${line.store}`;
+                    if (line.product) desc += `｜${line.product}`;
+                    return `<span class=\"legend-dot\" style=\"background:${color}\"></span>${label}：${desc}`;
+                }
+                legendDiv.innerHTML =
+                    lineDesc(mainLine, 'rgba(54, 162, 235, 1)', '主線') +
+                    (isCompareMode ? ('　' + lineDesc(compareLine, 'rgba(170, 170, 170, 1)', '對比線')) : '');
+            } else {
+                // 2. 其他圖表
+                renderOtherCharts(fullSalesData, mainFiltered, compareFiltered);
+            }
+        }
+
+        // 4. 其他圖表聚合
+        function renderOtherCharts(fullSalesData, mainFiltered, compareFiltered) {
+            // 分店銷售額
+            function aggStore(data) {
+                const map = {};
+                data.forEach(d=>{if(d.shopName) map[d.shopName]=(map[d.shopName]||0)+(parseFloat(d.amount)||0);});
+                return map;
+            }
+            // 產品佔比
+            function aggProduct(data) {
+                const map = {};
+                data.forEach(d=>{if(d.product) map[d.product]=(map[d.product]||0)+(parseFloat(d.amount)||0);});
+                return map;
+            }
+            // 支付方式
+            function aggPay(data) {
+                const map = {};
+                data.forEach(d=>{if(d.payType) map[d.payType]=(map[d.payType]||0)+1;});
+                return map;
+            }
+            // 切換圖表前先 destroy
+            if (mainSalesChartInstance) mainSalesChartInstance.destroy();
+            if(activeSalesChart==='store') {
+                const main = aggStore(mainFiltered);
+                const compare = isCompareMode ? aggStore(compareFiltered) : null;
+                renderStoreSalesChart(main, compare);
+            } else if(activeSalesChart==='product') {
+                const main = aggProduct(mainFiltered);
+                const compare = isCompareMode ? aggProduct(compareFiltered) : null;
+                renderProductSalesChart(main, compare);
+            } else if(activeSalesChart==='payment') {
+                const main = aggPay(mainFiltered);
+                const compare = isCompareMode ? aggPay(compareFiltered) : null;
+                renderPaymentTypeChart(main, compare);
+            }
+        }
+
+        // 5. 圖表切換按鈕事件
+        // 在setupSalesTrendTab內部加：
+        document.querySelectorAll('.chart-switch-btn').forEach(button => {
+            button.addEventListener('click', () => {
+                activeSalesChart = button.dataset.chart;
+                document.querySelectorAll('.chart-switch-btn').forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
+                renderSalesChart(window.fullSalesData);
+            });
+        });
+
         function processAndRenderCharts(fullSalesData, startDate, endDate) {
             // 1. 篩選主期間數據 (使用新的輔助函數，已包含0元過濾和日期修正)
             const primaryFilteredData = filterDataByDateRange(fullSalesData, startDate, endDate);
@@ -1106,7 +1319,7 @@
                 borderColor: 'rgba(54, 162, 235, 1)',
                 backgroundColor: 'rgba(54, 162, 235, 0.2)',
                 fill: true,
-                tension: 0,
+                tension: 0.2, // 讓線圖平滑
                 borderWidth: 2,
                 pointBackgroundColor: 'rgba(54, 162, 235, 1)',
                 pointRadius: 3,
@@ -1121,7 +1334,7 @@
                     borderColor: 'rgba(170, 170, 170, 1)',
                     backgroundColor: 'rgba(170, 170, 170, 0.2)',
                     fill: true,
-                    tension: 0,
+                    tension: 0.2, // 讓線圖平滑
                     borderDash: [5, 5],
                     borderWidth: 2,
                     pointBackgroundColor: 'rgba(170, 170, 170, 1)',
@@ -1206,44 +1419,40 @@
             });
         }
         
+        // 修正 renderStoreSalesChart
         function renderStoreSalesChart(primaryData, compareData) {
-            // Get all unique store names from both periods
-            const primaryStores = Object.keys(primaryData || {});
-            const compareStores = Object.keys(compareData || {});
-            const allStoreNames = [...new Set([...primaryStores, ...compareStores])];
-
-            // Sort stores by primary period sales amount, descending.
-            allStoreNames.sort((a, b) => (primaryData[b] || 0) - (primaryData[a] || 0));
-
-            const primaryLabel = document.getElementById('primaryPeriodLabel').textContent;
-            const compareLabel = document.getElementById('comparePeriodLabel').textContent;
-
-            const datasets = [
-                {
-                    label: primaryLabel,
-                    data: allStoreNames.map(storeName => primaryData[storeName] || 0),
-                    backgroundColor: 'rgba(54, 162, 235, 0.8)', // Primary color
-                    borderColor: 'rgba(54, 162, 235, 1)',
-                    borderWidth: 1
-                }
-            ];
-
+            // 依主線銷售額排序
+            const allStoreNames = Object.keys(primaryData||{}).sort((a,b)=>(primaryData[b]||0)-(primaryData[a]||0));
+            // 若有對比線，補上對比線有但主線沒有的分店（排在後面）
+            if (compareData) {
+                Object.keys(compareData).forEach(store => {
+                    if (!allStoreNames.includes(store)) allStoreNames.push(store);
+                });
+            }
+            // 生成 datasets
+            const datasets = [];
+            datasets.push({
+                label: '主線',
+                data: allStoreNames.map(store => primaryData[store] || 0),
+                backgroundColor: 'rgba(54, 162, 235, 0.8)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1
+            });
             if (compareData) {
                 datasets.push({
-                    label: compareLabel,
-                    data: allStoreNames.map(storeName => compareData[storeName] || 0),
-                    backgroundColor: 'rgba(170, 170, 170, 0.7)', // Comparison color
+                    label: '對比線',
+                    data: allStoreNames.map(store => compareData[store] || 0),
+                    backgroundColor: 'rgba(170, 170, 170, 0.7)',
                     borderColor: 'rgba(170, 170, 170, 1)',
                     borderWidth: 1
                 });
             }
-            
             const ctx = document.getElementById('mainSalesChart').getContext('2d');
             mainSalesChartInstance = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: allStoreNames, // Use the combined list of store names
-                    datasets: datasets      // Use the new datasets array
+                    labels: allStoreNames,
+                    datasets: datasets
                 },
                 options: {
                     responsive: true,
@@ -1255,71 +1464,40 @@
                         }
                     },
                     plugins: {
-                        legend: { 
-                            display: compareData ? true : false, // Show legend only when comparing
-                            position: 'top'
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    let label = context.dataset.label || '';
-                                    let value = context.parsed.y || 0;
-                                    return `${label}: ${value.toLocaleString()} 元`;
-                                }
-                            }
-                        },
+                        legend: { display: !!compareData, position: 'top' },
                         glassmorphismBackground: true
                     }
                 }
             });
         }
 
+        // 修正 renderProductSalesChart
         function renderProductSalesChart(primaryData, compareData) {
-            if (!primaryData) return;
-
             const ctx = document.getElementById('mainSalesChart').getContext('2d');
-
-            // --- Comparison Mode: 100% Stacked Bar Chart ---
             if (compareData) {
-                const process = (data) => {
-                    const sorted = Object.entries(data || {}).sort(([, a], [, b]) => b - a);
-                    const topN = 10;
-                    const topItems = sorted.slice(0, topN);
-                    const otherAmount = sorted.slice(topN).reduce((sum, [, amount]) => sum + amount, 0);
-                    let processedData = Object.fromEntries(topItems);
-                    if (otherAmount > 0) processedData['其他'] = otherAmount;
-                    return processedData;
-                };
-                
-                const processedPrimary = process(primaryData);
-                const processedCompare = process(compareData);
-
-                const totalPrimary = Object.values(processedPrimary).reduce((sum, v) => sum + v, 0);
-                const totalCompare = Object.values(processedCompare).reduce((sum, v) => sum + v, 0);
-
-                const allProductLabels = [...new Set([...Object.keys(processedPrimary), ...Object.keys(processedCompare)])];
-                
-                const datasets = allProductLabels.map(label => {
-                    const primaryValue = processedPrimary[label] || 0;
-                    const compareValue = processedCompare[label] || 0;
-                    const primaryPercentage = totalPrimary > 0 ? (primaryValue / totalPrimary) * 100 : 0;
-                    const comparePercentage = totalCompare > 0 ? (compareValue / totalCompare) * 100 : 0;
-
+                // 100% 堆疊 bar
+                const allLabels = Array.from(new Set([
+                    ...Object.keys(primaryData||{}),
+                    ...Object.keys(compareData||{})
+                ]));
+                const totalPrimary = Object.values(primaryData).reduce((sum, v) => sum + v, 0);
+                const totalCompare = Object.values(compareData).reduce((sum, v) => sum + v, 0);
+                const datasets = allLabels.map(label => {
+                    const primaryValue = primaryData[label] || 0;
+                    const compareValue = compareData[label] || 0;
+                    const primaryPct = totalPrimary > 0 ? (primaryValue / totalPrimary) * 100 : 0;
+                    const comparePct = totalCompare > 0 ? (compareValue / totalCompare) * 100 : 0;
                     return {
                         label: label,
-                        data: [primaryPercentage, comparePercentage],
+                        data: [primaryPct, comparePct],
                         backgroundColor: generateConsistentColors([label])[0],
-                        originalValues: [primaryValue, compareValue] // Store for tooltip
+                        originalValues: [primaryValue, compareValue]
                     };
                 });
-
-                const primaryLabel = document.getElementById('primaryPeriodLabel').textContent;
-                const compareLabel = document.getElementById('comparePeriodLabel').textContent;
-
                 mainSalesChartInstance = new Chart(ctx, {
                     type: 'bar',
                     data: {
-                        labels: [primaryLabel, compareLabel],
+                        labels: ['主線', '對比線'],
                         datasets: datasets
                     },
                     options: {
@@ -1351,20 +1529,17 @@
                 });
                 return;
             }
-
-            // --- Default Mode: Doughnut Chart ---
+            // 單一資料：圓餅圖
             const sortedProducts = Object.entries(primaryData).sort(([,a],[,b]) => b-a);
             const topN = 10;
             const topProducts = sortedProducts.slice(0, topN);
             const otherAmount = sortedProducts.slice(topN).reduce((sum, [, amount]) => sum + amount, 0);
-
             const labels = topProducts.map(([name]) => name);
             const data = topProducts.map(([,amount]) => amount);
             if (otherAmount > 0) {
                 labels.push('其他');
                 data.push(otherAmount);
             }
-
             mainSalesChartInstance = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
@@ -1396,39 +1571,33 @@
             });
         }
 
+        // 修正 renderPaymentTypeChart
         function renderPaymentTypeChart(primaryData, compareData) {
-            if (!primaryData) return;
-
             const ctx = document.getElementById('mainSalesChart').getContext('2d');
-
-             // --- Comparison Mode: 100% Stacked Bar Chart ---
             if (compareData) {
+                // 100% 堆疊 bar
+                const allLabels = Array.from(new Set([
+                    ...Object.keys(primaryData||{}),
+                    ...Object.keys(compareData||{})
+                ]));
                 const totalPrimary = Object.values(primaryData).reduce((sum, v) => sum + v, 0);
                 const totalCompare = Object.values(compareData).reduce((sum, v) => sum + v, 0);
-
-                const allPaymentLabels = [...new Set([...Object.keys(primaryData), ...Object.keys(compareData)])];
-
-                const datasets = allPaymentLabels.map(label => {
+                const datasets = allLabels.map(label => {
                     const primaryValue = primaryData[label] || 0;
                     const compareValue = compareData[label] || 0;
-                    const primaryPercentage = totalPrimary > 0 ? (primaryValue / totalPrimary) * 100 : 0;
-                    const comparePercentage = totalCompare > 0 ? (compareValue / totalCompare) * 100 : 0;
-
+                    const primaryPct = totalPrimary > 0 ? (primaryValue / totalPrimary) * 100 : 0;
+                    const comparePct = totalCompare > 0 ? (compareValue / totalCompare) * 100 : 0;
                     return {
                         label: label,
-                        data: [primaryPercentage, comparePercentage],
+                        data: [primaryPct, comparePct],
                         backgroundColor: generateConsistentColors([label])[0],
                         originalValues: [primaryValue, compareValue]
                     };
                 });
-
-                const primaryLabel = document.getElementById('primaryPeriodLabel').textContent;
-                const compareLabel = document.getElementById('comparePeriodLabel').textContent;
-
                 mainSalesChartInstance = new Chart(ctx, {
                     type: 'bar',
                     data: {
-                        labels: [primaryLabel, compareLabel],
+                        labels: ['主線', '對比線'],
                         datasets: datasets
                     },
                     options: {
@@ -1460,11 +1629,9 @@
                 });
                 return;
             }
-
-            // --- Default Mode: Pie Chart ---
+            // 單一資料：圓餅圖
             const labels = Object.keys(primaryData);
             const data = Object.values(primaryData);
-
             mainSalesChartInstance = new Chart(ctx, {
                 type: 'pie',
                 data: {
@@ -1474,12 +1641,12 @@
                         backgroundColor: generateConsistentColors(labels)
                     }]
                 },
-                 options: {
+                options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
                         legend: { position: 'bottom', labels: { boxWidth: 12 } },
-                         tooltip: {
+                        tooltip: {
                             callbacks: {
                                 label: function(context) {
                                     let label = context.label || '';
@@ -2239,6 +2406,36 @@
                 ctx.restore();
             }
         });
+
+        // KPI 顯示主線數據，對比增減以最後一條對比線為準
+        function renderKPI(mainFiltered, compareFiltered) {
+            // 主線
+            const totalSales = mainFiltered.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
+            const totalTransactions = mainFiltered.length;
+            const avgTransaction = totalTransactions > 0 ? totalSales / totalTransactions : 0;
+            // 對比線
+            let compareSales = 0, compareTransactions = 0, compareAvg = 0;
+            if (compareFiltered && compareFiltered.length > 0) {
+                compareSales = compareFiltered.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
+                compareTransactions = compareFiltered.length;
+                compareAvg = compareTransactions > 0 ? compareSales / compareTransactions : 0;
+            }
+            // 更新KPI
+            function kpiHtml(main, compare, unit, isCurrency) {
+                let html = `<p>${isCurrency ? main.toLocaleString() : main}${unit}</p>`;
+                if (compare > 0) {
+                    const diff = main - compare;
+                    const pct = (diff / compare) * 100;
+                    const arrow = diff >= 0 ? '▲' : '▼';
+                    const color = diff >= 0 ? 'positive' : 'negative';
+                    html += `<span class="kpi-comparison ${color}" title="與對比期間相差: ${(diff>=0?'+':'')}${diff.toLocaleString()}${unit}">${arrow} ${pct.toFixed(1)}%</span>`;
+                }
+                return html;
+            }
+            document.getElementById('kpi-total-sales').innerHTML = kpiHtml(totalSales, compareSales, ' 元', true);
+            document.getElementById('kpi-total-transactions').innerHTML = kpiHtml(totalTransactions, compareTransactions, ' 筆', false);
+            document.getElementById('kpi-avg-transaction-value').innerHTML = kpiHtml(avgTransaction, compareAvg, ' 元', true);
+        }
     </script>
 </body>
 </html> 

@@ -1672,3 +1672,203 @@
     justify-content: center;
   }
 }
+
+/* 新增：玻璃擬態下拉選單樣式 for sales-controls */
+.sales-controls select, .sales-controls select:focus {
+    background: rgba(255,255,255,0.22);
+    border: 1.5px solid rgba(255,255,255,0.18);
+    border-radius: 12px;
+    color: var(--text-primary);
+    font-size: 15px;
+    padding: 8px 16px;
+    min-width: 120px;
+    height: 44px;
+    box-shadow: 0 2px 8px 0 rgba(33, 150, 243, 0.10), 0 1.5px 4px 0 rgba(103, 58, 183, 0.07);
+    backdrop-filter: blur(8px) saturate(130%);
+    -webkit-backdrop-filter: blur(8px) saturate(130%);
+    outline: none;
+    transition: box-shadow 0.2s, background 0.2s, border-color 0.2s;
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+}
+.sales-controls select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.18), 0 2px 8px 0 rgba(33, 150, 243, 0.13);
+    background: rgba(255,255,255,0.32);
+}
+.sales-controls select:hover {
+    background: rgba(33,150,243,0.08);
+}
+
+/* 下拉箭頭美化（僅部分瀏覽器支援） */
+.sales-controls select::-ms-expand {
+    display: none;
+}
+.sales-controls select::-webkit-input-placeholder {
+    color: #b0b8c9;
+    opacity: 0.8;
+}
+.sales-controls select option {
+    background: #f8f9fa;
+    color: var(--text-primary);
+}
+
+/* 玻璃擬態 Litepicker 日期選擇器樣式 */
+.litepicker, .litepicker .container__main, .litepicker .container__months, .litepicker .container__days {
+    background: rgba(255,255,255,0.22) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 2px 16px 0 rgba(33, 150, 243, 0.13), 0 1.5px 6px 0 rgba(103, 58, 183, 0.08) !important;
+    backdrop-filter: blur(10px) saturate(130%) !important;
+    -webkit-backdrop-filter: blur(10px) saturate(130%) !important;
+    border: 1.5px solid rgba(255,255,255,0.18) !important;
+    color: var(--text-primary) !important;
+}
+.litepicker .container__header, .litepicker .container__footer {
+    background: rgba(255,255,255,0.18) !important;
+    border-radius: 12px !important;
+    color: var(--text-primary) !important;
+}
+.litepicker .container__days .day-item {
+    background: rgba(255,255,255,0.18) !important;
+    border-radius: 8px !important;
+    color: var(--text-primary) !important;
+    transition: background 0.18s, color 0.18s;
+}
+.litepicker .container__days .day-item:hover, .litepicker .container__days .day-item.is-today {
+    background: rgba(33,150,243,0.13) !important;
+    color: var(--primary-color) !important;
+}
+.litepicker .container__days .day-item.is-selected, .litepicker .container__days .day-item.is-in-range {
+    background: rgba(33,150,243,0.22) !important;
+    color: #fff !important;
+}
+.litepicker .button-previous-month, .litepicker .button-next-month, .litepicker .container__footer button {
+    background: rgba(255,255,255,0.22) !important;
+    border: 1.5px solid rgba(255,255,255,0.18) !important;
+    border-radius: 8px !important;
+    color: var(--primary-color) !important;
+    font-weight: 500;
+    transition: background 0.18s, border-color 0.18s, color 0.18s;
+}
+.litepicker .button-previous-month:hover, .litepicker .button-next-month:hover, .litepicker .container__footer button:hover {
+    background: rgba(33,150,243,0.13) !important;
+    border-color: var(--primary-color) !important;
+    color: #fff !important;
+}
+.litepicker .container__months .month-item-header {
+    color: var(--primary-color) !important;
+    font-weight: 600;
+}
+.litepicker .container__days .day-item.is-disabled {
+    opacity: 0.4;
+    background: none !important;
+    color: #b0b8c9 !important;
+}
+/* 日期輸入框玻璃擬態 */
+#datePicker, #compareDatePicker {
+    background: rgba(255,255,255,0.22);
+    border: 1.5px solid rgba(255,255,255,0.18);
+    border-radius: 12px;
+    color: var(--text-primary);
+    font-size: 15px;
+    padding: 8px 16px;
+    min-width: 120px;
+    height: 44px;
+    box-shadow: 0 2px 8px 0 rgba(33, 150, 243, 0.10), 0 1.5px 4px 0 rgba(103, 58, 183, 0.07);
+    backdrop-filter: blur(8px) saturate(130%);
+    -webkit-backdrop-filter: blur(8px) saturate(130%);
+    outline: none;
+    transition: box-shadow 0.2s, background 0.2s, border-color 0.2s;
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+}
+#datePicker:focus, #compareDatePicker:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.18), 0 2px 8px 0 rgba(33, 150, 243, 0.13);
+    background: rgba(255,255,255,0.32);
+}
+#datePicker:hover, #compareDatePicker:hover {
+    background: rgba(33,150,243,0.08);
+}
+
+/* 主線/對比線設定區塊玻璃卡片 */
+.glass-card {
+  background: rgba(255,255,255,0.22);
+  border-radius: 16px;
+  box-shadow: 0 2px 16px 0 rgba(33, 150, 243, 0.13), 0 1.5px 6px 0 rgba(103, 58, 183, 0.08);
+  border: 1.5px solid rgba(255,255,255,0.18);
+  backdrop-filter: blur(10px) saturate(130%);
+  -webkit-backdrop-filter: blur(10px) saturate(130%);
+  padding: 18px 20px 12px 20px;
+  margin-bottom: 0;
+  min-width: 260px;
+}
+.block-title {
+  font-weight: 700;
+  color: var(--primary-color);
+  margin-bottom: 8px;
+  font-size: 1.08em;
+  letter-spacing: 0.04em;
+}
+.line-legend {
+  display: flex;
+  gap: 24px;
+  margin-top: 12px;
+  align-items: center;
+  justify-content: flex-start;
+  font-size: 15px;
+  font-weight: 500;
+}
+.line-legend .legend-dot {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  margin-right: 8px;
+  vertical-align: middle;
+  box-shadow: 0 2px 8px 0 rgba(33, 150, 243, 0.10);
+}
+/* 玻璃擬態下拉選單、日期選擇器（沿用前面定義） */
+.sales-controls select, .sales-controls select:focus, #mainDatePicker, #compareDatePicker {
+    background: rgba(255,255,255,0.22);
+    border: 1.5px solid rgba(255,255,255,0.18);
+    border-radius: 12px;
+    color: var(--text-primary);
+    font-size: 15px;
+    padding: 8px 16px;
+    min-width: 120px;
+    height: 44px;
+    box-shadow: 0 2px 8px 0 rgba(33, 150, 243, 0.10), 0 1.5px 4px 0 rgba(103, 58, 183, 0.07);
+    backdrop-filter: blur(8px) saturate(130%);
+    -webkit-backdrop-filter: blur(8px) saturate(130%);
+    outline: none;
+    transition: box-shadow 0.2s, background 0.2s, border-color 0.2s;
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+}
+.sales-controls select:focus, #mainDatePicker:focus, #compareDatePicker:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.18), 0 2px 8px 0 rgba(33, 150, 243, 0.13);
+    background: rgba(255,255,255,0.32);
+}
+.sales-controls select:hover, #mainDatePicker:hover, #compareDatePicker:hover {
+    background: rgba(33,150,243,0.08);
+}
+
+.block-fields {
+  display: flex;
+  gap: 16px;
+}
+.block-fields > .date-block {
+  flex: 1 1 0;
+  min-width: 0;
+}
+@media (max-width: 768px) {
+  .block-fields {
+    flex-direction: column;
+    gap: 10px;
+  }
+}
