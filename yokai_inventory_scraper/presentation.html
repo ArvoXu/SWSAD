@@ -296,7 +296,7 @@
 
 
     <footer>
-        <p>v3.0 | 任何問題請洽開發人員 <a href="https://line.me/ti/p/LwMjp6jZVH" target="_blank">徐</a></p>
+        <p>v3.2 | 任何問題請洽開發人員 <a href="https://line.me/ti/p/LwMjp6jZVH" target="_blank">徐</a></p>
     </footer>
     
     <!-- Screenshot Loader -->
@@ -746,7 +746,8 @@
                 setup: (picker) => {
                     picker.on('selected', (date1, date2) => {
                         mainLine.start = date1.dateInstance;
-                        mainLine.end = date2.dateInstance;
+                        mainLine.end = new Date(date2.dateInstance);
+                        mainLine.end.setHours(23,59,59,999);
                         renderSalesChart(fullSalesData);
                     });
                 }
@@ -758,7 +759,8 @@
                 setup: (picker) => {
                     picker.on('selected', (date1, date2) => {
                         compareLine.start = date1.dateInstance;
-                        compareLine.end = date2.dateInstance;
+                        compareLine.end = new Date(date2.dateInstance);
+                        compareLine.end.setHours(23,59,59,999);
                         renderSalesChart(fullSalesData);
                     });
                 }
