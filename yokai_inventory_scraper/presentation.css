@@ -1593,6 +1593,7 @@
   backdrop-filter: blur(8px) saturate(120%);
   -webkit-backdrop-filter: blur(8px) saturate(120%);
   min-width: 220px;
+  position: relative;
 }
 .date-block i {
   color: #2196F3;
@@ -1632,9 +1633,12 @@
   padding: 6px 10px;
   box-shadow: 0 2px 8px 0 rgba(33, 150, 243, 0.10);
   border: 1.2px solid rgba(255,255,255,0.13);
-  backdrop-filter: blur(8px) saturate(120%);
-  -webkit-backdrop-filter: blur(8px) saturate(120%);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   min-width: 80px;
+  width: auto;
+  max-width: 120px;
+  margin: 0 auto;
 }
 .toggle-label {
   color: var(--primary-color);
@@ -1721,7 +1725,6 @@
     box-shadow: 0 2px 16px 0 rgba(33, 150, 243, 0.13), 0 1.5px 6px 0 rgba(103, 58, 183, 0.08) !important;
     backdrop-filter: blur(10px) saturate(130%) !important;
     -webkit-backdrop-filter: blur(10px) saturate(130%) !important;
-    border: 1.5px solid rgba(255,255,255,0.18) !important;
     color: var(--text-primary) !important;
 }
 .litepicker .container__header, .litepicker .container__footer {
@@ -1858,17 +1861,93 @@
     background: rgba(33,150,243,0.08);
 }
 
-.block-fields {
+/* 主線/對比線三參數同排且寬度一致 */
+.param-row {
   display: flex;
-  gap: 16px;
+  gap: 18px;
+  align-items: center;
+  justify-content: space-between;
 }
-.block-fields > .date-block {
+.param-row .date-block {
   flex: 1 1 0;
   min-width: 0;
+  max-width: 220px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.param-row .date-block label {
+  min-width: 36px;
+  font-weight: 500;
+}
+.param-row input[type="text"],
+.param-row input[type="date"],
+.param-row select {
+  width: 100%;
+  min-width: 0;
+  max-width: 140px;
+  box-sizing: border-box;
+}
+.param-row input[type="text"],
+.param-row input[type="date"],
+.param-row select,
+#mainDatePicker, #compareDatePicker {
+  min-width: 0;
+  max-width: 140px;
+  width: 100%;
 }
 @media (max-width: 768px) {
-  .block-fields {
+  .param-row {
     flex-direction: column;
     gap: 10px;
+    align-items: stretch;
   }
+  .param-row .date-block {
+    max-width: 100%;
+  }
+}
+
+/* 只針對主線設定卡片移除 blur，改用半透明白色背景 */
+.mainline-block.glass-card {
+  background: rgba(255,255,255,0.32) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* 只針對對比線設定卡片移除 blur，改用半透明白色背景 */
+.compareline-block.glass-card {
+  background: rgba(255,255,255,0.32) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* compare-row 寬度加大，讓子元素更寬 */
+.compare-row {
+  max-width: 1000px !important;
+}
+
+/* 讓三參數欄位更寬 */
+.param-row .date-block {
+  max-width: 300px;
+}
+.param-row input[type="text"],
+.param-row input[type="date"],
+.param-row select,
+#mainDatePicker, #compareDatePicker {
+  max-width: 200px;
+}
+
+.litepicker {
+  z-index: 3000 !important;
+  right: auto !important;
+  transform: none !important;
+  min-width: 200px !important;
+  max-width: 300px !important;
+  width: auto !important;
+  margin-left: 0 !important;
+}
+/* 保證一週顯示7天，避免禮拜日消失 */
+.litepicker .container__days {
+  display: grid !important;
+  grid-template-columns: repeat(7, 1fr) !important;
 }
