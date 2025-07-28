@@ -663,23 +663,11 @@ def get_replenishment_suggestion(store_key):
         inventory_items = db.query(Inventory).filter_by(store=store_name, machine_id=machine_id).all()
         current_inventory = {item.product_name: item.quantity for item in inventory_items}
 
-        # 2. 獲取上個月的銷售數據 (此處假設同店鋪名的所有機台共享銷售數據)
-        now = datetime.now()
-        if now.month == 1:
-            year = now.year - 1
-            month = 12
-        else:
-            year = now.year
-            month = now.month - 1
-        start_of_last_month = datetime(year, month, 1)
-        if month == 12:
-            end_of_last_month = datetime(year + 1, 1, 1) - timedelta(seconds=1)
-        else:
-            end_of_last_month = datetime(year, month + 1, 1) - timedelta(seconds=1)
+        # 2. 獲取過去30天的銷售數據 (此處假設同店鋪名的所有機台共享銷售數據)
+        thirty_days_ago = datetime.now() - timedelta(days=30)
         transactions = db.query(Transaction).filter(
             Transaction.store_key.startswith(store_name),
-            Transaction.transaction_time >= start_of_last_month,
-            Transaction.transaction_time <= end_of_last_month
+            Transaction.transaction_time >= thirty_days_ago
         ).all()
 
         sales_counts = {}

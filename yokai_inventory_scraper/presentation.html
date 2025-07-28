@@ -146,7 +146,7 @@
                 <div class="strategy-card selected" data-strategy="stable">
                     <i class="fas fa-balance-scale-right"></i>
                     <h4>穩健銷售</h4>
-                    <p>依據上個月銷售量佔比，等比例分配庫存，確保穩定滿足市場需求。</p>
+                    <p>依據過去30天銷售量佔比，等比例分配庫存，確保穩定滿足市場需求。</p>
                 </div>
                 <div class="strategy-card" data-strategy="aggressive">
                     <i class="fas fa-rocket"></i>
@@ -296,7 +296,7 @@
 
 
     <footer>
-        <p>v3.2 | 任何問題請洽開發人員 <a href="https://line.me/ti/p/LwMjp6jZVH" target="_blank">徐</a></p>
+        <p>v3.0 | 任何問題請洽開發人員 <a href="https://line.me/ti/p/LwMjp6jZVH" target="_blank">徐</a></p>
     </footer>
     
     <!-- Screenshot Loader -->
@@ -542,50 +542,61 @@
                 return;
             }
 
-            // --- NEW: Calculate last month sales data ---
-            let lastMonthSalesData = {};
+            // --- NEW: Calculate last 30 days sales data ---
+            let last30DaysSalesData = {};
             let salesDateRangeText = '未加載銷售數據，無法計算排名。';
 
             if (window.fullSalesData && window.fullSalesData.length > 0) {
-                // 取得今天
-                const now = new Date();
-                // 計算上個月的起始與結束日期
-                const year = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
-                const month = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
-                const startDate = new Date(year, month, 1, 0, 0, 0, 0);
-                const endDate = new Date(year, month + 1, 0, 23, 59, 59, 999); // 0號=上個月最後一天
+                const validDates = window.fullSalesData.map(d => d.jsDate).filter(Boolean);
+                if (validDates.length > 0) {
+                    // 1. Find the latest transaction date
+                    const latestDate = new Date(Math.max(...validDates));
+                    
+                    // 2. Calculate the 30-day window
+                    const endDate = new Date(latestDate);
+                    const startDate = new Date(latestDate);
+                    startDate.setDate(startDate.getDate() - 29); // 30 days inclusive
+                    startDate.setHours(0, 0, 0, 0);
+                    endDate.setHours(23, 59, 59, 999);
 
-                const formatDate = (date) => `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;
-                salesDateRangeText = `顯示上個月 (${formatDate(startDate)} - ${formatDate(endDate)}) 的銷售數據。`;
+                    const formatDate = (date) => `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;
+                    salesDateRangeText = `顯示過去一個月 (${formatDate(startDate)} - ${formatDate(endDate)}) 的銷售數據。`;
 
-                // 篩選上個月的交易
-                const lastMonthSales = window.fullSalesData.filter(d =>
-                    d.jsDate && d.jsDate >= startDate && d.jsDate <= endDate
-                );
+                    // 3. Filter transactions within this window
+                    const recentSales = window.fullSalesData.filter(d => 
+                        d.jsDate && d.jsDate >= startDate && d.jsDate <= endDate
+                    );
 
-                // 彙總
-                const aggregatedSales = {};
-                lastMonthSales.forEach(sale => {
-                    if (!sale.shopName || !sale.product) return;
-                    const shopName = String(sale.shopName).trim();
-                    const productName = String(sale.product).trim();
-                    if (!aggregatedSales[shopName]) {
-                        aggregatedSales[shopName] = {};
-                    }
-                    if (!aggregatedSales[shopName][productName]) {
-                        aggregatedSales[shopName][productName] = { count: 0, lastSoldDate: '1970-01-01' };
-                    }
-                    aggregatedSales[shopName][productName].count++;
-                    if (!aggregatedSales[shopName].totalSales) {
-                        aggregatedSales[shopName].totalSales = 0;
-                    }
-                    aggregatedSales[shopName].totalSales += parseFloat(sale.amount) || 0;
-                    const saleDateStr = sale.jsDate.toISOString().split('T')[0];
-                    if (saleDateStr > aggregatedSales[shopName][productName].lastSoldDate) {
-                        aggregatedSales[shopName][productName].lastSoldDate = saleDateStr;
-                    }
-                });
-                lastMonthSalesData = aggregatedSales;
+                    // 4. Aggregate the data
+                    const aggregatedSales = {};
+                    recentSales.forEach(sale => {
+                        if (!sale.shopName || !sale.product) return;
+
+                        const shopName = String(sale.shopName).trim();
+                        const productName = String(sale.product).trim();
+
+                        if (!aggregatedSales[shopName]) {
+                            aggregatedSales[shopName] = {};
+                        }
+                        if (!aggregatedSales[shopName][productName]) {
+                            aggregatedSales[shopName][productName] = { count: 0, lastSoldDate: '1970-01-01' };
+                        }
+
+                        aggregatedSales[shopName][productName].count++;
+                        
+                        // Add sales amount to the store's total
+                        if (!aggregatedSales[shopName].totalSales) {
+                            aggregatedSales[shopName].totalSales = 0;
+                        }
+                        aggregatedSales[shopName].totalSales += parseFloat(sale.amount) || 0;
+
+                        const saleDateStr = sale.jsDate.toISOString().split('T')[0];
+                        if (saleDateStr > aggregatedSales[shopName][productName].lastSoldDate) {
+                            aggregatedSales[shopName][productName].lastSoldDate = saleDateStr;
+                        }
+                    });
+                    last30DaysSalesData = aggregatedSales;
+                }
             }
             
             // 對數據進行預處理，根據後端提供的 isHidden 標誌過濾數據
@@ -623,12 +634,13 @@
             
             // 將storeGroups轉換為數組以便排序
             let storeGroupsArray = Object.entries(storeGroups).map(([key, value]) => {
-                // 獲取銷售額 - 改為使用上個月銷售額
-                const machineSalesTotal = lastMonthSalesData[value.store] ? lastMonthSalesData[value.store].totalSales : 0;
-                // 新增：計算該機台上個月銷售份數
+                // 獲取銷售額 - 改為使用動態計算的過去一個月銷售額
+                const machineSalesTotal = last30DaysSalesData[value.store] ? last30DaysSalesData[value.store].totalSales : 0;
+                // 新增：計算該機台過去一個月銷售份數
                 let machineSalesCount = 0;
-                if (lastMonthSalesData[value.store]) {
-                    machineSalesCount = Object.values(lastMonthSalesData[value.store])
+                if (last30DaysSalesData[value.store]) {
+                    // 將所有產品的 count 相加
+                    machineSalesCount = Object.values(last30DaysSalesData[value.store])
                         .filter(v => typeof v === 'object' && v.count !== undefined)
                         .reduce((sum, v) => sum + (v.count || 0), 0);
                 }
@@ -666,7 +678,7 @@
                     });
                 }
                 
-                renderStoreCards(dataToRender, storeNotesAndAddresses, lastMonthSalesData);
+                renderStoreCards(dataToRender, storeNotesAndAddresses, last30DaysSalesData);
                 updateSortButtonsState(currentInventorySort.key ? `sortBy${currentInventorySort.key}` : null);
             }
             
@@ -1464,6 +1476,42 @@
         // 修正 renderProductSalesChart
         function renderProductSalesChart(primaryData, compareData) {
             const ctx = document.getElementById('mainSalesChart').getContext('2d');
+            
+            // 計算每個產品的訂單筆數
+            function calculateProductOrderCounts(filteredData) {
+                const orderCounts = {};
+                filteredData.forEach(d => {
+                    if (d.product) {
+                        if (!orderCounts[d.product]) {
+                            orderCounts[d.product] = 0;
+                        }
+                        orderCounts[d.product]++;
+                    }
+                });
+                return orderCounts;
+            }
+            
+            // 獲取當前篩選的數據來計算訂單筆數
+            const mainFiltered = window.fullSalesData.filter(d => {
+                if (mainLine.store && d.shopName !== mainLine.store) return false;
+                if (mainLine.product && d.product !== mainLine.product) return false;
+                if (!d.jsDate) return false;
+                return d.jsDate >= mainLine.start && d.jsDate <= mainLine.end;
+            });
+            
+            let compareFiltered = [];
+            if (isCompareMode) {
+                compareFiltered = window.fullSalesData.filter(d => {
+                    if (compareLine.store && d.shopName !== compareLine.store) return false;
+                    if (compareLine.product && d.product !== compareLine.product) return false;
+                    if (!d.jsDate) return false;
+                    return d.jsDate >= compareLine.start && d.jsDate <= compareLine.end;
+                });
+            }
+            
+            const mainOrderCounts = calculateProductOrderCounts(mainFiltered);
+            const compareOrderCounts = calculateProductOrderCounts(compareFiltered);
+            
             if (compareData) {
                 // 100% 堆疊 bar
                 const allLabels = Array.from(new Set([
@@ -1481,7 +1529,8 @@
                         label: label,
                         data: [primaryPct, comparePct],
                         backgroundColor: generateConsistentColors([label])[0],
-                        originalValues: [primaryValue, compareValue]
+                        originalValues: [primaryValue, compareValue],
+                        orderCounts: [mainOrderCounts[label] || 0, compareOrderCounts[label] || 0]
                     };
                 });
                 mainSalesChartInstance = new Chart(ctx, {
@@ -1509,7 +1558,8 @@
                                         const dataset = context.chart.data.datasets[context.datasetIndex];
                                         const originalValue = dataset.originalValues[context.dataIndex];
                                         const percentage = context.parsed.y;
-                                        return `${dataset.label}: ${originalValue.toLocaleString()} 元 (${percentage.toFixed(1)}%)`;
+                                        const orderCount = dataset.orderCounts[context.dataIndex];
+                                        return `${dataset.label}: ${originalValue.toLocaleString()} 元 (${percentage.toFixed(1)}%) - ${orderCount} 筆`;
                                     }
                                 }
                             },
@@ -1526,17 +1576,26 @@
             const otherAmount = sortedProducts.slice(topN).reduce((sum, [, amount]) => sum + amount, 0);
             const labels = topProducts.map(([name]) => name);
             const data = topProducts.map(([,amount]) => amount);
+            const orderCounts = topProducts.map(([name]) => mainOrderCounts[name] || 0);
+            
             if (otherAmount > 0) {
                 labels.push('其他');
                 data.push(otherAmount);
+                // 計算"其他"類別的訂單筆數
+                const otherOrderCount = Object.keys(mainOrderCounts).filter(product => 
+                    !labels.slice(0, -1).includes(product)
+                ).reduce((sum, product) => sum + mainOrderCounts[product], 0);
+                orderCounts.push(otherOrderCount);
             }
+            
             mainSalesChartInstance = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
                     labels: labels,
                     datasets: [{
                         data: data,
-                        backgroundColor: generateConsistentColors(labels)
+                        backgroundColor: generateConsistentColors(labels),
+                        orderCounts: orderCounts
                     }]
                 },
                 options: {
@@ -1551,7 +1610,8 @@
                                     let value = context.raw || 0;
                                     const total = context.chart.getDatasetMeta(0).total;
                                     const percentage = total > 0 ? (value / total * 100).toFixed(1) : 0;
-                                    return `${label}: ${value.toLocaleString()} 元 (${percentage}%)`;
+                                    const orderCount = context.chart.data.datasets[0].orderCounts[context.dataIndex] || 0;
+                                    return `${label}: ${value.toLocaleString()} 元 (${percentage}%) - ${orderCount} 筆`;
                                 }
                             }
                         },
@@ -1701,7 +1761,7 @@
                     <i class="fas fa-wand-magic-sparkles suggestion-trigger-icon" title="智慧補貨建議"></i>
                     <div class="chart-card-title">
                         ${store}<br>${machineId}
-                        ${(machineSalesTotal > 0 || machineSalesCount > 0) ? `<div class="sales-info">上個月銷售: ${machineSalesTotal.toLocaleString()} 元 / ${machineSalesCount} 份</div>` : ''}
+                        ${(machineSalesTotal > 0 || machineSalesCount > 0) ? `<div class="sales-info">過去一個月銷售: ${machineSalesTotal.toLocaleString()} 元 / ${machineSalesCount} 份</div>` : ''}
                     </div>
                     <div class="chart-card-chart">
                         <canvas id="chart-${key}"></canvas>
@@ -1767,7 +1827,7 @@
                     const product = productsWithSales[i];
                     if (product) {
                         // 如果有對應排名的產品
-                        let tooltipParts = [`上個月銷量為 ${product.sales}`];
+                        let tooltipParts = [`過去一個月銷量為 ${product.sales}`];
                         let quantityDisplay = product.quantity;
 
                         if (product.quantity === 0) {
@@ -1784,7 +1844,7 @@
                         `;
                     } else {
                         // 如果沒有對應排名的產品，顯示空位
-                        const tooltip = `該機台上個月只銷售 ${productsWithSales.length} 樣產品`;
+                        const tooltip = `該機台過去一個月只銷售 ${productsWithSales.length} 樣產品`;
                         detailHtml += `
                             <div class="detail-item">
                                 <div>${medals[i]} -</div>
@@ -1799,7 +1859,7 @@
                 if (productsWithSales.length > 3) {
                      productsWithSales.slice(3).forEach(product => {
                         let quantityDisplay = product.quantity;
-                        let tooltipParts = [`上個月銷量為 ${product.sales}`];
+                        let tooltipParts = [`過去一個月銷量為 ${product.sales}`];
 
                         if (product.quantity === 0) {
                             quantityDisplay = '⚠️';
@@ -1822,7 +1882,7 @@
                         <div class="detail-item">
                             <div>${product.name}</div>
                             <div>${product.quantity}</div>
-                            <span class="detail-tooltip">該產品於上個月未有銷售紀錄</span>
+                            <span class="detail-tooltip">該產品於過去一個月未有銷售紀錄</span>
                         </div>
                     `;
                 });
