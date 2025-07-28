@@ -562,9 +562,9 @@
                     const formatDate = (date) => `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;
                     salesDateRangeText = `顯示過去一個月 (${formatDate(startDate)} - ${formatDate(endDate)}) 的銷售數據。`;
 
-                    // 3. Filter transactions within this window
+                    // 3. Filter transactions within this window - 排除金額為0的交易
                     const recentSales = window.fullSalesData.filter(d => 
-                        d.jsDate && d.jsDate >= startDate && d.jsDate <= endDate
+                        d.jsDate && d.jsDate >= startDate && d.jsDate <= endDate && parseFloat(d.amount) > 0
                     );
 
                     // 4. Aggregate the data
@@ -882,7 +882,7 @@
                         bucketEnd.setHours(23,59,59,999);
                         nextBucketStart.setDate(nextBucketStart.getDate()+1);
                 }
-                const sum = data.filter(d=>d.jsDate>=bucketStart&&d.jsDate<=bucketEnd).reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
+                const sum = data.filter(d=>d.jsDate>=bucketStart&&d.jsDate<=bucketEnd&&parseFloat(d.amount)>0).reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
                 labels.push(label);
                 values.push(sum);
                 dateMap.push({start:new Date(bucketStart), end:new Date(bucketEnd)});
@@ -895,20 +895,22 @@
 
         // 3. renderSalesChart主線/對比線聚合與繪圖
         function renderSalesChart(fullSalesData) {
-            // 過濾主線
+            // 過濾主線 - 排除金額為0的交易（維修測試訂單）
             const mainFiltered = fullSalesData.filter(d => {
                 if (mainLine.store && d.shopName !== mainLine.store) return false;
                 if (mainLine.product && d.product !== mainLine.product) return false;
                 if (!d.jsDate) return false;
+                if (parseFloat(d.amount) <= 0) return false; // 排除金額為0或負數的交易
                 return d.jsDate >= mainLine.start && d.jsDate <= mainLine.end;
             });
-            // 過濾對比線
+            // 過濾對比線 - 排除金額為0的交易（維修測試訂單）
             let compareFiltered = [];
             if (isCompareMode) {
                 compareFiltered = fullSalesData.filter(d => {
                     if (compareLine.store && d.shopName !== compareLine.store) return false;
                     if (compareLine.product && d.product !== compareLine.product) return false;
                     if (!d.jsDate) return false;
+                    if (parseFloat(d.amount) <= 0) return false; // 排除金額為0或負數的交易
                     return d.jsDate >= compareLine.start && d.jsDate <= compareLine.end;
                 });
             }
@@ -977,6 +979,26 @@
                             glassmorphismBackground: true
                         },
                         scales: {
+                            x: {
+                                ticks: {
+                                    color: function(context) {
+                                        const index = context.index;
+                                        const label = mainAgg.labels[index];
+                                        if (!label) return '#666666';
+                                        
+                                        // 檢查是否為周末
+                                        if (mainAgg.dateMap && mainAgg.dateMap[index]) {
+                                            const date = mainAgg.dateMap[index].start;
+                                            const dayOfWeek = date.getDay(); // 0=周日, 6=周六
+                                            if (dayOfWeek === 0 || dayOfWeek === 6) {
+                                                return '#ff4444'; // 紅色
+                                            }
+                                        }
+                                        
+                                        return '#666666'; // 預設顏色
+                                    }
+                                }
+                            },
                             y: {
                                 beginAtZero: true,
                                 ticks: {
@@ -1009,19 +1031,19 @@
             // 分店銷售額
             function aggStore(data) {
                 const map = {};
-                data.forEach(d=>{if(d.shopName) map[d.shopName]=(map[d.shopName]||0)+(parseFloat(d.amount)||0);});
+                data.forEach(d=>{if(d.shopName && parseFloat(d.amount) > 0) map[d.shopName]=(map[d.shopName]||0)+(parseFloat(d.amount)||0);});
                 return map;
             }
             // 產品佔比
             function aggProduct(data) {
                 const map = {};
-                data.forEach(d=>{if(d.product) map[d.product]=(map[d.product]||0)+(parseFloat(d.amount)||0);});
+                data.forEach(d=>{if(d.product && parseFloat(d.amount) > 0) map[d.product]=(map[d.product]||0)+(parseFloat(d.amount)||0);});
                 return map;
             }
             // 支付方式
             function aggPay(data) {
                 const map = {};
-                data.forEach(d=>{if(d.payType) map[d.payType]=(map[d.payType]||0)+1;});
+                data.forEach(d=>{if(d.payType && parseFloat(d.amount) > 0) map[d.payType]=(map[d.payType]||0)+1;});
                 return map;
             }
             // 切換圖表前先 destroy
@@ -1051,6 +1073,15 @@
                 renderSalesChart(window.fullSalesData);
             });
         });
+
+        // 新增: 過濾數據的輔助函數 - 排除金額為0的交易
+        function filterDataByDateRange(data, startDate, endDate) {
+            return data.filter(d => {
+                if (!d.jsDate) return false;
+                if (parseFloat(d.amount) <= 0) return false; // 排除金額為0或負數的交易
+                return d.jsDate >= startDate && d.jsDate <= endDate;
+            });
+        }
 
         function processAndRenderCharts(fullSalesData, startDate, endDate) {
             // 1. 篩選主期間數據 (使用新的輔助函數，已包含0元過濾和日期修正)
@@ -1093,6 +1124,9 @@
 
             filteredData.forEach(d => {
                 const amount = parseFloat(d.amount) || 0;
+                
+                // 跳過金額為0或負數的交易
+                if (amount <= 0) return;
                 
                 const y = d.jsDate.getFullYear();
                 const m = String(d.jsDate.getMonth() + 1).padStart(2, '0');
@@ -1274,7 +1308,7 @@
                 }
 
                 const amountInBucket = data
-                    .filter(d => d.jsDate >= bucketStart && d.jsDate <= bucketEnd)
+                    .filter(d => d.jsDate >= bucketStart && d.jsDate <= bucketEnd && parseFloat(d.amount) > 0)
                     .reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
                 
                 labels.push(label);
@@ -1355,28 +1389,44 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    scales: {
-                        x: {
-                           title: {
-                               display: true,
-                               text: `時間單位: ${activeTimeUnit}`
-                           },
-                           ticks: {
-                               callback: function(value, index, ticks) {
-                                   // `value` is the tick value. For a category axis, this is the index.
-                                   const label = primaryAgg.labels[index];
-                                   if (!label) return ''; // Avoid errors
-
-                                   if (activeTimeUnit === '2d') {
-                                       return index % 2 === 0 ? label : '';
-                                   }
-                                   
-                                   return label;
+                                            scales: {
+                            x: {
+                               title: {
+                                   display: true,
+                                   text: `時間單位: ${activeTimeUnit}`
                                },
-                               autoSkip: false,
-                               maxRotation: 0
-                           }
-                        },
+                               ticks: {
+                                   callback: function(value, index, ticks) {
+                                       // `value` is the tick value. For a category axis, this is the index.
+                                       const label = primaryAgg.labels[index];
+                                       if (!label) return ''; // Avoid errors
+
+                                       if (activeTimeUnit === '2d') {
+                                           return index % 2 === 0 ? label : '';
+                                       }
+                                       
+                                       return label;
+                                   },
+                                   autoSkip: false,
+                                   maxRotation: 0,
+                                   color: function(context) {
+                                       const index = context.index;
+                                       const label = primaryAgg.labels[index];
+                                       if (!label) return '#666666';
+                                       
+                                       // 檢查是否為周末
+                                       if (primaryAgg.dateMap && primaryAgg.dateMap[index]) {
+                                           const date = primaryAgg.dateMap[index].start;
+                                           const dayOfWeek = date.getDay(); // 0=周日, 6=周六
+                                           if (dayOfWeek === 0 || dayOfWeek === 6) {
+                                               return '#ff4444'; // 紅色
+                                           }
+                                       }
+                                       
+                                       return '#666666'; // 預設顏色
+                                   }
+                               }
+                            },
                         y: {
                             beginAtZero: true,
                             ticks: {
@@ -1477,11 +1527,11 @@
         function renderProductSalesChart(primaryData, compareData) {
             const ctx = document.getElementById('mainSalesChart').getContext('2d');
             
-            // 計算每個產品的訂單筆數
+            // 計算每個產品的訂單筆數 - 排除金額為0的交易
             function calculateProductOrderCounts(filteredData) {
                 const orderCounts = {};
                 filteredData.forEach(d => {
-                    if (d.product) {
+                    if (d.product && parseFloat(d.amount) > 0) {
                         if (!orderCounts[d.product]) {
                             orderCounts[d.product] = 0;
                         }
@@ -1491,11 +1541,12 @@
                 return orderCounts;
             }
             
-            // 獲取當前篩選的數據來計算訂單筆數
+            // 獲取當前篩選的數據來計算訂單筆數 - 排除金額為0的交易
             const mainFiltered = window.fullSalesData.filter(d => {
                 if (mainLine.store && d.shopName !== mainLine.store) return false;
                 if (mainLine.product && d.product !== mainLine.product) return false;
                 if (!d.jsDate) return false;
+                if (parseFloat(d.amount) <= 0) return false; // 排除金額為0或負數的交易
                 return d.jsDate >= mainLine.start && d.jsDate <= mainLine.end;
             });
             
@@ -1505,6 +1556,7 @@
                     if (compareLine.store && d.shopName !== compareLine.store) return false;
                     if (compareLine.product && d.product !== compareLine.product) return false;
                     if (!d.jsDate) return false;
+                    if (parseFloat(d.amount) <= 0) return false; // 排除金額為0或負數的交易
                     return d.jsDate >= compareLine.start && d.jsDate <= compareLine.end;
                 });
             }
@@ -1990,22 +2042,39 @@
                 html2canvas(body, {
                     scale: 2, // 提高分辨率
                     useCORS: true,
+                    allowTaint: true, // 允許跨域圖片
+                    foreignObjectRendering: true, // 啟用外部物件渲染
                     backgroundColor: getComputedStyle(body).backgroundColor, // 使用頁面背景色
+                    logging: false, // 關閉日誌以提升性能
                     onclone: (clonedDoc) => {
                         // 在克隆的文檔中，隱藏加載動畫本身，確保它不會出現在截圖中
                         const loaderInClone = clonedDoc.getElementById('screenshotLoader');
                         if (loaderInClone) {
                             loaderInClone.style.display = 'none';
                         }
+                        
+                        // 確保所有圖表都正確渲染
+                        const charts = clonedDoc.querySelectorAll('canvas');
+                        charts.forEach(canvas => {
+                            if (canvas.chart) {
+                                canvas.chart.resize();
+                            }
+                        });
                     }
                 }).then(canvas => {
-                    const url = canvas.toDataURL('image/png');
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `庫存截圖_${new Date().toISOString().split('T')[0]}.png`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
+                    try {
+                        const url = canvas.toDataURL('image/png', 1.0);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `庫存截圖_${new Date().toISOString().split('T')[0]}.png`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url); // 清理記憶體
+                    } catch (error) {
+                        console.error('生成下載連結失敗:', error);
+                        alert('截圖生成成功，但下載失敗: ' + error.message);
+                    }
                 }).catch(error => {
                     console.error('截圖失敗:', error);
                     alert('截圖失敗: ' + error.message);
@@ -2014,7 +2083,7 @@
                     loader.style.display = 'none';
                     body.classList.remove('is-capturing');
                 });
-            }, 200); // 延遲200毫秒
+            }, 300); // 增加延遲到300毫秒確保渲染完成
         });
         
         // 列印
@@ -2400,23 +2469,40 @@
                 html2canvas(body, {
                     scale: 2, // 提高分辨率
                     useCORS: true,
+                    allowTaint: true, // 允許跨域圖片
+                    foreignObjectRendering: true, // 啟用外部物件渲染
                     backgroundColor: getComputedStyle(body).backgroundColor,
+                    logging: false, // 關閉日誌以提升性能
                     onclone: (clonedDoc) => {
                         // 在克隆的文檔中，隱藏加載動畫本身
                         const loaderInClone = clonedDoc.getElementById('screenshotLoader');
                         if (loaderInClone) {
                             loaderInClone.style.display = 'none';
                         }
+                        
+                        // 確保所有圖表都正確渲染
+                        const charts = clonedDoc.querySelectorAll('canvas');
+                        charts.forEach(canvas => {
+                            if (canvas.chart) {
+                                canvas.chart.resize();
+                            }
+                        });
                     }
                 }).then(canvas => {
-                    const reportTitle = document.getElementById('salesReportTitle').textContent.trim() || '銷售趨勢報告';
-                    const url = canvas.toDataURL('image/png');
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `${reportTitle}_${new Date().toISOString().split('T')[0]}.png`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
+                    try {
+                        const reportTitle = document.getElementById('salesReportTitle').textContent.trim() || '銷售趨勢報告';
+                        const url = canvas.toDataURL('image/png', 1.0);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${reportTitle}_${new Date().toISOString().split('T')[0]}.png`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url); // 清理記憶體
+                    } catch (error) {
+                        console.error('生成下載連結失敗:', error);
+                        alert('截圖生成成功，但下載失敗: ' + error.message);
+                    }
                 }).catch(error => {
                     console.error('截圖失敗:', error);
                     alert('截圖失敗: ' + error.message);
@@ -2430,7 +2516,7 @@
                         mainSalesChartInstance.resize();
                     }
                 });
-            }, 300); // 增加延遲確保渲染
+            }, 400); // 增加延遲到400毫秒確保圖表完全渲染
         });
 
         toggleAdvancedOptionsButton.addEventListener('click', () => {

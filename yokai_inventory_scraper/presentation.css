@@ -742,6 +742,22 @@
             padding: 20px;
         }
 
+        /* 截圖時的額外優化 */
+        body.is-capturing * {
+            animation: none !important;
+            transition: none !important;
+        }
+
+        body.is-capturing .chart-card {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+        }
+
+        /* 確保截圖時所有文字都清晰可見 */
+        body.is-capturing {
+            font-smooth: never;
+            -webkit-font-smoothing: none;
+        }
+
         /* 分頁樣式 */
         .tab-nav {
             display: flex;
@@ -1402,6 +1418,17 @@
             letter-spacing: 2px;
             margin-bottom: 10px;
             text-shadow: 0 2px 8px rgba(33,150,243,0.08);
+        }
+
+        /* 截圖時的特殊樣式，避免漸層文字問題 */
+        body.is-capturing .dashboard-header h1 {
+            background: none !important;
+            -webkit-background-clip: unset !important;
+            -webkit-text-fill-color: unset !important;
+            background-clip: unset !important;
+            text-fill-color: unset !important;
+            color: #2196F3 !important;
+            text-shadow: none !important;
         }
         .dashboard-subtitle {
             font-size: 1.1rem;
