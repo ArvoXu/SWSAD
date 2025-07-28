@@ -15,6 +15,8 @@ import traceback
 from dateutil.parser import parse as parse_date
 import pandas as pd
 import shutil
+import json
+import pytz
 
 
 # --- Custom Imports ---
@@ -322,6 +324,128 @@ def trigger_scraper():
     thread.start()
     
     return jsonify({'success': True, 'message': 'Scraper job started in the background.'}), 202
+
+@app.route('/upload-inventory-file', methods=['POST'])
+def upload_inventory_file():
+    """
+    接收格式化好的庫存數據文件（JSON格式）並直接保存到數據庫
+    避免在伺服器上運行爬蟲腳本，減少CPU負載
+    """
+    try:
+        # 檢查是否有文件上傳
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'message': '沒有選擇文件'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'success': False, 'message': '沒有選擇文件'}), 400
+        
+        # 檢查文件類型
+        if not file.filename.endswith('.json'):
+            return jsonify({'success': False, 'message': '只支持 JSON 格式的文件'}), 400
+        
+        # 讀取文件內容
+        file_content = file.read()
+        try:
+            inventory_data = json.loads(file_content.decode('utf-8'))
+        except json.JSONDecodeError as e:
+            return jsonify({'success': False, 'message': f'JSON 格式錯誤: {str(e)}'}), 400
+        
+        # 驗證數據格式
+        if not isinstance(inventory_data, list):
+            return jsonify({'success': False, 'message': '數據格式錯誤：應該是列表格式'}), 400
+        
+        # 驗證每個項目是否包含必要字段
+        required_fields = ['store', 'machine_id', 'product_name', 'quantity']
+        for i, item in enumerate(inventory_data):
+            if not isinstance(item, dict):
+                return jsonify({'success': False, 'message': f'第 {i+1} 項數據格式錯誤：應該是字典格式'}), 400
+            
+            missing_fields = [field for field in required_fields if field not in item]
+            if missing_fields:
+                return jsonify({'success': False, 'message': f'第 {i+1} 項缺少必要字段: {", ".join(missing_fields)}'}), 400
+            
+            # 驗證數量字段
+            if not isinstance(item['quantity'], int) or item['quantity'] < 0:
+                return jsonify({'success': False, 'message': f'第 {i+1} 項數量字段錯誤：應該是正整數'}), 400
+        
+        # 處理日期時間字段
+        for item in inventory_data:
+            if 'process_time' in item:
+                if isinstance(item['process_time'], str):
+                    try:
+                        item['process_time'] = parse_date(item['process_time'])
+                    except Exception as e:
+                        return jsonify({'success': False, 'message': f'日期時間格式錯誤: {str(e)}'}), 400
+            else:
+                # 如果沒有 process_time，使用當前時間
+                item['process_time'] = datetime.now(pytz.timezone('Asia/Taipei'))
+        
+        # 保存到數據庫
+        max_retries = 3
+        retry_delay_seconds = 5
+        
+        for attempt in range(max_retries):
+            db: Session = next(get_db())
+            try:
+                # 清空現有庫存數據
+                num_deleted = db.query(Inventory).delete()
+                logging.info(f"Cleared {num_deleted} old records from the inventory table.")
+                
+                # 創建新的庫存對象
+                inventory_objects = [Inventory(**item) for item in inventory_data]
+                db.bulk_save_objects(inventory_objects)
+                
+                db.commit()
+                items_saved_count = len(inventory_objects)
+                logging.info(f"Successfully saved {items_saved_count} new records to the database via file upload.")
+                
+                # 記錄更新日誌
+                log_db_update(
+                    scraper_type='inventory_upload', 
+                    status='success', 
+                    details=f'File upload successful. Processed {items_saved_count} items from {file.filename}'
+                )
+                
+                db.close()
+                return jsonify({
+                    'success': True, 
+                    'message': f'成功上傳並處理 {items_saved_count} 項庫存數據',
+                    'items_processed': items_saved_count,
+                    'filename': file.filename
+                })
+                
+            except OperationalError as e:
+                db.rollback()
+                db.close()
+                logging.error(f"Database error on attempt {attempt + 1}/{max_retries}: {e}")
+                if attempt + 1 >= max_retries:
+                    log_db_update(
+                        scraper_type='inventory_upload', 
+                        status='error', 
+                        details=f'Database error after {max_retries} attempts: {str(e)}'
+                    )
+                    return jsonify({'success': False, 'message': f'數據庫錯誤，已重試 {max_retries} 次: {str(e)}'}), 500
+                logging.info(f"Retrying in {retry_delay_seconds} seconds...")
+                time.sleep(retry_delay_seconds)
+                
+            except Exception as e:
+                db.rollback()
+                db.close()
+                logging.error(f"Unexpected error during file upload: {e}", exc_info=True)
+                log_db_update(
+                    scraper_type='inventory_upload', 
+                    status='error', 
+                    details=f'Unexpected error: {str(e)}'
+                )
+                return jsonify({'success': False, 'message': f'處理文件時發生錯誤: {str(e)}'}), 500
+            finally:
+                if 'db' in locals() and db.is_active:
+                    db.close()
+                    
+    except Exception as e:
+        logging.error(f"Error in file upload endpoint: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': f'文件上傳失敗: {str(e)}'}), 500
 
 @app.route('/scraper-status', methods=['GET'])
 def get_scraper_status():

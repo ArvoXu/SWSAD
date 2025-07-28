@@ -1,0 +1,13 @@
+
+=== 上傳說明 ===
+1. 文件已生成: inventory_upload_20250728_113304.json
+2. 文件路徑: C:\Users\UserPC_01\Documents\GitHub\SWSAD1\yokai_inventory_scraper\inventory_upload_20250728_113304.json
+3. 上傳方式:
+   - 方法1: 使用網頁界面上傳
+   - 方法2: 使用 curl 命令:
+     curl -X POST -F "file=@inventory_upload_20250728_113304.json" http://your-server-url/upload-inventory-file
+4. 數據統計:
+   - 總項目數: 69
+   - 店鋪數量: 13
+   - 機台數量: 13
+   - 產品種類: 23

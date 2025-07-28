@@ -1,0 +1,554 @@
+[
+  {
+    "store": "TW Lion HQ 1.0",
+    "machine_id": "551",
+    "product_name": "IPPUDO_Spicy _TanTan",
+    "quantity": 2,
+    "last_updated": "2025-07-16 01:57:43 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.499653+08:00"
+  },
+  {
+    "store": "TW Lion HQ 1.0",
+    "machine_id": "551",
+    "product_name": "一風堂博多とんこつラーメン",
+    "quantity": 5,
+    "last_updated": "2025-07-16 01:57:43 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.499841+08:00"
+  },
+  {
+    "store": "TW Lion HQ 1.0",
+    "machine_id": "551",
+    "product_name": "一風堂橫濱家系拉麵",
+    "quantity": 3,
+    "last_updated": "2025-07-16 01:57:43 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.499916+08:00"
+  },
+  {
+    "store": "台北天文館 右邊",
+    "machine_id": "682",
+    "product_name": "Ippudo Spicy Plant",
+    "quantity": 6,
+    "last_updated": "2025-07-26 21:28:31 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.499978+08:00"
+  },
+  {
+    "store": "台北天文館 右邊",
+    "machine_id": "682",
+    "product_name": "小卷米粉",
+    "quantity": 3,
+    "last_updated": "2025-07-26 21:28:31 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.500024+08:00"
+  },
+  {
+    "store": "台北天文館 右邊",
+    "machine_id": "682",
+    "product_name": "緹魚鮮蝦青醬松子義大利麵",
+    "quantity": 7,
+    "last_updated": "2025-07-26 21:28:31 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.500068+08:00"
+  },
+  {
+    "store": "台北天文館 右邊",
+    "machine_id": "682",
+    "product_name": "雙醬鮭魚筆尖麵",
+    "quantity": 3,
+    "last_updated": "2025-07-26 21:28:31 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.500107+08:00"
+  },
+  {
+    "store": "台北天文館 左邊",
+    "machine_id": "683",
+    "product_name": "小卷米粉",
+    "quantity": 1,
+    "last_updated": "2025-07-26 21:41:27 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.500151+08:00"
+  },
+  {
+    "store": "台北天文館 左邊",
+    "machine_id": "683",
+    "product_name": "緹魚鮮蝦青醬松子義大利麵",
+    "quantity": 6,
+    "last_updated": "2025-07-26 21:41:27 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.500190+08:00"
+  },
+  {
+    "store": "台北天文館 左邊",
+    "machine_id": "683",
+    "product_name": "貓咪鮮乳造型紅豆包",
+    "quantity": 5,
+    "last_updated": "2025-07-26 21:41:27 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.500228+08:00"
+  },
+  {
+    "store": "台北天文館 左邊",
+    "machine_id": "683",
+    "product_name": "雙醬鮭魚筆尖麵",
+    "quantity": 6,
+    "last_updated": "2025-07-26 21:41:27 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.500274+08:00"
+  },
+  {
+    "store": "台北榮總急診室",
+    "machine_id": "488",
+    "product_name": "一風堂橫濱家系拉麵",
+    "quantity": 4,
+    "last_updated": "2025-07-25 17:09:04 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.500319+08:00"
+  },
+  {
+    "store": "台北榮總急診室",
+    "machine_id": "488",
+    "product_name": "王品剝皮辣椒水餃",
+    "quantity": 1,
+    "last_updated": "2025-07-25 17:09:04 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.500362+08:00"
+  },
+  {
+    "store": "台北榮總急診室",
+    "machine_id": "488",
+    "product_name": "緹魚鮮蝦青醬松子義大利麵",
+    "quantity": 3,
+    "last_updated": "2025-07-25 17:09:04 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.500399+08:00"
+  },
+  {
+    "store": "台北榮總急診室",
+    "machine_id": "488",
+    "product_name": "雙醬鮭魚筆尖麵",
+    "quantity": 10,
+    "last_updated": "2025-07-25 17:09:04 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.500438+08:00"
+  },
+  {
+    "store": "夾腳拖的家",
+    "machine_id": "479",
+    "product_name": "IPPUDO_Spicy _TanTan",
+    "quantity": 3,
+    "last_updated": "2025-07-21 15:50:37 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.500486+08:00"
+  },
+  {
+    "store": "夾腳拖的家",
+    "machine_id": "479",
+    "product_name": "Yukiko tantan ramen",
+    "quantity": 1,
+    "last_updated": "2025-07-21 15:50:37 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.500525+08:00"
+  },
+  {
+    "store": "夾腳拖的家",
+    "machine_id": "479",
+    "product_name": "緹魚鮮蝦青醬松子義大利麵",
+    "quantity": 2,
+    "last_updated": "2025-07-21 15:50:37 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.500563+08:00"
+  },
+  {
+    "store": "夾腳拖的家",
+    "machine_id": "479",
+    "product_name": "雙醬魚子義大利麵",
+    "quantity": 3,
+    "last_updated": "2025-07-21 15:50:37 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.500600+08:00"
+  },
+  {
+    "store": "捷運西門站B1",
+    "machine_id": "497 RIGHT",
+    "product_name": "IPPUDO_Spicy _TanTan",
+    "quantity": 8,
+    "last_updated": "2025-07-26 15:31:21 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.500645+08:00"
+  },
+  {
+    "store": "捷運西門站B1",
+    "machine_id": "497 RIGHT",
+    "product_name": "水豚君薯條鮮乳造型饅頭",
+    "quantity": 4,
+    "last_updated": "2025-07-26 15:31:21 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.500688+08:00"
+  },
+  {
+    "store": "捷運西門站B1",
+    "machine_id": "497 RIGHT",
+    "product_name": "水豚君造型鮮乳焦糖牛奶包",
+    "quantity": 3,
+    "last_updated": "2025-07-26 15:31:21 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.500731+08:00"
+  },
+  {
+    "store": "捷運西門站B1",
+    "machine_id": "497 RIGHT",
+    "product_name": "玉米寶寶鮮乳造型饅頭",
+    "quantity": 3,
+    "last_updated": "2025-07-26 15:31:21 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.500768+08:00"
+  },
+  {
+    "store": "捷運西門站B1",
+    "machine_id": "497 RIGHT",
+    "product_name": "王品剝皮辣椒水餃",
+    "quantity": 2,
+    "last_updated": "2025-07-26 15:31:21 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.500805+08:00"
+  },
+  {
+    "store": "捷運西門站B1",
+    "machine_id": "497 RIGHT",
+    "product_name": "籃球鮮乳造型奶黃包",
+    "quantity": 5,
+    "last_updated": "2025-07-26 15:31:21 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.500842+08:00"
+  },
+  {
+    "store": "捷運西門站B1",
+    "machine_id": "497 RIGHT",
+    "product_name": "緹魚鮮蝦青醬松子義大利麵",
+    "quantity": 21,
+    "last_updated": "2025-07-26 15:31:21 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.500877+08:00"
+  },
+  {
+    "store": "捷運西門站B1",
+    "machine_id": "497 RIGHT",
+    "product_name": "雙醬鮭魚筆尖麵",
+    "quantity": 2,
+    "last_updated": "2025-07-26 15:31:21 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.500913+08:00"
+  },
+  {
+    "store": "新竹竹科管理局車庫餐廳",
+    "machine_id": "452",
+    "product_name": "IPPUDO_Plant-Base_Ramen",
+    "quantity": 3,
+    "last_updated": "2025-07-26 17:17:08 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.500959+08:00"
+  },
+  {
+    "store": "新竹竹科管理局車庫餐廳",
+    "machine_id": "452",
+    "product_name": "一風堂博多とんこつラーメン",
+    "quantity": 10,
+    "last_updated": "2025-07-26 17:17:08 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.500998+08:00"
+  },
+  {
+    "store": "新竹竹科管理局車庫餐廳",
+    "machine_id": "452",
+    "product_name": "一風堂橫濱家系拉麵",
+    "quantity": 6,
+    "last_updated": "2025-07-26 17:17:08 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.501038+08:00"
+  },
+  {
+    "store": "新竹竹科管理局車庫餐廳",
+    "machine_id": "452",
+    "product_name": "小卷米粉",
+    "quantity": 9,
+    "last_updated": "2025-07-26 17:17:08 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.501074+08:00"
+  },
+  {
+    "store": "新竹竹科管理局車庫餐廳",
+    "machine_id": "452",
+    "product_name": "麻辣小籠包",
+    "quantity": 1,
+    "last_updated": "2025-07-26 17:17:08 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.501110+08:00"
+  },
+  {
+    "store": "新竹陽明交大博愛校區",
+    "machine_id": "445",
+    "product_name": "IPPUDO_Plant-Base_Ramen",
+    "quantity": 8,
+    "last_updated": "2025-07-26 16:29:31 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.501160+08:00"
+  },
+  {
+    "store": "新竹陽明交大博愛校區",
+    "machine_id": "445",
+    "product_name": "IPPUDO_Spicy _TanTan",
+    "quantity": 9,
+    "last_updated": "2025-07-26 16:29:31 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.501199+08:00"
+  },
+  {
+    "store": "新竹陽明交大博愛校區",
+    "machine_id": "445",
+    "product_name": "一風堂博多とんこつラーメン",
+    "quantity": 2,
+    "last_updated": "2025-07-26 16:29:31 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.501235+08:00"
+  },
+  {
+    "store": "新竹陽明交大博愛校區",
+    "machine_id": "445",
+    "product_name": "一風堂橫濱家系拉麵",
+    "quantity": 5,
+    "last_updated": "2025-07-26 16:29:31 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.501271+08:00"
+  },
+  {
+    "store": "新竹陽明交大博愛校區",
+    "machine_id": "445",
+    "product_name": "小卷米粉",
+    "quantity": 11,
+    "last_updated": "2025-07-26 16:29:31 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.501308+08:00"
+  },
+  {
+    "store": "板橋亞東醫院",
+    "machine_id": "446",
+    "product_name": "IPPUDO_Spicy _TanTan",
+    "quantity": 3,
+    "last_updated": "2025-07-16 10:57:55 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.501350+08:00"
+  },
+  {
+    "store": "板橋亞東醫院",
+    "machine_id": "446",
+    "product_name": "一風堂博多とんこつラーメン",
+    "quantity": 11,
+    "last_updated": "2025-07-16 10:57:55 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.501390+08:00"
+  },
+  {
+    "store": "板橋亞東醫院",
+    "machine_id": "446",
+    "product_name": "王品鮮蝦大餛飩",
+    "quantity": 1,
+    "last_updated": "2025-07-16 10:57:55 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.501427+08:00"
+  },
+  {
+    "store": "桃園市政府美食街",
+    "machine_id": "459",
+    "product_name": "一風堂博多とんこつラーメン",
+    "quantity": 11,
+    "last_updated": "2025-07-14 14:10:17 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.501469+08:00"
+  },
+  {
+    "store": "桃園市政府美食街",
+    "machine_id": "459",
+    "product_name": "小卷米粉",
+    "quantity": 7,
+    "last_updated": "2025-07-14 14:10:17 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.501508+08:00"
+  },
+  {
+    "store": "桃園市政府美食街",
+    "machine_id": "459",
+    "product_name": "緹魚鮮蝦青醬松子義大利麵",
+    "quantity": 16,
+    "last_updated": "2025-07-14 14:10:17 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.501544+08:00"
+  },
+  {
+    "store": "桃園市政府美食街",
+    "machine_id": "459",
+    "product_name": "雙醬鮭魚筆尖麵",
+    "quantity": 3,
+    "last_updated": "2025-07-14 14:10:17 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.501586+08:00"
+  },
+  {
+    "store": "桃園敏盛",
+    "machine_id": "448",
+    "product_name": "IPPUDO_Spicy _TanTan",
+    "quantity": 3,
+    "last_updated": "2025-07-11 11:25:57 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.501632+08:00"
+  },
+  {
+    "store": "桃園敏盛",
+    "machine_id": "448",
+    "product_name": "Yukiko Shoyu ramen",
+    "quantity": 7,
+    "last_updated": "2025-07-11 11:25:57 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.501670+08:00"
+  },
+  {
+    "store": "桃園敏盛",
+    "machine_id": "448",
+    "product_name": "一風堂橫濱家系拉麵",
+    "quantity": 2,
+    "last_updated": "2025-07-11 11:25:57 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.501707+08:00"
+  },
+  {
+    "store": "桃園敏盛",
+    "machine_id": "448",
+    "product_name": "小卷米粉",
+    "quantity": 3,
+    "last_updated": "2025-07-11 11:25:57 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.501743+08:00"
+  },
+  {
+    "store": "桃園敏盛",
+    "machine_id": "448",
+    "product_name": "緹魚鮮蝦青醬松子義大利麵",
+    "quantity": 3,
+    "last_updated": "2025-07-11 11:25:57 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.501779+08:00"
+  },
+  {
+    "store": "桃園敏盛",
+    "machine_id": "448",
+    "product_name": "雙醬鮭魚筆尖麵",
+    "quantity": 15,
+    "last_updated": "2025-07-11 11:25:57 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.501815+08:00"
+  },
+  {
+    "store": "桃園磁能 2",
+    "machine_id": "449",
+    "product_name": "Tonkotsu Ramen",
+    "quantity": 2,
+    "last_updated": "2025-07-24 16:57:45 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.501855+08:00"
+  },
+  {
+    "store": "義美榮總美食街",
+    "machine_id": "685",
+    "product_name": "IPPUDO_Spicy _TanTan",
+    "quantity": 9,
+    "last_updated": "2025-07-26 12:18:17 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.501903+08:00"
+  },
+  {
+    "store": "義美榮總美食街",
+    "machine_id": "685",
+    "product_name": "Yukiko tantan ramen",
+    "quantity": 4,
+    "last_updated": "2025-07-26 12:18:17 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.501940+08:00"
+  },
+  {
+    "store": "義美榮總美食街",
+    "machine_id": "685",
+    "product_name": "一風堂博多とんこつラーメン",
+    "quantity": 2,
+    "last_updated": "2025-07-26 12:18:17 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.501977+08:00"
+  },
+  {
+    "store": "義美榮總美食街",
+    "machine_id": "685",
+    "product_name": "小卷米粉",
+    "quantity": 10,
+    "last_updated": "2025-07-26 12:18:17 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.502019+08:00"
+  },
+  {
+    "store": "義美榮總美食街",
+    "machine_id": "685",
+    "product_name": "早安小雞鮮乳奶黃包",
+    "quantity": 1,
+    "last_updated": "2025-07-26 12:18:17 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.502058+08:00"
+  },
+  {
+    "store": "義美榮總美食街",
+    "machine_id": "685",
+    "product_name": "水豚君薯條鮮乳造型饅頭",
+    "quantity": 2,
+    "last_updated": "2025-07-26 12:18:17 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.502095+08:00"
+  },
+  {
+    "store": "義美榮總美食街",
+    "machine_id": "685",
+    "product_name": "燕三条 Se-Abura",
+    "quantity": 6,
+    "last_updated": "2025-07-26 12:18:17 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.502132+08:00"
+  },
+  {
+    "store": "義美榮總美食街",
+    "machine_id": "685",
+    "product_name": "玉米寶寶鮮乳造型饅頭",
+    "quantity": 3,
+    "last_updated": "2025-07-26 12:18:17 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.502170+08:00"
+  },
+  {
+    "store": "義美榮總美食街",
+    "machine_id": "685",
+    "product_name": "珍珠奶茶沖繩黑糖鮮乳造型饅頭",
+    "quantity": 1,
+    "last_updated": "2025-07-26 12:18:17 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.502206+08:00"
+  },
+  {
+    "store": "義美榮總美食街",
+    "machine_id": "685",
+    "product_name": "緹魚鮮蝦青醬松子義大利麵",
+    "quantity": 3,
+    "last_updated": "2025-07-26 12:18:17 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.502243+08:00"
+  },
+  {
+    "store": "捷運西門站B1",
+    "machine_id": "497 RIGHT",
+    "product_name": "IPPUDO_Spicy _TanTan",
+    "quantity": 8,
+    "last_updated": "2025-07-26 15:31:21 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.502287+08:00"
+  },
+  {
+    "store": "捷運西門站B1",
+    "machine_id": "497 RIGHT",
+    "product_name": "水豚君薯條鮮乳造型饅頭",
+    "quantity": 4,
+    "last_updated": "2025-07-26 15:31:21 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.502324+08:00"
+  },
+  {
+    "store": "捷運西門站B1",
+    "machine_id": "497 RIGHT",
+    "product_name": "水豚君造型鮮乳焦糖牛奶包",
+    "quantity": 3,
+    "last_updated": "2025-07-26 15:31:21 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.502360+08:00"
+  },
+  {
+    "store": "捷運西門站B1",
+    "machine_id": "497 RIGHT",
+    "product_name": "玉米寶寶鮮乳造型饅頭",
+    "quantity": 3,
+    "last_updated": "2025-07-26 15:31:21 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.502395+08:00"
+  },
+  {
+    "store": "捷運西門站B1",
+    "machine_id": "497 RIGHT",
+    "product_name": "王品剝皮辣椒水餃",
+    "quantity": 2,
+    "last_updated": "2025-07-26 15:31:21 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.502437+08:00"
+  },
+  {
+    "store": "捷運西門站B1",
+    "machine_id": "497 RIGHT",
+    "product_name": "籃球鮮乳造型奶黃包",
+    "quantity": 5,
+    "last_updated": "2025-07-26 15:31:21 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.502474+08:00"
+  },
+  {
+    "store": "捷運西門站B1",
+    "machine_id": "497 RIGHT",
+    "product_name": "緹魚鮮蝦青醬松子義大利麵",
+    "quantity": 21,
+    "last_updated": "2025-07-26 15:31:21 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.502510+08:00"
+  },
+  {
+    "store": "捷運西門站B1",
+    "machine_id": "497 RIGHT",
+    "product_name": "雙醬鮭魚筆尖麵",
+    "quantity": 2,
+    "last_updated": "2025-07-26 15:31:21 (Asia/Taipei)",
+    "process_time": "2025-07-28T11:33:04.502546+08:00"
+  }
+]

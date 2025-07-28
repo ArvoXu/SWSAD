@@ -26,6 +26,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const monthDialogCloseButton = monthSelectionDialog.querySelector('.close');
     const openChartWindowButton = document.getElementById('openChartWindowButton');
     const autoUpdateSalesButton = document.getElementById('autoUpdateSalesButton');
+    const uploadInventoryFileButton = document.getElementById('uploadInventoryFileButton');
+    const inventoryFileInput = document.getElementById('inventoryFileInput');
     
     // --- Global State ---
     let currentView = 'card';
@@ -437,6 +439,15 @@ document.addEventListener('DOMContentLoaded', function () {
         salesFileInput.addEventListener('change', handleSalesFile);
     }
 
+    // --- 庫存文件上傳事件監聽器 ---
+    if (uploadInventoryFileButton) {
+        uploadInventoryFileButton.addEventListener('click', () => inventoryFileInput.click());
+    }
+
+    if (inventoryFileInput) {
+        inventoryFileInput.addEventListener('change', handleInventoryFileUpload);
+    }
+
     function handleSalesFile(event) {
         const file = event.target.files[0];
         if (!file) return;
@@ -510,6 +521,58 @@ document.addEventListener('DOMContentLoaded', function () {
     // 移除已棄用的舊函數
     // function processSalesDataForMonth(...) {}
     // async function updateManualSales(...) {}
+
+    // --- 庫存文件上傳功能 ---
+    function handleInventoryFileUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        if (!file.name.endsWith('.json')) {
+            alert('請選擇 JSON 格式的文件');
+            inventoryFileInput.value = '';
+            return;
+        }
+        
+        uploadInventoryFile(file);
+    }
+    
+    async function uploadInventoryFile(file) {
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        try {
+            // 顯示上傳進度
+            uploadInventoryFileButton.disabled = true;
+            uploadInventoryFileButton.textContent = '上傳中...';
+            
+            const response = await fetch('/upload-inventory-file', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                alert(`✅ 庫存文件上傳成功！\n\n處理項目數: ${result.items_processed}\n文件名: ${result.filename}\n\n數據已更新到數據庫，請刷新頁面查看最新數據。`);
+                
+                // 自動刷新數據
+                await fetchAndDisplayData();
+                
+                // 刷新更新日誌
+                await loadUpdateLogs();
+            } else {
+                throw new Error(result.message || '上傳失敗');
+            }
+            
+        } catch (error) {
+            console.error('上傳庫存文件失敗:', error);
+            alert(`❌ 上傳失敗: ${error.message}`);
+        } finally {
+            uploadInventoryFileButton.disabled = false;
+            uploadInventoryFileButton.textContent = '上傳庫存文件';
+            inventoryFileInput.value = '';
+        }
+    }
 
     async function loadUpdateLogs() {
         const logList = document.getElementById('updateLogList');
