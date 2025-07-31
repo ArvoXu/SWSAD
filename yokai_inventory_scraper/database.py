@@ -40,7 +40,7 @@ Base = declarative_base()
 class Warehouse(Base):
     """
     代表倉庫的庫存資料。
-    每次上傳 Excel 文件時會完全清除並重新填入。
+    每次上傳 Excel 文件時只會更新同名倉庫的數據。
     """
     __tablename__ = "warehouse"
     

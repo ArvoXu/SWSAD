@@ -683,7 +683,7 @@ def add_transactions():
 def upload_warehouse_file():
     """
     接收倉庫庫存 Excel 文件並保存到數據庫
-    文件格式：Warehouse name, Product name, Remain quantity, Time
+    只替換同名倉庫的數據，不同倉庫的數據會保留
     """
     try:
         if 'file' not in request.files:
@@ -720,8 +720,12 @@ def upload_warehouse_file():
         for attempt in range(max_retries):
             db: Session = next(get_db())
             try:
-                # 清除現有倉庫數據
-                db.query(Warehouse).delete()
+                # 獲取要更新的倉庫列表
+                warehouse_names = df['Warehouse name'].unique()
+                
+                # 只刪除要更新的倉庫的數據
+                for warehouse in warehouse_names:
+                    db.query(Warehouse).filter(Warehouse.warehouse_name == warehouse).delete()
                 
                 # 創建新的倉庫記錄
                 warehouse_records = []
@@ -766,13 +770,18 @@ def get_warehouses():
     """
     db: Session = next(get_db())
     try:
+        logging.info("Fetching warehouse data from database...")
         warehouses = db.query(Warehouse).all()
+        logging.info(f"Found {len(warehouses)} warehouse records")
+        
         result = [{
             'warehouseName': w.warehouse_name,
             'productName': w.product_name,
             'quantity': w.quantity,
             'updatedAt': w.updated_at.isoformat() if w.updated_at else None
         } for w in warehouses]
+        
+        logging.info(f"Returning {len(result)} warehouse records")
         return jsonify(result)
     except Exception as e:
         logging.error(f"Error getting warehouses: {e}", exc_info=True)

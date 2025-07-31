@@ -31,16 +31,20 @@
                 if (window.embeddedColorMap) {
                      Object.assign(globalProductColorMap, window.embeddedColorMap);
                 }
+                if (window.embeddedWarehouseData) {
+                    window.warehouseData = window.embeddedWarehouseData;
+                }
                 return; // 返回 Promise.resolve() 的隱式結果
             }
 
             // --- API-driven data loading ---
             console.log('[Debug] Fetching data from server API...');
             try {
-                // 並行獲取庫存和交易數據
-                const [inventoryRes, transactionsRes] = await Promise.all([
+                // 並行獲取庫存、交易和倉庫數據
+                const [inventoryRes, transactionsRes, warehousesRes] = await Promise.all([
                     fetch('/get-data'),
-                    fetch('/api/transactions')
+                    fetch('/api/transactions'),
+                    fetch('/api/warehouses')
                 ]);
 
                 // --- Logging Start ---
@@ -2265,223 +2269,3 @@
             document.getElementById('kpi-total-transactions').innerHTML = kpiHtml(totalTransactions, compareTransactions, ' 筆', false);
             document.getElementById('kpi-avg-transaction-value').innerHTML = kpiHtml(avgTransaction, compareAvg, ' 元', true);
         }
-
-        // 補貨工作流程相關功能
-        document.addEventListener('DOMContentLoaded', function() {
-            // 初始化工作流程
-            const workflow = {
-                currentStep: 1,
-                totalSteps: 4,
-                selectedWarehouses: [],
-                selectedMachines: [],
-                selectedStrategy: null
-            };
-
-            // 獲取DOM元素
-            const steps = document.querySelectorAll('.step');
-            const contents = document.querySelectorAll('.step-content');
-            const prevButton = document.querySelector('.nav-button.prev');
-            const nextButton = document.querySelector('.nav-button.next');
-
-            // 更新步驟顯示
-            function updateSteps() {
-                steps.forEach((step, index) => {
-                    if (index + 1 === workflow.currentStep) {
-                        step.classList.add('active');
-                    } else {
-                        step.classList.remove('active');
-                    }
-                });
-
-                contents.forEach((content, index) => {
-                    if (index + 1 === workflow.currentStep) {
-                        content.classList.add('active');
-                    } else {
-                        content.classList.remove('active');
-                    }
-                });
-
-                // 更新導航按鈕狀態
-                prevButton.disabled = workflow.currentStep === 1;
-                nextButton.textContent = workflow.currentStep === workflow.totalSteps ? '完成' : '下一步';
-            }
-
-            // 加載倉庫數據
-            async function loadWarehouseData() {
-                try {
-                    const response = await fetch('/api/warehouses');
-                    const data = await response.json();
-                    renderWarehouseList(data);
-                } catch (error) {
-                    console.error('加載倉庫數據失敗:', error);
-                }
-            }
-
-            // 渲染倉庫列表
-            function renderWarehouseList(warehouses) {
-                const warehouseList = document.querySelector('.warehouse-list');
-                warehouseList.innerHTML = warehouses.map(warehouse => `
-                    <div class="warehouse-item" data-id="${warehouse.id}">
-                        <h4>${warehouse.name}</h4>
-                        <p>可用容量: ${warehouse.capacity}</p>
-                        <p>存取限制: ${warehouse.restrictions}</p>
-                    </div>
-                `).join('');
-
-                // 添加倉庫選擇事件監聽器
-                warehouseList.querySelectorAll('.warehouse-item').forEach(item => {
-                    item.addEventListener('click', () => {
-                        item.classList.toggle('selected');
-                        updateWarehouseSelection();
-                    });
-                });
-            }
-
-            // 更新倉庫選擇
-            function updateWarehouseSelection() {
-                const selectedItems = document.querySelectorAll('.warehouse-item.selected');
-                workflow.selectedWarehouses = Array.from(selectedItems).map(item => item.dataset.id);
-                
-                // 更新倉庫信息顯示
-                const infoContent = document.querySelector('.info-content');
-                if (workflow.selectedWarehouses.length > 0) {
-                    infoContent.innerHTML = `已選擇 ${workflow.selectedWarehouses.length} 個倉庫`;
-                } else {
-                    infoContent.innerHTML = '請選擇倉庫';
-                }
-            }
-
-            // 加載機台數據
-            async function loadMachineData() {
-                try {
-                    const response = await fetch('/api/machines');
-                    const data = await response.json();
-                    renderMachineList(data);
-                } catch (error) {
-                    console.error('加載機台數據失敗:', error);
-                }
-            }
-
-            // 渲染機台列表
-            function renderMachineList(machines) {
-                const machineSelection = document.querySelector('.machine-selection');
-                machineSelection.innerHTML = machines.map(machine => `
-                    <div class="machine-item" data-id="${machine.id}">
-                        <h4>${machine.name}</h4>
-                        <p>位置: ${machine.location}</p>
-                        <p>當前庫存: ${machine.currentStock}</p>
-                    </div>
-                `).join('');
-
-                // 添加機台選擇事件監聽器
-                machineSelection.querySelectorAll('.machine-item').forEach(item => {
-                    item.addEventListener('click', () => {
-                        item.classList.toggle('selected');
-                        workflow.selectedMachines = Array.from(document.querySelectorAll('.machine-item.selected'))
-                            .map(item => item.dataset.id);
-                    });
-                });
-            }
-
-            // 策略選擇事件監聽器
-            document.querySelectorAll('input[name="strategy"]').forEach(radio => {
-                radio.addEventListener('change', (e) => {
-                    workflow.selectedStrategy = e.target.value;
-                });
-            });
-
-            // 生成補貨建議
-            async function generateReplenishmentSuggestion() {
-                try {
-                    const response = await fetch('/api/replenishment/suggest', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            warehouses: workflow.selectedWarehouses,
-                            machines: workflow.selectedMachines,
-                            strategy: workflow.selectedStrategy
-                        })
-                    });
-                    const suggestion = await response.json();
-                    renderSuggestion(suggestion);
-                } catch (error) {
-                    console.error('生成補貨建議失敗:', error);
-                }
-            }
-
-            // 渲染補貨建議
-            function renderSuggestion(suggestion) {
-                const resultDiv = document.querySelector('.replenishment-result');
-                // 這裡添加建議的具體渲染邏輯
-                resultDiv.innerHTML = `
-                    <div class="suggestion-summary">
-                        <h4>補貨建議摘要</h4>
-                        <p>建議補貨總量: ${suggestion.totalQuantity} 件</p>
-                        <p>預估補貨成本: ${suggestion.estimatedCost} 元</p>
-                    </div>
-                    <div class="suggestion-details">
-                        <h4>詳細建議</h4>
-                        ${suggestion.details.map(detail => `
-                            <div class="suggestion-item">
-                                <p>商品: ${detail.product}</p>
-                                <p>建議數量: ${detail.quantity}</p>
-                                <p>來源倉庫: ${detail.warehouse}</p>
-                            </div>
-                        `).join('')}
-                    </div>
-                `;
-            }
-
-            // 導航按鈕事件監聽器
-            prevButton.addEventListener('click', () => {
-                if (workflow.currentStep > 1) {
-                    workflow.currentStep--;
-                    updateSteps();
-                }
-            });
-
-            nextButton.addEventListener('click', async () => {
-                if (workflow.currentStep < workflow.totalSteps) {
-                    // 驗證當前步驟
-                    let canProceed = true;
-                    switch (workflow.currentStep) {
-                        case 1:
-                            if (workflow.selectedWarehouses.length === 0) {
-                                alert('請至少選擇一個倉庫');
-                                canProceed = false;
-                            }
-                            break;
-                        case 2:
-                            if (workflow.selectedMachines.length === 0) {
-                                alert('請至少選擇一台機台');
-                                canProceed = false;
-                            }
-                            break;
-                        case 3:
-                            if (!workflow.selectedStrategy) {
-                                alert('請選擇補貨策略');
-                                canProceed = false;
-                            }
-                            break;
-                    }
-
-                    if (canProceed) {
-                        workflow.currentStep++;
-                        if (workflow.currentStep === 4) {
-                            // 生成最終建議
-                            await generateReplenishmentSuggestion();
-                        }
-                        updateSteps();
-                    }
-                } else {
-                    // 完成工作流程
-                    alert('補貨建議已生成！');
-                }
-            });
-
-            // 初始化
-            updateSteps();
-            loadWarehouseData();
-        });
