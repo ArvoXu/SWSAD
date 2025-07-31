@@ -20,7 +20,7 @@ import pytz
 
 
 # --- Custom Imports ---
-from database import init_db, get_db, Inventory, Store, Transaction, UpdateLog
+from database import init_db, get_db, Inventory, Store, Transaction, UpdateLog, Warehouse
 from scraper import run_scraper as run_inventory_scraper_function, parse_inventory_from_text, save_to_database, save_to_json
 from salesscraper import run_sales_scraper
 
@@ -678,6 +678,107 @@ def add_transactions():
             if 'db' in locals() and db.is_active:
                 db.close()
 
+
+@app.route('/upload-warehouse-file', methods=['POST'])
+def upload_warehouse_file():
+    """
+    接收倉庫庫存 Excel 文件並保存到數據庫
+    文件格式：Warehouse name, Product name, Remain quantity, Time
+    """
+    try:
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'message': '沒有選擇文件'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'success': False, 'message': '沒有選擇文件'}), 400
+        
+        # 檢查文件類型
+        if not file.filename.endswith(('.xlsx', '.xls')):
+            return jsonify({'success': False, 'message': '只支持 Excel 格式的文件 (.xlsx, .xls)'}), 400
+        
+        # 讀取 Excel 文件
+        df = pd.read_excel(file)
+        required_columns = ['Warehouse name', 'Product name', 'Remain quantity']
+        
+        # 驗證必要欄位
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            return jsonify({
+                'success': False, 
+                'message': f'缺少必要欄位: {", ".join(missing_columns)}'
+            }), 400
+        
+        # 資料處理和驗證
+        df['Remain quantity'] = pd.to_numeric(df['Remain quantity'], errors='coerce')
+        df = df.dropna(subset=['Warehouse name', 'Product name', 'Remain quantity'])
+        
+        # 更新資料庫
+        max_retries = 3
+        retry_delay_seconds = 5
+        
+        for attempt in range(max_retries):
+            db: Session = next(get_db())
+            try:
+                # 清除現有倉庫數據
+                db.query(Warehouse).delete()
+                
+                # 創建新的倉庫記錄
+                warehouse_records = []
+                for _, row in df.iterrows():
+                    warehouse_records.append(Warehouse(
+                        warehouse_name=str(row['Warehouse name']),
+                        product_name=str(row['Product name']),
+                        quantity=int(row['Remain quantity']),
+                        updated_at=datetime.now(pytz.timezone('Asia/Taipei'))
+                    ))
+                
+                db.bulk_save_objects(warehouse_records)
+                db.commit()
+                
+                return jsonify({
+                    'success': True,
+                    'message': f'成功上傳並處理 {len(warehouse_records)} 筆倉庫數據',
+                    'records_count': len(warehouse_records)
+                })
+                
+            except OperationalError as e:
+                db.rollback()
+                logging.error(f"Database error on attempt {attempt + 1}/{max_retries}: {e}")
+                if attempt + 1 >= max_retries:
+                    return jsonify({'success': False, 'message': f'數據庫錯誤: {str(e)}'}), 500
+                time.sleep(retry_delay_seconds)
+            except Exception as e:
+                db.rollback()
+                logging.error(f"Error processing warehouse file: {e}", exc_info=True)
+                return jsonify({'success': False, 'message': f'處理文件時發生錯誤: {str(e)}'}), 500
+            finally:
+                db.close()
+                
+    except Exception as e:
+        logging.error(f"Error in warehouse file upload: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': f'文件上傳失敗: {str(e)}'}), 500
+
+@app.route('/api/warehouses', methods=['GET'])
+def get_warehouses():
+    """
+    獲取所有倉庫數據
+    """
+    db: Session = next(get_db())
+    try:
+        warehouses = db.query(Warehouse).all()
+        result = [{
+            'warehouseName': w.warehouse_name,
+            'productName': w.product_name,
+            'quantity': w.quantity,
+            'updatedAt': w.updated_at.isoformat() if w.updated_at else None
+        } for w in warehouses]
+        return jsonify(result)
+    except Exception as e:
+        logging.error(f"Error getting warehouses: {e}", exc_info=True)
+        return jsonify({"error": "Could not retrieve warehouse data"}), 500
+    finally:
+        db.close()
 
 @app.route('/api/transactions', methods=['GET'])
 def get_transactions():

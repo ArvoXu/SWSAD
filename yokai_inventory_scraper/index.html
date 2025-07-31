@@ -45,8 +45,32 @@
     <div class="container">
         <div class="input-section">
             <h2>輸入區域</h2>
+            
+            <!-- 倉庫數據上傳區域 -->
+            <div class="upload-section">
+                <h3>倉庫庫存數據</h3>
+                <p>上傳倉庫庫存 Excel 文件：</p>
+                <p style="color: #f44336; font-size: 13px; margin-bottom: 10px;">
+                    <i class="fas fa-exclamation-circle"></i> 注意：新數據將完全替換現有倉庫數據。請確保 Excel 文件包含必要欄位：Warehouse name, Product name, Remain quantity。
+                </p>
+                <div class="file-upload">
+                    <input type="file" id="warehouseFile" accept=".xlsx,.xls" style="display: none;">
+                    <button id="warehouseUploadBtn" class="upload-button">
+                        <i class="fas fa-file-upload"></i> 選擇倉庫文件
+                    </button>
+                    <span id="warehouseFileName" class="file-name"></span>
+                </div>
+                <div id="warehouseUploadStatus" class="upload-status"></div>
+            </div>
+
+            <div class="divider"></div>
+
+            <!-- 原有的庫存數據輸入區域 -->
+            <h3>機台庫存數據</h3>
             <p>請將複製的庫存資料貼上至下方文本框：</p>
-            <p style="color: #f44336; font-size: 13px; margin-bottom: 10px;"><i class="fas fa-exclamation-circle"></i> 注意：新數據將完全替換相同店鋪-機台的舊數據，已售罄的產品將不會保留。</p>
+            <p style="color: #f44336; font-size: 13px; margin-bottom: 10px;">
+                <i class="fas fa-exclamation-circle"></i> 注意：新數據將完全替換相同店鋪-機台的舊數據，已售罄的產品將不會保留。
+            </p>
             <textarea id="rawData" placeholder="在此粘貼原始庫存數據..."></textarea>
             
             <div class="form-group" style="margin-top: 10px; margin-bottom: 15px;">

@@ -55,6 +55,55 @@ h2 {
     padding-bottom: 10px;
 }
 
+.divider {
+    border-bottom: 1px solid var(--border-color);
+    margin: 20px 0;
+}
+
+.upload-section {
+    background-color: var(--card-background);
+    padding: 20px;
+    margin-bottom: 20px;
+    border: 1px solid var(--border-color);
+}
+
+.file-upload {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 15px 0;
+}
+
+.upload-button {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.upload-button:hover {
+    background-color: #0056b3;
+}
+
+.file-name {
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin-left: 10px;
+}
+
+.upload-status {
+    margin-top: 10px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 .container {
     display: grid;
     grid-template-columns: 350px 1fr;

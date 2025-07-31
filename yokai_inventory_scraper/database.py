@@ -37,6 +37,27 @@ Base = declarative_base()
 
 # --- Data Models (Tables) ---
 
+class Warehouse(Base):
+    """
+    代表倉庫的庫存資料。
+    每次上傳 Excel 文件時會完全清除並重新填入。
+    """
+    __tablename__ = "warehouse"
+    
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    warehouse_name = Column(String, nullable=False, index=True)
+    product_name = Column(String, nullable=False, index=True)
+    quantity = Column(Integer, nullable=False)
+    updated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(pytz.timezone('Asia/Taipei')))
+    
+    def to_dict(self):
+        return {
+            'warehouse_name': self.warehouse_name,
+            'product_name': self.product_name,
+            'quantity': self.quantity,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
 class Inventory(Base):
     """
     Represents the inventory of a product in a specific machine.
