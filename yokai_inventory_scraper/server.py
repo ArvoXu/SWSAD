@@ -789,6 +789,177 @@ def get_warehouses():
     finally:
         db.close()
 
+@app.route('/api/warehouse-replenishment-suggestion/<string:store_key>', methods=['POST'])
+def get_warehouse_replenishment_suggestion(store_key):
+    """
+    新的補貨建議 API，專門用於補貨分頁，考慮倉庫庫存
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({"success": False, "message": "No data provided"}), 400
+
+    selected_warehouses = data.get("warehouses", [])
+    if not selected_warehouses:
+        return jsonify({
+            "success": False,
+            "message": "請選擇至少一個倉庫"
+        }), 400
+
+    strategy = data.get("strategy", "stable")
+    machine_capacity = int(data.get("max_total_qty", 50))
+    if machine_capacity < 1 or machine_capacity > 50:
+        machine_capacity = 50
+
+    db: Session = next(get_db())
+    try:
+        store_name, machine_id = store_key.split('-', 1)
+        
+        # 1. 獲取倉庫庫存數據
+        warehouse_inventory = {}
+        for warehouse_name in selected_warehouses:
+            warehouse_items = db.query(Warehouse).filter_by(warehouse_name=warehouse_name).all()
+            for item in warehouse_items:
+                if item.product_name in warehouse_inventory:
+                    warehouse_inventory[item.product_name] += item.quantity
+                else:
+                    warehouse_inventory[item.product_name] = item.quantity
+
+        if not warehouse_inventory:
+            return jsonify({
+                "success": False,
+                "message": "選擇的倉庫中沒有可用庫存"
+            }), 400
+
+        # 2. 獲取機台當前庫存
+        inventory_items = db.query(Inventory).filter_by(store=store_name, machine_id=machine_id).all()
+        current_inventory = {item.product_name: item.quantity for item in inventory_items}
+
+        # 3. 獲取銷售數據
+        thirty_days_ago = datetime.now() - timedelta(days=30)
+        transactions = db.query(Transaction).filter(
+            Transaction.store_key.startswith(store_name),
+            Transaction.transaction_time >= thirty_days_ago
+        ).all()
+
+        sales_counts = {}
+        for t in transactions:
+            if t.product_name:
+                sales_counts[t.product_name] = sales_counts.get(t.product_name, 0) + 1
+
+        # 4. 根據策略生成建議
+        suggestion_list = []
+        warning = None
+
+        # 根據不同策略生成建議
+        if strategy == 'stable':
+            # 穩健策略：平衡考慮銷量和倉庫庫存
+            for product, warehouse_qty in warehouse_inventory.items():
+                current_qty = current_inventory.get(product, 0)
+                sales = sales_counts.get(product, 0)
+                
+                if warehouse_qty > 0:  # 只考慮倉庫有庫存的產品
+                    suggestion_list.append({
+                        'productName': product,
+                        'currentQty': current_qty,
+                        'suggestedQty': min(
+                            current_qty + warehouse_qty,
+                            round(machine_capacity * (sales / (sum(sales_counts.values()) or 1)) if sales > 0 else 2)
+                        ),
+                        'warehouseQty': warehouse_qty,
+                        'salesCount30d': sales
+                    })
+
+        elif strategy == 'aggressive':
+            # 積極策略：優先補充熱銷品
+            sorted_products = sorted(
+                [(p, warehouse_inventory.get(p, 0), sales_counts.get(p, 0)) for p in warehouse_inventory.keys()],
+                key=lambda x: x[2],  # 按銷量排序
+                reverse=True
+            )
+            
+            remaining_capacity = machine_capacity
+            for product, warehouse_qty, sales in sorted_products:
+                if remaining_capacity <= 0:
+                    break
+                    
+                current_qty = current_inventory.get(product, 0)
+                if warehouse_qty > 0:  # 只考慮倉庫有庫存的產品
+                    suggested_qty = min(
+                        current_qty + warehouse_qty,
+                        round(machine_capacity * 0.3)  # 單個產品最多佔30%
+                    )
+                    suggestion_list.append({
+                        'productName': product,
+                        'currentQty': current_qty,
+                        'suggestedQty': suggested_qty,
+                        'warehouseQty': warehouse_qty,
+                        'salesCount30d': sales
+                    })
+                    remaining_capacity -= (suggested_qty - current_qty)
+
+        else:  # exploratory
+            # 探索策略：保留空間測試新產品
+            # 先處理有銷量的產品
+            used_capacity = 0
+            for product, warehouse_qty in warehouse_inventory.items():
+                current_qty = current_inventory.get(product, 0)
+                sales = sales_counts.get(product, 0)
+                
+                if warehouse_qty > 0 and used_capacity < machine_capacity * 0.8:  # 使用80%空間
+                    suggested_qty = min(
+                        current_qty + warehouse_qty,
+                        round(machine_capacity * 0.2)  # 單個產品最多佔20%
+                    )
+                    suggestion_list.append({
+                        'productName': product,
+                        'currentQty': current_qty,
+                        'suggestedQty': suggested_qty,
+                        'warehouseQty': warehouse_qty,
+                        'salesCount30d': sales
+                    })
+                    used_capacity += (suggested_qty - current_qty)
+
+            # 處理沒有銷量的新產品
+            remaining_capacity = machine_capacity - used_capacity
+            new_products = [p for p in warehouse_inventory.keys() if p not in sales_counts]
+            if new_products and remaining_capacity > 0:
+                qty_per_new = max(1, round(remaining_capacity / len(new_products)))
+                for product in new_products:
+                    warehouse_qty = warehouse_inventory[product]
+                    if warehouse_qty > 0:
+                        current_qty = current_inventory.get(product, 0)
+                        suggestion_list.append({
+                            'productName': product,
+                            'currentQty': current_qty,
+                            'suggestedQty': min(current_qty + warehouse_qty, qty_per_new),
+                            'warehouseQty': warehouse_qty,
+                            'salesCount30d': 0
+                        })
+
+        # 5. 排序並返回結果
+        suggestion_list.sort(key=lambda x: (x['suggestedQty'] - x['currentQty']), reverse=True)
+        
+        return jsonify({
+            "success": True,
+            "store_key": store_key,
+            "strategy_used": strategy,
+            "suggestion": suggestion_list,
+            "warning": warning,
+            "warehouse_info": [{
+                "name": w,
+                "products": len([p for p in warehouse_inventory if w in selected_warehouses])
+            } for w in selected_warehouses]
+        })
+
+    except Exception as e:
+        logging.error(f"Error generating warehouse replenishment suggestion: {e}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "message": f"生成補貨建議時發生錯誤: {str(e)}"
+        }), 500
+    finally:
+        db.close()
+
 @app.route('/api/transactions', methods=['GET'])
 def get_transactions():
     """
@@ -884,6 +1055,14 @@ def get_replenishment_suggestion(store_key):
     reserve_slots = int(data.get("reserve_slots", 0))
     only_add = bool(data.get("only_add", False))
     machine_capacity = int(data.get("max_total_qty", 50))
+    selected_warehouses = data.get("warehouses", [])
+    
+    if not selected_warehouses:
+        return jsonify({
+            "success": False,
+            "message": "請選擇至少一個倉庫"
+        }), 400
+
     if machine_capacity < 1 or machine_capacity > 50:
         machine_capacity = 50
     
@@ -911,43 +1090,161 @@ def get_replenishment_suggestion(store_key):
         
         total_sales_volume = sum(sales_counts.values())
 
+        # 2.5 獲取所選倉庫的庫存數據
+        warehouse_inventory = {}
+        for warehouse_name in selected_warehouses:
+            warehouse_items = db.query(Warehouse).filter_by(warehouse_name=warehouse_name).all()
+            for item in warehouse_items:
+                if item.product_name in warehouse_inventory:
+                    warehouse_inventory[item.product_name] += item.quantity
+                else:
+                    warehouse_inventory[item.product_name] = item.quantity
+
+        if not warehouse_inventory:
+            return jsonify({
+                "success": False,
+                "message": "選擇的倉庫中沒有可用庫存"
+            }), 400
+
         if total_sales_volume == 0:
+            # 如果沒有銷售數據，則根據倉庫庫存情況提供建議
+            available_products = list(warehouse_inventory.items())
+            if strategy == 'stable':
+                # 平均分配倉庫中有的商品
+                slots_per_product = available_slots // len(available_products)
+                suggestion_list = [
+                    {'productName': p, 'suggestedQty': min(slots_per_product, q)} 
+                    for p, q in available_products
+                ]
+            elif strategy == 'aggressive':
+                # 按倉庫庫存量排序，優先分配庫存量大的商品
+                sorted_products = sorted(available_products, key=lambda x: x[1], reverse=True)
+                top_products = sorted_products[:3]
+                suggestion_list = [
+                    {'productName': p, 'suggestedQty': min(round(available_slots * 0.3), q)} 
+                    for p, q in top_products
+                ]
+            else:  # exploratory
+                # 少量嘗試倉庫中的所有商品
+                suggestion_list = [
+                    {'productName': p, 'suggestedQty': min(2, q)} 
+                    for p, q in available_products
+                ]
+            
             return jsonify({
                 "success": True,
-                "strategy_used": "no_sales_data",
-                "suggestion": [],
-                "message": "過去30天沒有銷售紀錄，無法生成建議。"
+                "strategy_used": f"{strategy}_no_sales",
+                "suggestion": suggestion_list,
+                "message": "根據倉庫庫存生成建議"
             })
 
-        # 3. 應用不同策略
+        # 3. 應用不同策略（考慮銷售數據和倉庫庫存）
         suggestion_list = []
-        sorted_sales = sorted(sales_counts.items(), key=lambda item: item[1], reverse=True)
+        # 只考慮倉庫中有庫存的產品的銷售數據
+        filtered_sales = {
+            product: count for product, count in sales_counts.items() 
+            if product in warehouse_inventory
+        }
+        if not filtered_sales:
+            return jsonify({
+                "success": False,
+                "message": "倉庫中沒有任何有銷售記錄的產品"
+            }), 400
+            
+        total_filtered_sales = sum(filtered_sales.values())
+        sorted_sales = sorted(filtered_sales.items(), key=lambda item: item[1], reverse=True)
 
         if strategy == 'stable':
-            temp_suggestions = [{'productName': p, 'suggestedQty_float': (c / total_sales_volume) * available_slots, 'sales_count': c} for p, c in sales_counts.items()]
+            # 穩健策略：根據銷售比例分配，但受倉庫庫存限制
+            temp_suggestions = []
+            for p, c in filtered_sales.items():
+                suggested_qty = (c / total_filtered_sales) * available_slots
+                # 確保不超過倉庫庫存
+                warehouse_qty = warehouse_inventory.get(p, 0)
+                suggested_qty = min(suggested_qty, warehouse_qty)
+                temp_suggestions.append({
+                    'productName': p,
+                    'suggestedQty_float': suggested_qty,
+                    'sales_count': c,
+                    'warehouse_qty': warehouse_qty
+                })
             suggestion_list = distribute_remainder(temp_suggestions, available_slots)
         
         elif strategy == 'aggressive':
+            # 積極策略：優先分配銷量前三的產品，但受倉庫庫存限制
             top_3_products = sorted_sales[:3]
             other_products = sorted_sales[3:]
             
-            top_3_sales_volume = sum(c for _, c in top_3_products)
-            other_sales_volume = sum(c for _, c in other_products)
-
             slots_for_top_3 = round(available_slots * 0.8)
             slots_for_others = available_slots - slots_for_top_3
             
             temp_suggestions = []
-            if top_3_sales_volume > 0:
-                temp_suggestions.extend([{'productName': p, 'suggestedQty_float': (c / top_3_sales_volume) * slots_for_top_3, 'sales_count': c} for p, c in top_3_products])
-            if other_sales_volume > 0 and len(other_products) > 0:
-                temp_suggestions.extend([{'productName': p, 'suggestedQty_float': (c / other_sales_volume) * slots_for_others, 'sales_count': c} for p, c in other_products])
+            # 處理前三名產品
+            for p, c in top_3_products:
+                warehouse_qty = warehouse_inventory.get(p, 0)
+                suggested_qty = min(slots_for_top_3 / len(top_3_products), warehouse_qty)
+                temp_suggestions.append({
+                    'productName': p,
+                    'suggestedQty_float': suggested_qty,
+                    'sales_count': c,
+                    'warehouse_qty': warehouse_qty
+                })
+            
+            # 處理其他產品
+            if other_products:
+                qty_per_other = slots_for_others / len(other_products)
+                for p, c in other_products:
+                    warehouse_qty = warehouse_inventory.get(p, 0)
+                    suggested_qty = min(qty_per_other, warehouse_qty)
+                    temp_suggestions.append({
+                        'productName': p,
+                        'suggestedQty_float': suggested_qty,
+                        'sales_count': c,
+                        'warehouse_qty': warehouse_qty
+                    })
             
             suggestion_list = distribute_remainder(temp_suggestions, available_slots)
 
         elif strategy == 'exploratory':
+            # 探索策略：保留20%空間給新產品，其餘根據銷量分配
             slots_for_existing = round(available_slots * 0.8)
-            # 只考慮有銷量的產品進行分配
+            slots_for_new = available_slots - slots_for_existing
+
+            # 處理現有產品
+            temp_suggestions = []
+            for p, c in filtered_sales.items():
+                warehouse_qty = warehouse_inventory.get(p, 0)
+                suggested_qty = min(
+                    (c / total_filtered_sales) * slots_for_existing,
+                    warehouse_qty
+                )
+                temp_suggestions.append({
+                    'productName': p,
+                    'suggestedQty_float': suggested_qty,
+                    'sales_count': c,
+                    'warehouse_qty': warehouse_qty
+                })
+
+            # 尋找倉庫中有庫存但尚未銷售的新產品
+            new_products = [
+                p for p in warehouse_inventory.keys()
+                if p not in filtered_sales and warehouse_inventory[p] > 0
+            ]
+            
+            # 為新產品分配空間
+            if new_products:
+                slots_per_new = slots_for_new / len(new_products)
+                for p in new_products:
+                    warehouse_qty = warehouse_inventory[p]
+                    suggested_qty = min(slots_per_new, warehouse_qty)
+                    temp_suggestions.append({
+                        'productName': p,
+                        'suggestedQty_float': suggested_qty,
+                        'sales_count': 0,
+                        'warehouse_qty': warehouse_qty
+                    })
+            
+            suggestion_list = distribute_remainder(temp_suggestions, available_slots)
             temp_suggestions = [{'productName': p, 'suggestedQty_float': (c / total_sales_volume) * slots_for_existing, 'sales_count': c} for p, c in sales_counts.items()]
             suggestion_list = distribute_remainder(temp_suggestions, slots_for_existing)
 

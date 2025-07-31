@@ -126,7 +126,7 @@ async function generateReplenishmentSuggestion() {
         for (const machine of selectedMachines) {
             const [store, machineId] = machine.split('-');
             
-            const response = await fetch(`/api/replenishment-suggestion/${store}-${machineId}`, {
+            const response = await fetch(`/api/warehouse-replenishment-suggestion/${store}-${machineId}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
