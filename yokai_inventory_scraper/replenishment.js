@@ -158,16 +158,29 @@ async function generateReplenishmentSuggestion() {
 function renderSuggestions(suggestions) {
     const resultContainer = document.getElementById('replenishmentResult');
     
-    // 生成合併的出貨清單
-    let consolidatedShipment = {};
+    // 按倉庫分類生成出貨清單
+    let warehouseShipments = {};
     suggestions.forEach(suggestion => {
+        // 對每個建議產品，找出它來自哪個倉庫
         suggestion.suggestion.forEach(item => {
             const adjustment = item.suggestedQty - item.currentQty;
             if (adjustment > 0) {
-                if (consolidatedShipment[item.productName]) {
-                    consolidatedShipment[item.productName] += adjustment;
-                } else {
-                    consolidatedShipment[item.productName] = adjustment;
+                // 從倉庫數據中找出該產品所在的倉庫
+                const productWarehouses = warehouseData.filter(w => 
+                    w.productName === item.productName && 
+                    selectedWarehouses.has(w.warehouseName)
+                );
+                
+                if (productWarehouses.length > 0) {
+                    // 假設使用第一個有該產品的倉庫
+                    const warehouse = productWarehouses[0].warehouseName;
+                    if (!warehouseShipments[warehouse]) {
+                        warehouseShipments[warehouse] = {};
+                    }
+                    if (!warehouseShipments[warehouse][item.productName]) {
+                        warehouseShipments[warehouse][item.productName] = 0;
+                    }
+                    warehouseShipments[warehouse][item.productName] += adjustment;
                 }
             }
         });
@@ -240,11 +253,17 @@ function renderSuggestions(suggestions) {
         resultHTML += suggestionHTML;
     });
 
-    // 如果有需要補貨的商品，顯示出貨清單
-    if (Object.keys(consolidatedShipment).length > 0) {
-        const shipmentHTML = `
+    // 顯示每個倉庫的出貨清單
+    const shipmentCards = Object.entries(warehouseShipments).map(([warehouse, shipments]) => {
+        if (Object.keys(shipments).length === 0) return '';
+        
+        // 計算送貨地點
+        const deliveryLocations = suggestions.map(s => s.machine).join('、');
+        
+        return `
             <div class="shipment-card">
-                <h4>合併出貨清單</h4>
+                <h4>${warehouse} 出貨清單</h4>
+                <p class="delivery-info">送貨地點：${deliveryLocations}</p>
                 <div class="suggestion-table-container">
                     <table class="suggestion-table">
                         <thead>
@@ -254,7 +273,7 @@ function renderSuggestions(suggestions) {
                             </tr>
                         </thead>
                         <tbody>
-                            ${Object.entries(consolidatedShipment).map(([product, quantity]) => `
+                            ${Object.entries(shipments).map(([product, quantity]) => `
                                 <tr>
                                     <td>${product}</td>
                                     <td class="positive">+${quantity}</td>
@@ -262,14 +281,18 @@ function renderSuggestions(suggestions) {
                             `).join('')}
                             <tr class="total-row">
                                 <td>總計</td>
-                                <td class="positive">+${Object.values(consolidatedShipment).reduce((a, b) => a + b, 0)}</td>
+                                <td class="positive">+${Object.values(shipments).reduce((a, b) => a + b, 0)}</td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
             </div>
         `;
-        resultHTML = shipmentHTML + resultHTML;
+    }).join('');
+        
+    // 如果有出貨清單，添加到結果HTML的開頭
+    if (shipmentCards) {
+        resultHTML = shipmentCards + resultHTML;
     }
 
     resultContainer.innerHTML = resultHTML;

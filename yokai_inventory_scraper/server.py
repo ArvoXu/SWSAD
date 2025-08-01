@@ -852,8 +852,11 @@ def get_warehouse_replenishment_suggestion(store_key):
 
         # 根據不同策略生成建議
         if strategy == 'stable':
-            # 穩健策略：根據銷量比例分配，確保總量為50
+            # 穩健策略：根據銷量比例分配剩餘空間
             sales_products = []
+            current_total = sum(current_inventory.values())  # 當前總數
+            remaining_space = machine_capacity - current_total  # 剩餘可用空間
+            
             for product, warehouse_qty in warehouse_inventory.items():
                 current_qty = current_inventory.get(product, 0)
                 sales = sales_counts.get(product, 0)
@@ -863,116 +866,160 @@ def get_warehouse_replenishment_suggestion(store_key):
                         'productName': product,
                         'currentQty': current_qty,
                         'warehouseQty': warehouse_qty,
-                        'salesCount30d': sales
+                        'salesCount30d': sales,
+                        'suggestedQty': current_qty  # 初始設為當前數量
                     })
             
-            if sales_products:
-                # 根據銷量計算初始分配
+            if sales_products and remaining_space > 0:
+                # 根據銷量計算額外分配
                 total_sales = sum(p['salesCount30d'] for p in sales_products)
-                if total_sales > 0:
-                    # 有銷量的產品按比例分配
-                    for product in sales_products:
-                        product['suggestedQty'] = round((product['salesCount30d'] / total_sales) * machine_capacity)
+                products_to_add = [p for p in sales_products if p['warehouseQty'] > 0]
+                
+                if total_sales > 0 and products_to_add:
+                    # 有銷量的產品按比例分配剩餘空間
+                    base_additions = []
+                    for product in products_to_add:
+                        ratio = product['salesCount30d'] / total_sales
+                        addition = round(ratio * remaining_space)
+                        base_additions.append((product, addition))
+                        
+                    # 調整以確保總數正確
+                    total_addition = sum(addition for _, addition in base_additions)
+                    if total_addition != remaining_space:
+                        diff = remaining_space - total_addition
+                        # 按比例調整差異
+                        for i, (product, _) in enumerate(base_additions):
+                            if i < abs(diff):
+                                base_additions[i] = (product, base_additions[i][1] + (1 if diff > 0 else -1))
+                    
+                    # 應用調整後的數量
+                    for product, addition in base_additions:
+                        product['suggestedQty'] = product['currentQty'] + addition
                 else:
-                    # 無銷量時平均分配
-                    base_qty = machine_capacity // len(sales_products)
-                    remainder = machine_capacity % len(sales_products)
-                    for i, product in enumerate(sales_products):
-                        product['suggestedQty'] = base_qty + (1 if i < remainder else 0)
+                    # 無銷量時平均分配剩餘空間
+                    base_qty = remaining_space // len(products_to_add)
+                    remainder = remaining_space % len(products_to_add)
+                    for i, product in enumerate(products_to_add):
+                        addition = base_qty + (1 if i < remainder else 0)
+                        product['suggestedQty'] = product['currentQty'] + addition
                 
                 suggestion_list.extend(sales_products)
 
         elif strategy == 'aggressive':
             # 積極策略：優先分配給熱銷品，確保總量為50
-            sorted_products = sorted(
-                [(p, warehouse_inventory.get(p, 0), sales_counts.get(p, 0), current_inventory.get(p, 0)) 
-                 for p in warehouse_inventory.keys()],
-                key=lambda x: x[2],  # 按銷量排序
-                reverse=True
-            )
+            current_total = sum(current_inventory.values())
+            remaining_space = machine_capacity - current_total
             
-            suggestion_list = []
-            remaining_qty = machine_capacity
+            # 先加入所有現有產品
+            suggestion_list = [{
+                'productName': product,
+                'currentQty': qty,
+                'suggestedQty': qty,  # 初始設為當前數量
+                'warehouseQty': warehouse_inventory.get(product, 0),
+                'salesCount30d': sales_counts.get(product, 0)
+            } for product, qty in current_inventory.items()]
             
-            # 前3名產品分配80%的空間
-            top_3 = sorted_products[:3]
-            if top_3:
-                top_3_space = round(machine_capacity * 0.8)
+            # 根據銷量排序所有可能的新增產品
+            available_products = [(p, warehouse_inventory.get(p, 0), sales_counts.get(p, 0))
+                                for p in warehouse_inventory.keys()
+                                if p not in current_inventory and warehouse_inventory.get(p, 0) > 0]
+            
+            sorted_products = sorted(available_products,
+                                  key=lambda x: x[2],  # 按銷量排序
+                                  reverse=True)
+            
+            if remaining_space > 0 and sorted_products:
+                # 新產品中的前3名分配80%的剩餘空間
+                top_3 = sorted_products[:3]
+                top_3_space = round(remaining_space * 0.8)
                 base_qty = top_3_space // len(top_3)
                 remainder = top_3_space % len(top_3)
                 
-                for i, (product, warehouse_qty, sales, current_qty) in enumerate(top_3):
-                    if warehouse_qty > 0:
-                        suggested_qty = base_qty + (1 if i < remainder else 0)
-                        suggestion_list.append({
-                            'productName': product,
-                            'currentQty': current_qty,
-                            'suggestedQty': suggested_qty,
-                            'warehouseQty': warehouse_qty,
-                            'salesCount30d': sales
-                        })
-                        remaining_qty -= suggested_qty
+                for i, (product, warehouse_qty, sales) in enumerate(top_3):
+                    suggested_qty = base_qty + (1 if i < remainder else 0)
+                    suggestion_list.append({
+                        'productName': product,
+                        'currentQty': 0,
+                        'suggestedQty': suggested_qty,
+                        'warehouseQty': warehouse_qty,
+                        'salesCount30d': sales
+                    })
             
             # 剩餘產品分配剩餘空間
             other_products = sorted_products[3:]
-            if other_products and remaining_qty > 0:
-                base_qty = remaining_qty // len(other_products)
-                remainder = remaining_qty % len(other_products)
+            remaining_space_for_others = remaining_space - top_3_space
+            
+            if other_products and remaining_space_for_others > 0:
+                base_qty = remaining_space_for_others // len(other_products)
+                remainder = remaining_space_for_others % len(other_products)
                 
-                for i, (product, warehouse_qty, sales, current_qty) in enumerate(other_products):
-                    if warehouse_qty > 0:
-                        suggested_qty = base_qty + (1 if i < remainder else 0)
-                        suggestion_list.append({
-                            'productName': product,
-                            'currentQty': current_qty,
-                            'suggestedQty': suggested_qty,
-                            'warehouseQty': warehouse_qty,
-                            'salesCount30d': sales
-                        })
+                for i, (product, warehouse_qty, sales) in enumerate(other_products):
+                    suggested_qty = base_qty + (1 if i < remainder else 0)
+                    suggestion_list.append({
+                        'productName': product,
+                        'currentQty': 0,
+                        'suggestedQty': suggested_qty,
+                        'warehouseQty': warehouse_qty,
+                        'salesCount30d': sales
+                    })
 
         else:  # exploratory
-            # 探索策略：80%空間給現有產品，20%給新產品，確保總量為50
+            # 探索策略：80%空間給現有產品，20%給新產品
             suggestion_list = []
-            existing_space = round(machine_capacity * 0.8)  # 40個空間
-            new_space = machine_capacity - existing_space    # 10個空間
+            current_total = sum(current_inventory.values())
+            remaining_space = machine_capacity - current_total
             
-            # 處理有銷量的產品
-            sales_products = [(p, warehouse_inventory[p], sales_counts.get(p, 0), current_inventory.get(p, 0))
-                            for p in warehouse_inventory.keys() if sales_counts.get(p, 0) > 0]
+            # 先加入所有現有產品
+            for product, qty in current_inventory.items():
+                suggestion_list.append({
+                    'productName': product,
+                    'currentQty': qty,
+                    'suggestedQty': qty,  # 保持當前數量
+                    'warehouseQty': warehouse_inventory.get(product, 0),
+                    'salesCount30d': sales_counts.get(product, 0)
+                })
             
-            if sales_products:
-                base_qty = existing_space // len(sales_products)
-                remainder = existing_space % len(sales_products)
+            if remaining_space > 0:
+                # 處理有銷量但不在當前庫存的產品（佔剩餘空間的80%）
+                existing_space = round(remaining_space * 0.8)
+                sales_products = [(p, warehouse_inventory[p], sales_counts.get(p, 0))
+                                for p in warehouse_inventory.keys()
+                                if p not in current_inventory and sales_counts.get(p, 0) > 0 and warehouse_inventory[p] > 0]
                 
-                for i, (product, warehouse_qty, sales, current_qty) in enumerate(sales_products):
-                    if warehouse_qty > 0:
+                if sales_products:
+                    base_qty = existing_space // len(sales_products)
+                    remainder = existing_space % len(sales_products)
+                    
+                    for i, (product, warehouse_qty, sales) in enumerate(sales_products):
                         suggested_qty = base_qty + (1 if i < remainder else 0)
                         suggestion_list.append({
                             'productName': product,
-                            'currentQty': current_qty,
+                            'currentQty': 0,
                             'suggestedQty': suggested_qty,
                             'warehouseQty': warehouse_qty,
                             'salesCount30d': sales
                         })
             
             # 處理新產品（沒有銷量的產品）
-            new_products = [(p, warehouse_inventory[p], current_inventory.get(p, 0))
-                          for p in warehouse_inventory.keys() if p not in sales_counts]
+            new_space = remaining_space - existing_space  # 剩餘20%空間給新產品
+            new_products = [(p, warehouse_inventory[p])
+                          for p in warehouse_inventory.keys()
+                          if p not in current_inventory and p not in [x['productName'] for x in suggestion_list] 
+                          and warehouse_inventory[p] > 0]
             
-            if new_products:
+            if new_products and new_space > 0:
                 base_qty = new_space // len(new_products)
                 remainder = new_space % len(new_products)
                 
-                for i, (product, warehouse_qty, current_qty) in enumerate(new_products):
-                    if warehouse_qty > 0:
-                        suggested_qty = base_qty + (1 if i < remainder else 0)
-                        suggestion_list.append({
-                            'productName': product,
-                            'currentQty': current_qty,
-                            'suggestedQty': suggested_qty,
-                            'warehouseQty': warehouse_qty,
-                            'salesCount30d': 0
-                        })        # 5. 排序並返回結果
+                for i, (product, warehouse_qty) in enumerate(new_products):
+                    suggested_qty = base_qty + (1 if i < remainder else 0)
+                    suggestion_list.append({
+                        'productName': product,
+                        'currentQty': 0,
+                        'suggestedQty': suggested_qty,
+                        'warehouseQty': warehouse_qty,
+                        'salesCount30d': 0
+                    })        # 5. 排序並返回結果
         suggestion_list.sort(key=lambda x: (x['suggestedQty'] - x['currentQty']), reverse=True)
         
         return jsonify({
