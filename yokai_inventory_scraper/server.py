@@ -25,6 +25,7 @@ from datetime import datetime
 from database import init_db, get_db, Inventory, Store, Transaction, UpdateLog, Warehouse
 from scraper import run_scraper as run_inventory_scraper_function, parse_inventory_from_text, save_to_database, save_to_json
 from salesscraper import run_sales_scraper
+from warehousescraper import run_warehouse_scraper
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -308,6 +309,100 @@ def log_db_update(scraper_type, status, details):
         finally:
             db_log.close()
 
+
+# --- Warehouse Scraper Background Function ---
+def run_warehouse_scraper_background():
+    """
+    在背景執行倉庫爬蟲，處理下載的檔案並更新資料庫。
+    """
+    global sales_scraper_state
+    
+    with sales_state_lock:
+        if sales_scraper_state['status'] == 'running':
+            logging.warning(f"[{datetime.now()}] Warehouse scraper start requested, but a job is already in progress. Aborting.")
+            return
+        sales_scraper_state['status'] = 'running'
+        sales_scraper_state['last_run_output'] = ''
+        logging.info(f"[{datetime.now()}] Warehouse scraper status set to 'running'. Starting job.")
+
+    downloaded_file_path = None
+    try:
+        # 1. 執行爬蟲下載檔案
+        downloaded_file_path = run_warehouse_scraper(headless=True)
+        
+        # 2. 處理下載的 Excel 檔案
+        if downloaded_file_path:
+            df = pd.read_excel(downloaded_file_path)
+            
+            # 確保必要的欄位存在
+            required_columns = ['Warehouse name', 'Product name', 'Remain quantity']
+            missing_columns = [col for col in required_columns if col not in df.columns]
+            if missing_columns:
+                raise ValueError(f"Excel 檔案缺少必要欄位: {', '.join(missing_columns)}")
+            
+            # 更新資料庫
+            max_retries = 3
+            retry_delay_seconds = 5
+            
+            for attempt in range(max_retries):
+                db: Session = next(get_db())
+                try:
+                    # 記錄當前時間作為更新時間
+                    update_time = datetime.now()
+                    
+                    # 將資料轉換為資料庫記錄
+                    warehouse_records = []
+                    for _, row in df.iterrows():
+                        warehouse_records.append(Warehouse(
+                            warehouse_name=row['Warehouse name'],
+                            product_name=row['Product name'],
+                            quantity=int(row['Remain quantity']),
+                            updated_at=update_time
+                        ))
+                    
+                    # 刪除舊的倉庫資料
+                    db.query(Warehouse).delete()
+                    
+                    # 新增新的倉庫資料
+                    db.bulk_save_objects(warehouse_records)
+                    db.commit()
+                    
+                    output = f"成功更新倉庫資料。處理了 {len(warehouse_records)} 筆記錄。"
+                    status = "success"
+                    break
+                    
+                except OperationalError as e:
+                    db.rollback()
+                    if attempt + 1 >= max_retries:
+                        raise
+                    logging.error(f"資料庫操作失敗 (嘗試 {attempt + 1}/{max_retries}): {e}")
+                    time.sleep(retry_delay_seconds)
+                finally:
+                    db.close()
+        else:
+            output = "倉庫爬蟲執行完成但未返回檔案路徑。"
+            status = "error"
+            
+    except Exception as e:
+        output = f"倉庫爬蟲過程中發生錯誤: {str(e)}"
+        status = "error"
+        logging.error(output, exc_info=True)
+    finally:
+        # 清理下載的檔案和暫存目錄
+        if downloaded_file_path:
+            download_dir = os.path.dirname(downloaded_file_path)
+            try:
+                shutil.rmtree(download_dir)
+                logging.info(f"成功清理暫存目錄: {download_dir}")
+            except OSError as e:
+                logging.error(f"移除目錄時發生錯誤 {download_dir}: {e.strerror}")
+                
+        with sales_state_lock:
+            sales_scraper_state['status'] = status
+            sales_scraper_state['last_run_output'] = output
+            
+        # 記錄更新到資料庫
+        log_db_update(scraper_type='warehouse', status=status, details=output)
 
 # --- API Endpoints ---
 @app.route('/run-scraper', methods=['POST'])
@@ -1534,12 +1629,24 @@ def run_scheduler():
     # Schedule the sales scraper to run daily at 23:55 Taiwan Time (UTC+8), which is 15:55 UTC.
     schedule.every().day.at("15:55").do(run_sales_scraper_background)
     logging.info("Scheduler started for sales: will run daily at 15:55 UTC (23:55 Taiwan Time).")
+
+    # Schedule the warehouse scraper to run daily at 23:50 Taiwan Time (UTC+8), which is 15:50 UTC.
+    schedule.every().day.at("15:50").do(run_warehouse_scraper_background)
+    logging.info("Scheduler started for warehouse: will run daily at 15:50 UTC (23:50 Taiwan Time).")
     
     while True:
         schedule.run_pending()
         time.sleep(1)
 
 # --- Endpoints for Manual Testing ---
+@app.route('/test-run-warehouse-scraper', methods=['GET'])
+def test_run_warehouse_scraper():
+    """用於手動觸發倉庫爬蟲的測試端點。"""
+    logging.info("收到手動觸發倉庫爬蟲的請求。")
+    thread = threading.Thread(target=run_warehouse_scraper_background)
+    thread.start()
+    return "倉庫爬蟲工作已手動觸發進行測試。"
+
 @app.route('/test-run-inventory-scraper', methods=['GET'])
 def test_run_inventory_scraper():
     """A simple endpoint to manually trigger the inventory scraper for testing."""
