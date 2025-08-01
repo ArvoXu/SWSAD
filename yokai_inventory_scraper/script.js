@@ -28,6 +28,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const autoUpdateSalesButton = document.getElementById('autoUpdateSalesButton');
     const uploadInventoryFileButton = document.getElementById('uploadInventoryFileButton');
     const inventoryFileInput = document.getElementById('inventoryFileInput');
+    const warehouseFileInput = document.getElementById('warehouseFile');
+    const warehouseUploadBtn = document.getElementById('warehouseUploadBtn');
+    const warehouseFileName = document.getElementById('warehouseFileName');
+    const warehouseUploadStatus = document.getElementById('warehouseUploadStatus');
     
     // --- Global State ---
     let currentView = 'card';
@@ -35,6 +39,46 @@ document.addEventListener('DOMContentLoaded', function () {
     let currentSort = { key: 'store', order: 'asc' };
     let currentEditingStore = null;
     let savedInventoryData = []; // Single source of truth for data from the server
+
+    // --- Warehouse File Upload Handling ---
+    warehouseUploadBtn.addEventListener('click', () => {
+        warehouseFileInput.click();
+    });
+
+    warehouseFileInput.addEventListener('change', async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        // 更新檔案名稱顯示
+        warehouseFileName.textContent = file.name;
+        warehouseUploadStatus.textContent = '正在上傳...';
+        warehouseUploadStatus.style.color = '#666';
+
+        // 創建 FormData 對象
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const response = await fetch('/upload-warehouse-file', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+                warehouseUploadStatus.textContent = '上傳成功！';
+                warehouseUploadStatus.style.color = '#4CAF50';
+                // 重新載入數據以顯示更新
+                await fetchAndDisplayData();
+            } else {
+                throw new Error(result.message || '上傳失敗');
+            }
+        } catch (error) {
+            warehouseUploadStatus.textContent = `上傳失敗: ${error.message}`;
+            warehouseUploadStatus.style.color = '#f44336';
+        }
+    });
 
     // --- Core Functions: Data Handling and Rendering ---
 
