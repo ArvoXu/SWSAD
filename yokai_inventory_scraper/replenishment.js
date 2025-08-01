@@ -158,10 +158,36 @@ async function generateReplenishmentSuggestion() {
 function renderSuggestions(suggestions) {
     const resultContainer = document.getElementById('replenishmentResult');
     
-    resultContainer.innerHTML = suggestions.map(suggestion => {
+    // 生成合併的出貨清單
+    let consolidatedShipment = {};
+    suggestions.forEach(suggestion => {
+        suggestion.suggestion.forEach(item => {
+            const adjustment = item.suggestedQty - item.currentQty;
+            if (adjustment > 0) {
+                if (consolidatedShipment[item.productName]) {
+                    consolidatedShipment[item.productName] += adjustment;
+                } else {
+                    consolidatedShipment[item.productName] = adjustment;
+                }
+            }
+        });
+    });
+
+    let resultHTML = '';
+    
+    // 渲染每個機台的建議
+    suggestions.forEach(suggestion => {
         const [store, machineId] = suggestion.machine.split('-');
         
-        return `
+        // 計算總計
+        let totals = {
+            salesCount: 0,
+            currentQty: 0,
+            suggestedQty: 0,
+            adjustment: 0
+        };
+        
+        const suggestionHTML = `
             <div class="suggestion-card">
                 <h4>${store} - ${machineId}</h4>
                 ${suggestion.warning ? `<p class="warning">${suggestion.warning}</p>` : ''}
@@ -170,28 +196,83 @@ function renderSuggestions(suggestions) {
                         <thead>
                             <tr>
                                 <th>產品名稱</th>
+                                <th>30天銷量</th>
                                 <th>目前庫存</th>
                                 <th>建議數量</th>
-                                <th>需補貨數</th>
+                                <th>調整</th>
                             </tr>
                         </thead>
                         <tbody>
-                            ${suggestion.suggestion.map(item => `
-                                <tr>
-                                    <td>${item.productName}</td>
-                                    <td>${item.currentQty}</td>
-                                    <td>${item.suggestedQty}</td>
-                                    <td class="${item.suggestedQty - item.currentQty > 0 ? 'positive' : 'negative'}">
-                                        ${item.suggestedQty - item.currentQty}
-                                    </td>
-                                </tr>
-                            `).join('')}
+                            ${suggestion.suggestion.map(item => {
+                                const adjustment = item.suggestedQty - item.currentQty;
+                                // 更新總計
+                                totals.salesCount += item.salesCount30d;
+                                totals.currentQty += item.currentQty;
+                                totals.suggestedQty += item.suggestedQty;
+                                totals.adjustment += adjustment;
+                                
+                                return `
+                                    <tr>
+                                        <td>${item.productName}</td>
+                                        <td>${item.salesCount30d}</td>
+                                        <td>${item.currentQty}</td>
+                                        <td>${item.suggestedQty}</td>
+                                        <td class="${adjustment > 0 ? 'positive' : adjustment < 0 ? 'negative' : ''}">${
+                                            adjustment > 0 ? '+' + adjustment : adjustment
+                                        }</td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                            <tr class="total-row">
+                                <td>總計</td>
+                                <td>${totals.salesCount}</td>
+                                <td>${totals.currentQty}</td>
+                                <td>${totals.suggestedQty}</td>
+                                <td class="${totals.adjustment > 0 ? 'positive' : totals.adjustment < 0 ? 'negative' : ''}">${
+                                    totals.adjustment > 0 ? '+' + totals.adjustment : totals.adjustment
+                                }</td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
             </div>
         `;
-    }).join('');
+        resultHTML += suggestionHTML;
+    });
+
+    // 如果有需要補貨的商品，顯示出貨清單
+    if (Object.keys(consolidatedShipment).length > 0) {
+        const shipmentHTML = `
+            <div class="shipment-card">
+                <h4>合併出貨清單</h4>
+                <div class="suggestion-table-container">
+                    <table class="suggestion-table">
+                        <thead>
+                            <tr>
+                                <th>產品名稱</th>
+                                <th>出貨數量</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${Object.entries(consolidatedShipment).map(([product, quantity]) => `
+                                <tr>
+                                    <td>${product}</td>
+                                    <td class="positive">+${quantity}</td>
+                                </tr>
+                            `).join('')}
+                            <tr class="total-row">
+                                <td>總計</td>
+                                <td class="positive">+${Object.values(consolidatedShipment).reduce((a, b) => a + b, 0)}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+        resultHTML = shipmentHTML + resultHTML;
+    }
+
+    resultContainer.innerHTML = resultHTML;
 }
 
 // 當頁面加載完成時初始化

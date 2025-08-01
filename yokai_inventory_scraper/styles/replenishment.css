@@ -1,0 +1,95 @@
+/* 總計行樣式 */
+.total-row {
+    font-weight: bold;
+    background-color: var(--card-background);
+}
+
+.total-row td {
+    border-top: 2px solid var(--border-color);
+}
+
+/* 出貨清單卡片樣式 */
+.shipment-card {
+    margin-bottom: 20px;
+    padding: 20px;
+    background-color: var(--highlight-background);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+}
+
+.shipment-card h4 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: var(--highlight-text);
+    font-weight: 500;
+}
+
+/* 表格樣式增強 */
+.suggestion-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+}
+
+.suggestion-table th {
+    background-color: var(--card-background);
+    font-weight: 500;
+    text-align: left;
+    padding: 12px 8px;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.suggestion-table td {
+    padding: 8px;
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: middle;
+}
+
+.suggestion-table tr:hover {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+.suggestion-table td.positive {
+    color: var(--success-color);
+}
+
+.suggestion-table td.negative {
+    color: var(--danger-color);
+}
+
+/* 建議卡片樣式增強 */
+.suggestion-card {
+    background: var(--card-background);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    margin-bottom: 20px;
+    padding: 20px;
+}
+
+.suggestion-card h4 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.suggestion-table-container {
+    overflow-x: auto;
+    margin-top: 10px;
+}
+
+/* 警告訊息樣式 */
+.warning {
+    color: var(--warning-color);
+    font-size: 0.9rem;
+    margin: 10px 0;
+    padding: 8px;
+    background-color: rgba(255, 152, 0, 0.1);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+}
+
+.warning i {
+    margin-right: 8px;
+}
