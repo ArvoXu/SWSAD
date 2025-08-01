@@ -1,0 +1,89 @@
+/* 地區分組樣式 */
+.region-section {
+    margin-bottom: 24px;
+    background-color: var(--card-background);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    overflow: hidden;
+}
+
+.region-title {
+    padding: 12px 16px;
+    margin: 0;
+    background-color: var(--header-background);
+    color: var(--text-primary);
+    font-size: 16px;
+    font-weight: 500;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.region-machines {
+    padding: 8px;
+}
+
+.machine-item {
+    padding: 10px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.machine-item:last-child {
+    border-bottom: none;
+}
+
+.machine-info {
+    display: flex;
+    flex-direction: column;
+    margin-left: 8px;
+}
+
+.machine-name {
+    font-size: 15px;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.machine-detail {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.address {
+    margin-right: 8px;
+}
+
+.note {
+    color: var(--info-color);
+    font-style: italic;
+}
+
+/* 修改原有的checkbox容器樣式 */
+.checkbox-container {
+    display: flex;
+    align-items: flex-start;
+    padding: 4px;
+    cursor: pointer;
+    flex: 1;
+}
+
+/* 產品數量標籤樣式 */
+.product-count {
+    font-size: 12px;
+    color: var(--text-secondary);
+    background-color: rgba(255, 255, 255, 0.1);
+    padding: 4px 8px;
+    border-radius: 12px;
+    white-space: nowrap;
+}
+
+/* 滑鼠懸停效果 */
+.machine-item:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* 選中效果 */
+.checkbox-container input:checked + .checkmark + .machine-info .machine-name {
+    color: var(--primary-color);
+}

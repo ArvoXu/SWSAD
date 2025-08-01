@@ -72,25 +72,68 @@ function renderWarehouseList() {
 function renderMachineList() {
     const machineList = document.getElementById('machineList');
     
-    // 獲取唯一的機台
-    const uniqueMachines = [...new Set(inventoryData.map(item => `${item.store}-${item.machineId}`))];
+    // 按照地區分組機台
+    const machinesByRegion = {};
     
-    machineList.innerHTML = uniqueMachines.map(machine => {
-        const [store, machineId] = machine.split('-');
-        const productCount = inventoryData.filter(item => 
-            item.store === store && item.machineId === machineId
-        ).length;
+    // 遍歷所有機台並按地區分組
+    inventoryData.forEach(item => {
+        const machineKey = `${item.store}-${item.machineId}`;
+        if (item.address) {
+            const region = item.address.substring(0, 3); // 取地址前三個字作為地區
+            if (!machinesByRegion[region]) {
+                machinesByRegion[region] = new Set();
+            }
+            machinesByRegion[region].add(machineKey);
+        }
+    });
+    
+    // 按地區名稱排序（台北市、新竹市、桃園市等）
+    const sortedRegions = Object.keys(machinesByRegion).sort();
+    
+    // 生成HTML，每個地區一個區塊
+    machineList.innerHTML = sortedRegions.map(region => {
+        const machines = [...machinesByRegion[region]];
+        
+        // 該地區的所有機台HTML
+        const machinesHtml = machines.map(machine => {
+            const [store, machineId] = machine.split('-');
+            const machineData = inventoryData.find(item => 
+                item.store === store && item.machineId === machineId
+            );
+            const productCount = inventoryData.filter(item => 
+                item.store === store && item.machineId === machineId
+            ).length;
+            
+            const address = machineData?.address || '';
+            const note = machineData?.note ? `(${machineData.note})` : '';
 
+            return `
+                <div class="machine-item">
+                    <label class="checkbox-container">
+                        <input type="checkbox" class="machine-checkbox" value="${machine}">
+                        <span class="checkmark"></span>
+                        <div class="machine-info">
+                            <div class="machine-name">${store} - ${machineId}</div>
+                            <div class="machine-detail">
+                                <span class="address">${address}</span>
+                                <span class="note">${note}</span>
+                            </div>
+                        </div>
+                    </label>
+                    <span class="product-count">
+                        ${productCount} 個產品
+                    </span>
+                </div>
+            `;
+        }).join('');
+
+        // 返回該地區的完整HTML
         return `
-            <div class="machine-item">
-                <label class="checkbox-container">
-                    <input type="checkbox" class="machine-checkbox" value="${machine}">
-                    <span class="checkmark"></span>
-                    ${store} - ${machineId}
-                </label>
-                <span class="product-count">
-                    ${productCount} 個產品
-                </span>
+            <div class="region-section">
+                <h3 class="region-title">${region}</h3>
+                <div class="region-machines">
+                    ${machinesHtml}
+                </div>
             </div>
         `;
     }).join('');
@@ -216,26 +259,44 @@ function renderSuggestions(suggestions) {
                             </tr>
                         </thead>
                         <tbody>
-                            ${suggestion.suggestion.map(item => {
-                                const adjustment = item.suggestedQty - item.currentQty;
-                                // 更新總計
-                                totals.salesCount += item.salesCount30d;
-                                totals.currentQty += item.currentQty;
-                                totals.suggestedQty += item.suggestedQty;
-                                totals.adjustment += adjustment;
-                                
-                                return `
-                                    <tr>
-                                        <td>${item.productName}</td>
-                                        <td>${item.salesCount30d}</td>
-                                        <td>${item.currentQty}</td>
-                                        <td>${item.suggestedQty}</td>
-                                        <td class="${adjustment > 0 ? 'positive' : adjustment < 0 ? 'negative' : ''}">${
-                                            adjustment > 0 ? '+' + adjustment : adjustment
-                                        }</td>
-                                    </tr>
-                                `;
-                            }).join('')}
+                            ${suggestion.suggestion
+                                // 過濾掉全是0的商品
+                                .filter(item => {
+                                    const adjustment = item.suggestedQty - item.currentQty;
+                                    return item.salesCount30d !== 0 || 
+                                           item.currentQty !== 0 || 
+                                           item.suggestedQty !== 0 || 
+                                           adjustment !== 0;
+                                })
+                                // 按照30天銷量排序，其次是調整量
+                                .sort((a, b) => {
+                                    if (a.salesCount30d !== b.salesCount30d) {
+                                        return b.salesCount30d - a.salesCount30d;
+                                    }
+                                    const adjustmentA = a.suggestedQty - a.currentQty;
+                                    const adjustmentB = b.suggestedQty - b.currentQty;
+                                    return Math.abs(adjustmentB) - Math.abs(adjustmentA);
+                                })
+                                .map(item => {
+                                    const adjustment = item.suggestedQty - item.currentQty;
+                                    // 更新總計
+                                    totals.salesCount += item.salesCount30d;
+                                    totals.currentQty += item.currentQty;
+                                    totals.suggestedQty += item.suggestedQty;
+                                    totals.adjustment += adjustment;
+                                    
+                                    return `
+                                        <tr>
+                                            <td>${item.productName}</td>
+                                            <td>${item.salesCount30d}</td>
+                                            <td>${item.currentQty}</td>
+                                            <td>${item.suggestedQty}</td>
+                                            <td class="${adjustment > 0 ? 'positive' : adjustment < 0 ? 'negative' : ''}">${
+                                                adjustment > 0 ? '+' + adjustment : adjustment
+                                            }</td>
+                                        </tr>
+                                    `;
+                                }).join('')}
                             <tr class="total-row">
                                 <td>總計</td>
                                 <td>${totals.salesCount}</td>
