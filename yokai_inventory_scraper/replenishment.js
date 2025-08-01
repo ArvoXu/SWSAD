@@ -356,7 +356,43 @@ function renderSuggestions(suggestions) {
         resultHTML = shipmentCards + resultHTML;
     }
 
+    // 添加生成補貨單按鈕
+    resultHTML += `
+        <div class="action-buttons">
+            <button id="generateFormButton" class="btn btn-primary">
+                <i class="fas fa-file-excel"></i> 生成補貨單
+            </button>
+        </div>
+    `;
+
     resultContainer.innerHTML = resultHTML;
+
+    // 添加生成補貨單事件監聽器
+    document.getElementById('generateFormButton').addEventListener('click', async () => {
+        try {
+            // 生成補貨單
+            const response = await fetch('/api/generate-replenishment-form', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    suggestions: suggestions
+                })
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                // 創建下載鏈接
+                window.location.href = `/download-replenishment-form/${result.filename}`;
+            } else {
+                alert('生成補貨單失敗：' + result.message);
+            }
+        } catch (error) {
+            console.error('Error generating replenishment form:', error);
+            alert('生成補貨單時發生錯誤');
+        }
+    });
 }
 
 // 當頁面加載完成時初始化

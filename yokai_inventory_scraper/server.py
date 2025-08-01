@@ -17,6 +17,8 @@ import pandas as pd
 import shutil
 import json
 import pytz
+from openpyxl import load_workbook
+from datetime import datetime
 
 
 # --- Custom Imports ---
@@ -1525,6 +1527,102 @@ def test_run_sales_scraper():
     thread.start()
     return "Sales scraper job manually triggered for testing."
 
+
+# --- 補貨單生成相關功能 ---
+@app.route('/api/generate-replenishment-form', methods=['POST'])
+def generate_replenishment_form():
+    """根據補貨建議生成補貨單Excel"""
+    try:
+        # 獲取請求數據
+        data = request.get_json()
+        if not data or 'suggestions' not in data:
+            return jsonify({'success': False, 'message': '無效的請求數據'}), 400
+        
+        suggestions = data['suggestions']
+        if not suggestions:
+            return jsonify({'success': False, 'message': '沒有補貨建議數據'}), 400
+
+        # 加載模板
+        template_path = os.path.join(script_dir, '補貨單.xlsx')
+        current_date = datetime.now().strftime('%Y%m%d')
+        output_path = os.path.join(script_dir, f'{current_date}-在那裡-每日商品補貨明細表.xlsx')
+        
+        if not os.path.exists(template_path):
+            return jsonify({'success': False, 'message': '找不到補貨單模板'}), 404
+            
+        # 複製模板
+        shutil.copy2(template_path, output_path)
+        
+        # 打開工作簿
+        wb = load_workbook(output_path)
+        ws = wb.active
+        
+        # 填寫基本信息
+        ws['F1'] = datetime.now().strftime('%Y/%m/%d')  # 補貨日期
+        ws['H2'] = len(suggestions)  # 增加點位數
+        
+        # 機台位置映射
+        machine_positions = [
+            {'name': 'A4', 'items': ('B4', 'D4', 'B12', 'D12'), 'item_range': (4, 11)},  # 第一台
+            {'name': 'E4', 'items': ('F4', 'H4', 'F12', 'H12'), 'item_range': (4, 11)},  # 第二台
+            {'name': 'A17', 'items': ('B17', 'D17', 'B25', 'D25'), 'item_range': (17, 24)},  # 第三台
+            {'name': 'E17', 'items': ('F17', 'H17', 'F25', 'H25'), 'item_range': (17, 24)},  # 第四台
+            {'name': 'A30', 'items': ('B30', 'D30', 'B38', 'D38'), 'item_range': (30, 37)},  # 第五台
+            {'name': 'E30', 'items': ('F30', 'H30', 'F38', 'H38'), 'item_range': (30, 37)},  # 第六台
+            {'name': 'A43', 'items': ('B43', 'D43', 'B51', 'D51'), 'item_range': (43, 50)},  # 第七台
+            {'name': 'E43', 'items': ('F43', 'H43', 'E51', 'H51'), 'item_range': (43, 50)}   # 第八台
+        ]
+
+        # 填寫每台機器的數據
+        for i, suggestion in enumerate(suggestions[:8]):  # 最多處理8台機器
+            pos = machine_positions[i]
+            ws[pos['name']] = suggestion['machine']  # 填寫機台名稱
+            
+            # 獲取有調整的產品
+            adjusted_items = [item for item in suggestion['suggestion'] 
+                            if item['suggestedQty'] - item['currentQty'] != 0]
+            
+            # 填寫產品信息
+            for j, item in enumerate(adjusted_items[:8]):  # 每台最多8個產品
+                row = pos['item_range'][0] + j
+                item_col = pos['items'][0][0]  # B或F
+                qty_col = pos['items'][1][0]   # D或H
+                
+                # 填寫產品名稱和調整數量
+                ws[f'{item_col}{row}'] = item['productName']
+                ws[f'{qty_col}{row}'] = item['suggestedQty'] - item['currentQty']
+            
+            # 填寫庫存和總數
+            current_stock = sum(item['currentQty'] for item in suggestion['suggestion'])
+            total_adjustment = sum(item['suggestedQty'] - item['currentQty'] 
+                                 for item in suggestion['suggestion'])
+            
+            # 使用machine_positions中定義的單元格位置
+            ws[pos['items'][2]] = current_stock  # 機內庫存
+            ws[pos['items'][3]] = total_adjustment  # 補貨總數
+
+        # 保存工作簿
+        wb.save(output_path)
+        
+        # 返回文件名供下載
+        filename = os.path.basename(output_path)
+        return jsonify({
+            'success': True, 
+            'message': '補貨單生成成功',
+            'filename': filename
+        })
+        
+    except Exception as e:
+        logging.error(f"生成補貨單時發生錯誤: {str(e)}")
+        return jsonify({'success': False, 'message': f'生成補貨單時發生錯誤: {str(e)}'}), 500
+
+@app.route('/download-replenishment-form/<filename>')
+def download_replenishment_form(filename):
+    """下載生成的補貨單"""
+    try:
+        return send_from_directory(script_dir, filename, as_attachment=True)
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 404
 
 # --- Main Execution ---
 if __name__ == '__main__':
