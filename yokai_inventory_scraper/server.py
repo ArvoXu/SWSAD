@@ -1341,6 +1341,35 @@ def get_replenishment_suggestion(store_key):
         # 正確邏輯：最大補貨總數量是補貨後的目標庫存量
         warning = None
         total_current = sum(current_inventory.get(name, 0) for name in all_product_names)
+        
+        # 先將所有產品的建議數量設為不低於當前庫存
+        for name in all_product_names:
+            current_qty = current_inventory.get(name, 0)
+            suggested_qty = max(current_qty, suggestion_map.get(name, current_qty))
+            final_suggestion.append({
+                'productName': name,
+                'currentQty': current_qty,
+                'suggestedQty': suggested_qty,
+                'salesCount30d': sales_counts.get(name, 0)
+            })
+
+        # 按照調整量（建議數量-當前數量）排序，只保留前7個需要調整的項目
+        final_suggestion.sort(key=lambda x: (
+            x['suggestedQty'] - x['currentQty'],  # 首要條件：調整量
+            x['salesCount30d']  # 次要條件：銷量
+        ), reverse=True)
+
+        # 只保留需要調整的前7個項目，其他項目的建議數量設為當前庫存
+        needs_adjustment = [x for x in final_suggestion if x['suggestedQty'] - x['currentQty'] > 0]
+        no_adjustment = [x for x in final_suggestion if x['suggestedQty'] - x['currentQty'] <= 0]
+
+        if len(needs_adjustment) > 7:
+            for item in needs_adjustment[7:]:
+                item['suggestedQty'] = item['currentQty']
+
+        final_suggestion = needs_adjustment[:7] + no_adjustment
+        final_suggestion.sort(key=lambda x: x['suggestedQty'], reverse=True)
+
         if total_current >= machine_capacity:
             warning = f"現有庫存總和({total_current})已達最大補貨總數量({machine_capacity})，無需補貨。"
             for name in all_product_names:
@@ -1578,12 +1607,16 @@ def generate_replenishment_form():
             pos = machine_positions[i]
             ws[pos['name']] = suggestion['machine']  # 填寫機台名稱
             
-            # 獲取有調整的產品
+            # 獲取需要增加庫存的產品（只取正數調整）
             adjusted_items = [item for item in suggestion['suggestion'] 
-                            if item['suggestedQty'] - item['currentQty'] != 0]
+                            if item['suggestedQty'] - item['currentQty'] > 0]
+            
+            # 按調整數量排序並只取前7個
+            adjusted_items.sort(key=lambda x: x['suggestedQty'] - x['currentQty'], reverse=True)
+            adjusted_items = adjusted_items[:7]  # 限制每台最多7個調整項目
             
             # 填寫產品信息
-            for j, item in enumerate(adjusted_items[:8]):  # 每台最多8個產品
+            for j, item in enumerate(adjusted_items):
                 row = pos['item_range'][0] + j
                 item_col = pos['items'][0][0]  # B或F
                 qty_col = pos['items'][1][0]   # D或H

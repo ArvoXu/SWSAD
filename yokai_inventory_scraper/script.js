@@ -36,56 +36,6 @@ document.addEventListener('DOMContentLoaded', function () {
     let currentEditingStore = null;
     let savedInventoryData = []; // Single source of truth for data from the server
 
-    // --- Warehouse File Upload Handling ---
-    const warehouseUploadBtn = document.getElementById('warehouseUploadBtn');
-    const warehouseFileInput = document.getElementById('warehouseFile');
-    const warehouseFileName = document.getElementById('warehouseFileName');
-    const warehouseUploadStatus = document.getElementById('warehouseUploadStatus');
-
-    // 點擊上傳按鈕時觸發文件選擇
-    warehouseUploadBtn.addEventListener('click', () => {
-        warehouseFileInput.click();
-    });
-
-    // 當選擇文件後更新文件名顯示
-    warehouseFileInput.addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        warehouseFileName.textContent = file.name;
-        warehouseUploadStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 正在上傳...';
-        warehouseUploadStatus.style.color = '#666';
-
-        // 創建 FormData 對象並添加文件
-        const formData = new FormData();
-        formData.append('file', file);
-
-        try {
-            const response = await fetch('/upload-warehouse-file', {
-                method: 'POST',
-                body: formData
-            });
-
-            const result = await response.json();
-
-            if (response.ok && result.success) {
-                warehouseUploadStatus.innerHTML = '<i class="fas fa-check-circle"></i> ' + result.message;
-                warehouseUploadStatus.style.color = '#4CAF50';
-                // 可以在這裡添加更新倉庫數據顯示的代碼
-            } else {
-                warehouseUploadStatus.innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + (result.message || '上傳失敗');
-                warehouseUploadStatus.style.color = '#f44336';
-            }
-        } catch (error) {
-            console.error('Error uploading warehouse file:', error);
-            warehouseUploadStatus.innerHTML = '<i class="fas fa-exclamation-circle"></i> 上傳時發生錯誤';
-            warehouseUploadStatus.style.color = '#f44336';
-        }
-
-        // 清除文件輸入，允許上傳相同的文件
-        warehouseFileInput.value = '';
-    });
-
     // --- Core Functions: Data Handling and Rendering ---
 
     async function fetchAndDisplayData() {

@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="presentation.css">
+    <link rel="stylesheet" href="workflow.css">
+    <title>補貨流程</title>
+</head>
+<body>
+    <div class="workflow-container">
+        <div class="workflow-steps">
+            <div class="workflow-step">
+                <div class="step-circle active">
+                    <i class="fas fa-warehouse"></i>
+                </div>
+                <div class="step-title">選擇倉庫</div>
+                <div class="step-description">選擇要從哪些倉庫進行補貨</div>
+            </div>
+            <div class="workflow-step">
+                <div class="step-circle">
+                    <i class="fas fa-lightbulb"></i>
+                </div>
+                <div class="step-title">生成建議</div>
+                <div class="step-description">根據選擇的策略生成補貨建議</div>
+            </div>
+            <div class="workflow-step">
+                <div class="step-circle">
+                    <i class="fas fa-edit"></i>
+                </div>
+                <div class="step-title">調整確認</div>
+                <div class="step-description">檢視並調整補貨建議</div>
+            </div>
+            <div class="workflow-step">
+                <div class="step-circle">
+                    <i class="fas fa-file-export"></i>
+                </div>
+                <div class="step-title">產生表單</div>
+                <div class="step-description">生成並下載補貨表單</div>
+            </div>
+        </div>
+
+        <div class="workflow-content">
+            <!-- Step 1: 選擇倉庫 -->
+            <div id="step1" class="active">
+                <div class="warehouse-selector">
+                    <h3><i class="fas fa-warehouse"></i> 選擇補貨倉庫</h3>
+                    <div class="warehouse-list">
+                        <!-- 倉庫選項將由JavaScript動態生成 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: 生成建議 -->
+            <div id="step2">
+                <div class="strategy-selector">
+                    <h3><i class="fas fa-lightbulb"></i> 選擇補貨策略</h3>
+                    <div class="strategy-cards">
+                        <div class="strategy-card" data-strategy="stable">
+                            <i class="fas fa-balance-scale"></i>
+                            <h4>穩健銷售</h4>
+                            <p>根據過去30天銷售數據，穩定分配庫存</p>
+                        </div>
+                        <div class="strategy-card" data-strategy="aggressive">
+                            <i class="fas fa-rocket"></i>
+                            <h4>積極增長</h4>
+                            <p>優先補充熱銷商品，最大化銷售潛力</p>
+                        </div>
+                        <div class="strategy-card" data-strategy="exploratory">
+                            <i class="fas fa-search"></i>
+                            <h4>探索平衡</h4>
+                            <p>保持商品多樣性，測試新品潛力</p>
+                        </div>
+                    </div>
+                    <div class="advanced-options">
+                        <button class="workflow-button" onclick="toggleAdvancedOptions()">
+                            <i class="fas fa-cog"></i> 進階設定
+                        </button>
+                        <div id="advancedOptionsPanel" style="display: none;">
+                            <div class="option-group">
+                                <label>預留空位：</label>
+                                <input type="number" min="0" max="10" value="0">
+                            </div>
+                            <div class="option-group">
+                                <label>僅增加不減少：</label>
+                                <input type="checkbox">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3: 調整確認 -->
+            <div id="step3">
+                <div class="suggestion-review">
+                    <h3><i class="fas fa-edit"></i> 檢視並調整建議</h3>
+                    <div class="suggestion-list">
+                        <!-- 建議列表將由JavaScript動態生成 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 4: 產生表單 -->
+            <div id="step4">
+                <div class="form-generation">
+                    <h3><i class="fas fa-file-export"></i> 補貨表單生成</h3>
+                    <div class="form-preview">
+                        <!-- 表單預覽將由JavaScript動態生成 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="workflow-actions">
+            <button class="workflow-button" id="prevStep" disabled>
+                <i class="fas fa-arrow-left"></i> 上一步
+            </button>
+            <button class="workflow-button primary" id="nextStep">
+                下一步 <i class="fas fa-arrow-right"></i>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let currentStep = 1;
+        const totalSteps = 4;
+
+        function updateSteps() {
+            // 更新步驟圈圈的狀態
+            document.querySelectorAll('.step-circle').forEach((circle, index) => {
+                circle.classList.remove('active', 'completed');
+                if (index + 1 === currentStep) {
+                    circle.classList.add('active');
+                } else if (index + 1 < currentStep) {
+                    circle.classList.add('completed');
+                }
+            });
+
+            // 更新內容區域的顯示
+            document.querySelectorAll('.workflow-content > div').forEach((content, index) => {
+                content.classList.toggle('active', index + 1 === currentStep);
+            });
+
+            // 更新按鈕狀態
+            document.getElementById('prevStep').disabled = currentStep === 1;
+            document.getElementById('nextStep').innerHTML = 
+                currentStep === totalSteps ? '完成 <i class="fas fa-check"></i>' : '下一步 <i class="fas fa-arrow-right"></i>';
+        }
+
+        document.getElementById('prevStep').addEventListener('click', () => {
+            if (currentStep > 1) {
+                currentStep--;
+                updateSteps();
+            }
+        });
+
+        document.getElementById('nextStep').addEventListener('click', () => {
+            if (currentStep < totalSteps) {
+                currentStep++;
+                updateSteps();
+            } else {
+                // 處理完成動作
+                alert('補貨流程完成！');
+            }
+        });
+
+        function toggleAdvancedOptions() {
+            const panel = document.getElementById('advancedOptionsPanel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+
+        // 初始化
+        updateSteps();
+    </script>
+</body>
+</html>
