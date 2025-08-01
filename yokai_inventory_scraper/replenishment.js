@@ -179,7 +179,12 @@ async function generateReplenishmentSuggestion() {
         return;
     }
 
-    const selectedStrategy = document.querySelector('input[name="replenishStrategy"]:checked').value;
+    const selectedStrategyCard = document.querySelector('.strategy-card.selected');
+    if (!selectedStrategyCard) {
+        alert('請選擇一個補貨策略');
+        return;
+    }
+    const selectedStrategy = selectedStrategyCard.dataset.strategy;
 
     try {
         // 為每個選中的機台生成建議
