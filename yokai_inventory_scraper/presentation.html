@@ -15,7 +15,9 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litepicker/dist/css/litepicker.css"/>
     <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/litepicker.js"></script>
     <link rel="stylesheet" href="presentation.css">
+    <link rel="stylesheet" href="replenishment.css">
     <script src="replenishment.js"></script>
+    <script src="strategy.js"></script>
     <script>
     // 偵測 iOS/Safari 並加上 is-ios-safari class
     (function() {
@@ -42,9 +44,6 @@
         <button class="tab-link" data-tab="sales-tab">銷售</button>
         <button class="tab-link" data-tab="replenishment-tab">補貨</button>
     </div>
-    
-    <!-- 引入補貨工作流程樣式 -->
-    <link rel="stylesheet" href="replenishment-workflow.css">
 
     <!-- 庫存視圖分頁 -->
     <div id="inventory-tab" class="tab-content active">
@@ -209,52 +208,44 @@
     <div id="replenishment-tab" class="tab-content">
         <div class="replenishment-container">
             <div class="step-container">
-                <h3>步驟 1：選擇倉庫</h3>
+                <h3><i class="fas fa-warehouse"></i> 步驟 1：選擇倉庫</h3>
                 <div class="warehouse-selection">
-                    <div class="warehouse-list" id="warehouseList">
+                    <div class="warehouse-grid" id="warehouseList">
                         <!-- 倉庫列表將由 JavaScript 動態生成 -->
                     </div>
                 </div>
             </div>
 
             <div class="step-container">
-                <h3>步驟 2：選擇補貨機台</h3>
-                <div class="machine-selection">
-                    <div class="machine-list" id="machineList">
-                        <!-- 機台列表將由 JavaScript 動態生成 -->
-                    </div>
+                <h3><i class="fas fa-robot"></i> 步驟 2：選擇補貨機台</h3>
+                <div class="machine-selection" id="machineList">
+                    <!-- 機台列表將由 JavaScript 動態生成，按地區分組 -->
                 </div>
             </div>
 
             <div class="step-container">
-                <h3>步驟 3：選擇補貨策略</h3>
+                <h3><i class="fas fa-lightbulb"></i> 步驟 3：選擇補貨策略</h3>
                 <div class="strategy-selection">
-                    <div class="strategy-radio">
-                        <input type="radio" id="stableStrategy" name="replenishStrategy" value="stable" checked>
-                        <label for="stableStrategy">
-                            <i class="fas fa-balance-scale"></i>
-                            穩健平衡
-                        </label>
+                    <div class="strategy-card" data-strategy="stable">
+                        <i class="fas fa-balance-scale"></i>
+                        <h4>穩健平衡</h4>
+                        <p>依據過去30天銷售量佔比，等比例分配庫存</p>
                     </div>
-                    <div class="strategy-radio">
-                        <input type="radio" id="aggressiveStrategy" name="replenishStrategy" value="aggressive">
-                        <label for="aggressiveStrategy">
-                            <i class="fas fa-rocket"></i>
-                            積極增長
-                        </label>
+                    <div class="strategy-card" data-strategy="aggressive">
+                        <i class="fas fa-rocket"></i>
+                        <h4>積極增長</h4>
+                        <p>集中資源於銷量前3名的明星商品</p>
                     </div>
-                    <div class="strategy-radio">
-                        <input type="radio" id="exploratoryStrategy" name="replenishStrategy" value="exploratory">
-                        <label for="exploratoryStrategy">
-                            <i class="fas fa-search-dollar"></i>
-                            探索汰換
-                        </label>
+                    <div class="strategy-card" data-strategy="exploratory">
+                        <i class="fas fa-search-dollar"></i>
+                        <h4>探索汰換</h4>
+                        <p>汰除零銷量商品，保留空間測試新品</p>
                     </div>
                 </div>
             </div>
 
             <div class="step-container">
-                <h3>步驟 4：生成建議</h3>
+                <h3><i class="fas fa-magic"></i> 步驟 4：生成建議</h3>
                 <div class="suggestion-generation">
                     <button id="generateReplenishmentButton" class="generate-button">
                         <i class="fas fa-magic"></i>

@@ -40,30 +40,47 @@ async function initReplenishmentTab() {
 function renderWarehouseList() {
     const warehouseList = document.getElementById('warehouseList');
     
-    // 獲取唯一的倉庫名稱
+    // 獲取唯一的倉庫名稱和其庫存數據
     const uniqueWarehouses = [...new Set(warehouseData.map(w => w.warehouseName))];
     
-    warehouseList.innerHTML = uniqueWarehouses.map(warehouse => `
-        <div class="warehouse-item">
-            <label class="checkbox-container">
-                <input type="checkbox" class="warehouse-checkbox" value="${warehouse}">
-                <span class="checkmark"></span>
-                ${warehouse}
-            </label>
-            <span class="product-count">
-                ${warehouseData.filter(w => w.warehouseName === warehouse).length} 個產品
-            </span>
-        </div>
-    `).join('');
+    warehouseList.innerHTML = uniqueWarehouses.map(warehouse => {
+        // 獲取該倉庫的所有產品
+        const warehouseProducts = warehouseData.filter(w => w.warehouseName === warehouse);
+        
+        // 生成庫存預覽HTML
+        const inventoryPreviewHtml = warehouseProducts
+            .map(product => `
+                <div class="inventory-item">
+                    <span>${product.productName}</span>
+                    <span>${product.quantity || 0} 個</span>
+                </div>
+            `).join('');
+
+        return `
+            <div class="warehouse-card" data-warehouse="${warehouse}">
+                <div class="warehouse-header">
+                    <span class="warehouse-name">${warehouse}</span>
+                    <span class="warehouse-stats">
+                        <i class="fas fa-box"></i> ${warehouseProducts.length} 個產品
+                    </span>
+                </div>
+                <div class="warehouse-preview">
+                    ${inventoryPreviewHtml}
+                </div>
+            </div>
+        `;
+    }).join('');
 
     // 添加事件監聽器
-    document.querySelectorAll('.warehouse-checkbox').forEach(checkbox => {
-        checkbox.addEventListener('change', e => {
-            if (e.target.checked) {
-                selectedWarehouses.add(e.target.value);
-            } else {
-                selectedWarehouses.delete(e.target.value);
-            }
+    document.querySelectorAll('.warehouse-card').forEach(card => {
+        card.addEventListener('click', e => {
+            // 移除其他卡片的選中狀態
+            document.querySelectorAll('.warehouse-card').forEach(c => c.classList.remove('selected'));
+            // 選中當前卡片
+            card.classList.add('selected');
+            // 更新選中的倉庫
+            selectedWarehouses.clear();
+            selectedWarehouses.add(card.dataset.warehouse);
         });
     });
 }
@@ -108,21 +125,18 @@ function renderMachineList() {
             const note = machineData?.note ? `(${machineData.note})` : '';
 
             return `
-                <div class="machine-item">
-                    <label class="checkbox-container">
-                        <input type="checkbox" class="machine-checkbox" value="${machine}">
-                        <span class="checkmark"></span>
-                        <div class="machine-info">
-                            <div class="machine-name">${store} - ${machineId}</div>
-                            <div class="machine-detail">
-                                <span class="address">${address}</span>
-                                <span class="note">${note}</span>
-                            </div>
+                <div class="machine-card" data-machine="${machine}">
+                    <div class="machine-info">
+                        <div class="machine-name">
+                            <i class="fas fa-robot"></i>
+                            ${store} - ${machineId}
                         </div>
-                    </label>
-                    <span class="product-count">
-                        ${productCount} 個產品
-                    </span>
+                        <div class="machine-detail">
+                            <div><i class="fas fa-map-marker-alt"></i> ${address}</div>
+                            ${note ? `<div><i class="fas fa-info-circle"></i> ${note}</div>` : ''}
+                            <div><i class="fas fa-box"></i> ${productCount} 個產品</div>
+                        </div>
+                    </div>
                 </div>
             `;
         }).join('');
@@ -130,8 +144,8 @@ function renderMachineList() {
         // 返回該地區的完整HTML
         return `
             <div class="region-section">
-                <h3 class="region-title">${region}</h3>
-                <div class="region-machines">
+                <h3 class="region-title"><i class="fas fa-map-marked-alt"></i> ${region}</h3>
+                <div class="machine-grid">
                     ${machinesHtml}
                 </div>
             </div>
@@ -139,12 +153,16 @@ function renderMachineList() {
     }).join('');
 
     // 添加事件監聽器
-    document.querySelectorAll('.machine-checkbox').forEach(checkbox => {
-        checkbox.addEventListener('change', e => {
-            if (e.target.checked) {
-                selectedMachines.add(e.target.value);
+    document.querySelectorAll('.machine-card').forEach(card => {
+        card.addEventListener('click', e => {
+            // 切換選中狀態
+            card.classList.toggle('selected');
+            const machineId = card.dataset.machine;
+            
+            if (card.classList.contains('selected')) {
+                selectedMachines.add(machineId);
             } else {
-                selectedMachines.delete(e.target.value);
+                selectedMachines.delete(machineId);
             }
         });
     });
