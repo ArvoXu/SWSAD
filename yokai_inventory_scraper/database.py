@@ -37,6 +37,20 @@ Base = declarative_base()
 
 # --- Data Models (Tables) ---
 
+class PredictedTransaction(Base):
+    """
+    存储机器学习预测的销售数据。
+    """
+    __tablename__ = "predicted_transactions"
+    
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    transaction_date = Column(DateTime, nullable=False, index=True)
+    shop_name = Column(String, nullable=False, index=True)
+    product = Column(String, nullable=False, index=True)
+    predicted_quantity = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=datetime.now(pytz.utc))
+    updated_at = Column(DateTime, default=datetime.now(pytz.utc), onupdate=datetime.now(pytz.utc))
+
 class Warehouse(Base):
     """
     代表倉庫的庫存資料。

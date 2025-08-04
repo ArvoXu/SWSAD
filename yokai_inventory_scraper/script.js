@@ -2,6 +2,11 @@ document.addEventListener('DOMContentLoaded', function () {
     // --- Element Selections ---
     const processButton = document.getElementById('processButton');
     const clearButton = document.getElementById('clearButton');
+    const predictionFileInput = document.getElementById('predictionFile');
+    const uploadPredictionButton = document.getElementById('uploadPrediction');
+    const predictionFileName = document.getElementById('predictionFileName');
+    const predictionUploadProgress = document.getElementById('predictionUploadProgress');
+    const predictionUploadResult = document.getElementById('predictionUploadResult');
     const clearStorageButton = document.getElementById('clearStorageButton');
     const rawDataTextarea = document.getElementById('rawData');
     const outputTableDiv = document.getElementById('outputTable');
@@ -39,6 +44,51 @@ document.addEventListener('DOMContentLoaded', function () {
     let currentSort = { key: 'store', order: 'asc' };
     let currentEditingStore = null;
     let savedInventoryData = []; // Single source of truth for data from the server
+    
+    // --- Prediction File Upload Handling ---
+    predictionFileInput.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        predictionFileName.textContent = file.name;
+        uploadPredictionButton.disabled = false;
+    });
+    
+    uploadPredictionButton.addEventListener('click', async () => {
+        const file = predictionFileInput.files[0];
+        if (!file) return;
+        
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        try {
+            predictionUploadProgress.style.display = 'block';
+            uploadPredictionButton.disabled = true;
+            
+            const response = await fetch('/api/predictions/upload', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                predictionUploadResult.innerHTML = '<span class="success">預測數據上傳成功</span>';
+                // 刷新數據顯示
+                await fetchAndDisplayData();
+            } else {
+                predictionUploadResult.innerHTML = `<span class="error">上傳失敗: ${result.error}</span>`;
+            }
+            
+        } catch (error) {
+            predictionUploadResult.innerHTML = `<span class="error">上傳失敗: ${error.message}</span>`;
+        } finally {
+            predictionUploadProgress.style.display = 'none';
+            uploadPredictionButton.disabled = false;
+            predictionFileInput.value = '';
+            predictionFileName.textContent = '未選擇檔案';
+        }
+    });
 
     // --- Warehouse File Upload Handling ---
     warehouseUploadBtn.addEventListener('click', () => {
@@ -121,7 +171,14 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!storeGroups[storeKey]) {
                 storeGroups[storeKey] = { ...item, processTime: item.processTime ? new Date(item.processTime) : null, products: [] };
             }
-            storeGroups[storeKey].products.push({ name: item.productName, quantity: item.quantity });
+            storeGroups[storeKey].products.push({
+                name: item.productName,
+                quantity: item.quantity,
+                daysUntilSoldOut: item.daysUntilSoldOut,
+                averageDailyPredicted: item.averageDailyPredicted,
+                totalPredictedQuantity: item.totalPredictedQuantity,
+                predictedSales: item.predictedSales
+            });
         });
 
         storeGroupsArray = Object.values(storeGroups).map(group => ({
@@ -196,8 +253,23 @@ document.addEventListener('DOMContentLoaded', function () {
                                 <div class="info-line">${group.note ? `備註: ${group.note}` : '&nbsp;'}</div>
                             </div></td>
                         </tr>
-                        <tr><th class="col-num">#</th><th>產品名稱</th><th class="col-qty">數量</th></tr>
-                        ${group.products.map((p, i) => `<tr><td class="col-num">${i + 1}</td><td>${p.name}</td><td class="col-qty">${p.quantity}</td></tr>`).join('')}
+                        <tr><th class="col-num">#</th><th>產品名稱</th><th class="col-qty">數量</th><th>預測</th></tr>
+                        ${group.products.map((p, i) => `<tr>
+                            <td class="col-num">${i + 1}</td>
+                            <td>${p.name}</td>
+                            <td class="col-qty">${p.quantity}</td>
+                            <td class="col-prediction">
+                                ${p.daysUntilSoldOut !== null && p.daysUntilSoldOut !== undefined
+                                    ? `<span class="${p.daysUntilSoldOut <= 3 ? 'prediction-urgent' : 'prediction-normal'}">
+                                         ${p.daysUntilSoldOut}天內售罄
+                                         <br>
+                                         <small>每日平均：${p.averageDailyPredicted || 0}</small>
+                                         <br>
+                                         <small>總預測：${p.totalPredictedQuantity || 0}</small>
+                                       </span>`
+                                    : '無預測'}
+                            </td>
+                        </tr>`).join('')}
                         ${Array(maxProducts - group.products.length).fill('<tr><td colspan="3">&nbsp;</td></tr>').join('')}
                         <tr class="total-row"><td colspan="2">總計</td><td class="col-qty">${group.totalQuantity}</td></tr>
                     </table>
