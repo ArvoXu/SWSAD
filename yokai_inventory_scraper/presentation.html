@@ -17,6 +17,7 @@
     <link rel="stylesheet" href="presentation.css">
     <link rel="stylesheet" href="replenishment.css">
     <link rel="stylesheet" href="styles/prediction-badge.css">
+    <link rel="stylesheet" href="styles/modal.css">
     <script src="replenishment.js"></script>
     <script src="strategy.js"></script>
     <script>
@@ -302,6 +303,22 @@
     <div id="screenshotLoader" class="screenshot-loader" style="display: none;">
         <span>正在生成高解析度圖片...</span>
     </div>
+
+    <!-- 预测说明模态框 -->
+    <div id="predictionModal" class="glass-modal">
+        <div class="modal-content">
+            <button class="modal-close">&times;</button>
+            <h2 class="modal-title">補貨預警預測說明</h2>
+            <div class="modal-section">
+                <p class="modal-description">本系統預測某機台在幾天後庫存將低於 10%，以協助用戶及早規劃補貨。該預測結合了以下技術與資料分析方法：</p>
+            </div>
+            <div class="modal-section">
+                <h3 class="modal-section-title">預測核心技術</h3>
+                <p class="modal-description">目前主要採用 XGBoost 機器學習模型 搭配 Croston 方法，以提升對不規則銷售（間歇性需求）的預測準確度。此外，模型亦結合特徵工程與時間序列分析，並整合天氣資訊，以建立更全面的預測邏輯。</p>
+            </div>
+        </div>
+    </div>
+
     <script src="presentation.js"></script>
 </body>
 </html> 

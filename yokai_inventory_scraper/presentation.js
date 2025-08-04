@@ -1535,7 +1535,9 @@
                     const badgeClass = daysUntilCritical <= 2 ? 'urgent' : 
                                     daysUntilCritical <= 4 ? 'warning' : 'normal';
                     predictionBadgeHTML = `
-                        <div class="prediction-badge ${badgeClass}" title="预计${daysUntilCritical}天后库存将低于10%">
+                        <div class="prediction-badge ${badgeClass}" 
+                            onclick="showPredictionModal(event)"
+                            title="点击查看预测说明">
                             <i class="fas fa-eye" aria-hidden="true"></i>
                             <span>${daysUntilCritical}</span>
                         </div>
@@ -1903,7 +1905,37 @@
         }
         
         // 載入數據並顯示圖表
-        window.addEventListener('DOMContentLoaded', async function() {
+        // 预测说明模态框处理
+function showPredictionModal(event) {
+    event.stopPropagation(); // 阻止事件冒泡
+    const modal = document.getElementById('predictionModal');
+    modal.classList.add('active');
+}
+
+// 关闭模态框
+document.addEventListener('DOMContentLoaded', function() {
+    const modal = document.getElementById('predictionModal');
+    const closeButton = modal.querySelector('.modal-close');
+
+    closeButton.addEventListener('click', () => {
+        modal.classList.remove('active');
+    });
+
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.classList.remove('active');
+        }
+    });
+
+    // 添加 ESC 键关闭功能
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.classList.contains('active')) {
+            modal.classList.remove('active');
+        }
+    });
+});
+
+window.addEventListener('DOMContentLoaded', async function() {
             // 新增: 設置報告標題
             const today = new Date();
             const year = today.getFullYear();
