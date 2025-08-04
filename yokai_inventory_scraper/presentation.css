@@ -135,7 +135,7 @@
         .chart-card-title {
             font-weight: 600;
             margin-bottom: calc(var(--spacing-unit) * 2);
-            text-align: center;
+text-align: center;
             font-size: 16px;
             color: var(--text-primary);
         }

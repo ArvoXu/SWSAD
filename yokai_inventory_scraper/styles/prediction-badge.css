@@ -1,0 +1,50 @@
+.chart-card {
+    position: relative; /* 确保这个存在 */
+}
+
+.chart-card-title {
+    position: relative;
+    width: 100%;
+    text-align: center;
+}
+
+.prediction-badge {
+    position: absolute;
+    top: var(--spacing-unit);
+    right: var(--spacing-unit);
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.prediction-badge.urgent i {
+    color: var(--danger-color);
+}
+
+.prediction-badge.warning i {
+    color: var(--warning-color);
+}
+
+.prediction-badge.normal i {
+    color: var(--success-color);
+}
+
+.prediction-badge span {
+    font-size: 0.9em;
+}
+
+/* 添加一个小动画效果 */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.prediction-badge {
+    animation: fadeIn 0.3s ease-out;
+}

@@ -310,7 +310,8 @@
                         lastUpdated: item.lastUpdated,
                         lastCleaned: item.lastCleaned,
                         products: [],
-                        totalQuantity: 0 // 添加總數量欄位
+                        totalQuantity: 0, // 添加總數量欄位
+                        totalPredictedSales: [] // 新增預測數據
                     };
                 }
                 
@@ -319,7 +320,11 @@
                 if (!existingProduct) {
                     storeGroups[storeKey].products.push({
                         name: item.productName,
-                        quantity: item.quantity
+                        quantity: item.quantity,
+                        predictedSales: item.predictedSales || [],
+                        daysUntilSoldOut: item.daysUntilSoldOut,
+                        averageDailyPredicted: item.averageDailyPredicted,
+                        totalPredictedQuantity: item.totalPredictedQuantity
                     });
                     // 累計總數量
                     storeGroups[storeKey].totalQuantity += item.quantity;
@@ -1506,10 +1511,42 @@
                 cardDiv.id = `card-${key}`;
                 
                 // 圓餅圖視圖內容
+                // 计算预测信息
+                const criticalThreshold = maxCapacity * 0.1; // 10% of max capacity
+                let daysUntilCritical = null;
+                
+                // 检查所有产品的预测信息
+                products.forEach(product => {
+                    if (product.predictedSales && Array.isArray(product.predictedSales)) {
+                        let remainingQuantity = totalQuantity;
+                        for (let i = 0; i < Math.min(7, product.predictedSales.length); i++) {
+                            remainingQuantity -= product.predictedSales[i].predictedQuantity;
+                            if (remainingQuantity <= criticalThreshold && daysUntilCritical === null) {
+                                daysUntilCritical = i + 1;
+                                break;
+                            }
+                        }
+                    }
+                });
+
+                // 设置预测徽章的样式
+                let predictionBadgeHTML = '';
+                if (daysUntilCritical !== null && daysUntilCritical <= 7) {
+                    const badgeClass = daysUntilCritical <= 2 ? 'urgent' : 
+                                    daysUntilCritical <= 4 ? 'warning' : 'normal';
+                    predictionBadgeHTML = `
+                        <div class="prediction-badge ${badgeClass}" title="预计${daysUntilCritical}天后库存将低于10%">
+                            <i class="fas fa-eye" aria-hidden="true"></i>
+                            <span>${daysUntilCritical}</span>
+                        </div>
+                    `;
+                }
+
                 cardDiv.innerHTML = `
                     <div class="chart-card-title">
                         ${store}<br>${machineId}
                         ${(machineSalesTotal > 0 || machineSalesCount > 0) ? `<div class="sales-info">過去一個月銷售: ${machineSalesTotal.toLocaleString()} 元 / ${machineSalesCount} 份</div>` : ''}
+                        ${predictionBadgeHTML}
                     </div>
                     <div class="chart-card-chart">
                         <canvas id="chart-${key}"></canvas>
