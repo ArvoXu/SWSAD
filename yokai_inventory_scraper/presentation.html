@@ -139,70 +139,7 @@
         </div>
     </div>
 
-    <!-- 補貨建議對話框 -->
-    <div id="suggestionDialog" class="modal" style="display: none;">
-        <div class="suggestion-modal-content">
-            <span class="close">&times;</span>
-            <h2 id="suggestionDialogTitle"><i class="fas fa-lightbulb"></i> 補貨建議</h2>
-            
-            <h4>1. 選擇補貨策略</h4>
-            <div class="strategy-selector">
-                <div class="strategy-card selected" data-strategy="stable">
-                    <i class="fas fa-balance-scale-right"></i>
-                    <h4>穩健銷售</h4>
-                    <p>依據過去30天銷售量佔比，等比例分配庫存，確保穩定滿足市場需求。</p>
-                </div>
-                <div class="strategy-card" data-strategy="aggressive">
-                    <i class="fas fa-rocket"></i>
-                    <h4>積極增長</h4>
-                    <p>集中80%庫存於銷量前3名的明星商品，最大化頂尖產品的營收潛力。</p>
-                </div>
-                <div class="strategy-card" data-strategy="exploratory">
-                    <i class="fas fa-search-dollar"></i>
-                    <h4>探索汰換</h4>
-                    <p>優先汰除零銷量商品，並保留20%彈性空間，用於測試新品或補充潛力股。</p>
-                </div>
-            </div>
 
-            <!-- 主要操作區 -->
-            <div class="suggestion-controls">
-                <button id="generateSuggestionButton" class="export-button generate-suggestion">
-                    <i class="fas fa-magic"></i> 生成建議
-                </button>
-                <button id="toggleAdvancedOptionsButton" class="btn-info" type="button">
-                    <i class="fas fa-cog"></i>
-                </button>
-            </div>
-            <div class="advanced-options-table" style="display:none;">
-                <table>
-                    <tr>
-                        <td><i class="fas fa-box-open"></i></td>
-                        <td class="adv-label">預留空位</td>
-                        <td><input type="number" id="reserveSlotsInput" value="0" min="0" max="40" class="adv-input"></td>
-                        <td class="adv-desc">保留給新品測試的空位數</td>
-                    </tr>
-                    <tr>
-                        <td><i class="fas fa-plus-circle"></i></td>
-                        <td class="adv-label">不取出現有產品</td>
-                        <td><input type="checkbox" id="onlyAddCheckbox"></td>
-                        <td class="adv-desc">僅補貨，不減少現有庫存</td>
-                    </tr>
-                    <tr>
-                        <td><i class="fas fa-layer-group"></i></td>
-                        <td class="adv-label">最大補貨總數量</td>
-                        <td><input type="number" id="maxTotalQtyInput" value="50" min="1" max="50" class="adv-input"></td>
-                        <td class="adv-desc">補貨後的總庫存上限</td>
-                    </tr>
-                </table>
-            </div>
-            <div id="suggestionWarning" style="color: #dc3545; font-size: 13px; margin: 8px 0 0 0; display: none;"></div>
-
-            <h4>2. 建議結果</h4>
-            <div id="suggestionResultContainer" class="suggestion-result-container">
-                <p style="text-align: center; color: var(--text-secondary); padding: 20px;">請點擊 "生成建議" 以載入結果。</p>
-            </div>
-        </div>
-    </div>
 
     <!-- 補貨視圖分頁 -->
     <div id="replenishment-tab" class="tab-content">

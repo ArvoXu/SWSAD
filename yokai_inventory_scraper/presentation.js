@@ -1507,7 +1507,6 @@
                 
                 // 圓餅圖視圖內容
                 cardDiv.innerHTML = `
-                    <i class="fas fa-wand-magic-sparkles suggestion-trigger-icon" title="智慧補貨建議"></i>
                     <div class="chart-card-title">
                         ${store}<br>${machineId}
                         ${(machineSalesTotal > 0 || machineSalesCount > 0) ? `<div class="sales-info">過去一個月銷售: ${machineSalesTotal.toLocaleString()} 元 / ${machineSalesCount} 份</div>` : ''}
@@ -1657,11 +1656,7 @@
                     }
                 }, 100);
 
-                // 為新創建的卡片上的圖標添加事件監聽器
-                cardDiv.querySelector('.suggestion-trigger-icon').addEventListener('click', (event) => {
-                    event.stopPropagation(); // 防止觸發卡片的其他點擊事件
-                    openSuggestionDialog(key, store, machineId);
-                });
+
             });
         }
         
@@ -1909,97 +1904,7 @@
             }
         });
 
-        // --- 補貨建議功能 (Replenishment Suggestion) ---
-        const suggestionDialog = document.getElementById('suggestionDialog');
-        // const suggestionButton = document.getElementById('suggestionButton'); // 不再需要全局按鈕
-        const closeSuggestionDialog = suggestionDialog.querySelector('.close');
-        const strategyCards = document.querySelectorAll('.strategy-card');
-        const generateSuggestionButton = document.getElementById('generateSuggestionButton');
-        const suggestionResultContainer = document.getElementById('suggestionResultContainer');
-        const reserveSlotsInput = document.getElementById('reserveSlotsInput');
-        const onlyAddCheckbox = document.getElementById('onlyAddCheckbox');
-        const maxTotalQtyInput = document.getElementById('maxTotalQtyInput');
-        const toggleAdvancedOptionsButton = document.getElementById('toggleAdvancedOptionsButton');
-        const advancedOptionsCard = document.querySelector('.advanced-options-card');
-        const advancedOptionsTable = document.querySelector('.advanced-options-table');
-        const suggestionWarning = document.getElementById('suggestionWarning');
-        
-        let activeSuggestionStoreKey = null;
-        let selectedStrategy = 'stable';
-        let isFirstRequest = true;
 
-        // 新增：檢查爬蟲狀態
-        async function isDataUpdating() {
-            try {
-                const [invRes, salesRes] = await Promise.all([
-                    fetch('/scraper-status'),
-                    fetch('/sales-scraper-status')
-                ]);
-                const invStatus = await invRes.json();
-                const salesStatus = await salesRes.json();
-                return invStatus.status === 'running' || salesStatus.status === 'running';
-            } catch (e) {
-                // 若查詢失敗，預設不鎖定
-                return false;
-            }
-        }
-
-        // 自動輪詢鎖定生成建議按鈕
-        let suggestionStatusInterval = null;
-        function startSuggestionStatusPolling() {
-            suggestionStatusInterval = setInterval(async () => {
-                if (await isDataUpdating()) {
-                    generateSuggestionButton.disabled = true;
-                    generateSuggestionButton.innerHTML = '<i class="fas fa-magic"></i> 資料正在更新...';
-                } else {
-                    generateSuggestionButton.disabled = false;
-                    generateSuggestionButton.innerHTML = '<i class="fas fa-magic"></i> 生成建議';
-                }
-            }, 2000);
-        }
-        function stopSuggestionStatusPolling() {
-            if (suggestionStatusInterval) {
-                clearInterval(suggestionStatusInterval);
-                suggestionStatusInterval = null;
-            }
-        }
-
-        // 打開建議對話框 (修改為針對單一卡片)
-        function openSuggestionDialog(storeKey, storeName, machineId) {
-            activeSuggestionStoreKey = storeKey;
-            document.getElementById('suggestionDialogTitle').innerHTML = `<i class=\"fas fa-lightbulb\"></i> 補貨建議: ${storeName} - ${machineId}`;
-            suggestionDialog.classList.add('active');
-            suggestionResultContainer.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 20px;">請點擊 "生成建議" 以載入結果。</p>';
-            reserveSlotsInput.value = 0;
-            maxTotalQtyInput.value = 50;
-            onlyAddCheckbox.checked = false;
-            advancedOptionsTable.style.display = 'none';
-            suggestionWarning.style.display = 'none';
-            suggestionWarning.textContent = '';
-            strategyCards.forEach(card => card.classList.remove('selected'));
-            document.querySelector('.strategy-card[data-strategy=\"stable\"]').classList.add('selected');
-            selectedStrategy = 'stable';
-            isFirstRequest = true;
-            startSuggestionStatusPolling(); // 新增：開啟時啟動輪詢
-        }
-        
-        // 關閉對話框時停止輪詢
-        closeSuggestionDialog.onclick = () => { suggestionDialog.classList.remove('active'); stopSuggestionStatusPolling(); };
-        window.onclick = (event) => {
-            if (event.target == suggestionDialog) {
-                suggestionDialog.classList.remove('active');
-                stopSuggestionStatusPolling();
-            }
-        };
-
-        // 選擇策略
-        strategyCards.forEach(card => {
-            card.addEventListener('click', () => {
-                strategyCards.forEach(c => c.classList.remove('selected'));
-                card.classList.add('selected');
-                selectedStrategy = card.dataset.strategy;
-            });
-        });
 
         // 生成建議按鈕點擊事件
         generateSuggestionButton.addEventListener('click', async () => {
