@@ -1536,10 +1536,10 @@
                                     daysUntilCritical <= 4 ? 'warning' : 'normal';
                     predictionBadgeHTML = `
                         <div class="prediction-badge ${badgeClass}" 
-                            onclick="showPredictionModal(event)"
-                            title="点击查看预测说明">
+                            onclick="showPredictionModal(event)">
                             <i class="fas fa-eye" aria-hidden="true"></i>
                             <span>${daysUntilCritical}</span>
+                            <span class="detail-tooltip">點擊查看預測說明</span>
                         </div>
                     `;
                 }
