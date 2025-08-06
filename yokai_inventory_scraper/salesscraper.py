@@ -8,6 +8,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
 from dotenv import load_dotenv
 
 # --- Configurable Variables ---
@@ -71,31 +73,19 @@ def run_sales_scraper(headless=True):
         login_button.click()
         logging.info("Login successful.")
 
+        # 登入後直接點父選單展開，再點子選單
+        logging.info("Expanding Order Management parent menu...")
+        order_management_menu_xpath = "//div[contains(@class, 'el-submenu__title')][.//span[normalize-space()='Order management']]"
+        order_management_item_xpath = "//li[contains(@class, 'el-menu-item') and not(contains(@class, 'el-submenu__title')) and normalize-space()='Order management']"
+        WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, order_management_menu_xpath))).click()
+        logging.info(" > Parent menu clicked, waiting for submenu...")
+        WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, order_management_item_xpath))).click()
+        logging.info(" > Submenu item clicked.")
+
         # The main process now runs only once. The page-refresh retry loop is removed.
         try:
             logging.info("--- Starting Sales Data Download ---")
-
-            # Step 2: Navigate to Order Management with robust, idempotent logic
-            logging.info("Navigating to Order Management...")
-            try:
-                # Attempt to click the final menu item directly. This works if the menu is already open.
-                order_management_item_xpath = "//li[contains(@class, 'el-menu-item') and normalize-space()='Order management']"
-                order_management_item = wait.until(EC.element_to_be_clickable((By.XPATH, order_management_item_xpath)))
-                order_management_item.click()
-                logging.info(" > Direct click on menu item successful (menu was likely open).")
-            except TimeoutException:
-                # If direct click fails, the menu is likely closed. Expand it first.
-                logging.info(" > Direct click failed. Expanding menu first...")
-                order_management_menu_xpath = "//div[contains(@class, 'el-submenu__title')][.//span[normalize-space()='Order management']]"
-                order_management_menu = wait.until(EC.element_to_be_clickable((By.XPATH, order_management_menu_xpath)))
-                order_management_menu.click()
-                
-                # Now click the item
-                order_management_item_xpath = "//li[contains(@class, 'el-menu-item') and normalize-space()='Order management']"
-                order_management_item = wait.until(EC.element_to_be_clickable((By.XPATH, order_management_item_xpath)))
-                order_management_item.click()
-                logging.info(" > Expanded menu and clicked item.")
-
+            # 已於上方直接點擊 Order Management menu item，這裡不用再點一次
             logging.info("Navigation click sent. Waiting for page to load...")
 
             # Step 3: Set date range (Search click is removed as per new strategy)
@@ -108,14 +98,17 @@ def run_sales_scraper(headless=True):
             end_date_input = driver.find_element(By.XPATH, "//input[@placeholder='Select end date']")
             end_date_input.clear()
             end_date_input.send_keys("2026-01-01")
-            
-            logging.info("Date range set. Clicking away to finalize date selection.")
-            # This click simulates a user clicking outside the date picker, which often
-            # triggers the necessary JavaScript event to update the component's state.
-            driver.find_element(By.TAG_NAME, 'body').click()
+
+            # 新增：輸入完日期後先送出 Enter，再點擊 body，確保日期選擇器事件觸發
+            end_date_input.send_keys(Keys.ENTER)
+            time.sleep(0.2)
+            try:
+                ActionChains(driver).move_to_element(driver.find_element(By.TAG_NAME, 'body')).click().perform()
+            except Exception:
+                driver.find_element(By.TAG_NAME, 'body').click()
             time.sleep(0.5) # Brief pause to allow any JS events to fire.
 
-            logging.info("Proceeding directly to export.")
+            logging.info("Date range set and finalized. Proceeding directly to export.")
 
             # Step 4: New robust export logic based on filesystem checks
             export_button_xpath = "//button[.//span[normalize-space()='Export as excel']]"
