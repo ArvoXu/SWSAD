@@ -37,22 +37,6 @@ body {
     overflow-x: hidden;
 }
 
-/* 預測信息樣式 */
-.col-prediction {
-    padding: 2px 8px;
-    text-align: center;
-    font-size: 0.9em;
-}
-
-.prediction-urgent {
-    color: var(--danger-color);
-    font-weight: bold;
-}
-
-.prediction-normal {
-    color: var(--info-color);
-}
-
 h1 {
     color: var(--text-primary);
     text-align: center;

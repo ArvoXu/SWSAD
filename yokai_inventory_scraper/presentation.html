@@ -1,11 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon"
-        href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M21 17H3V5H21V17M21 3H3C1.9 3 1 3.9 1 5V17C1 18.1 1.9 19 3 19H21C22.1 19 23 18.1 23 17V5C23 3.9 22.1 3 21 3M12 16H14V14H16V12H14V10H12V12H10V14H12V16M7 11.5C7 12.3 6.3 13 5.5 13S4 12.3 4 11.5 4.7 10 5.5 10S7 10.7 7 11.5M19 11.5C19 12.3 18.3 13 17.5 13S16 12.3 16 11.5 16.7 10 17.5 10S19 10.7 19 11.5Z' fill='gray'/%3E%3C/svg%3E">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M21 17H3V5H21V17M21 3H3C1.9 3 1 3.9 1 5V17C1 18.1 1.9 19 3 19H21C22.1 19 23 18.1 23 17V5C23 3.9 22.1 3 21 3M12 16H14V14H16V12H14V10H12V12H10V14H12V16M7 11.5C7 12.3 6.3 13 5.5 13S4 12.3 4 11.5 4.7 10 5.5 10S7 10.7 7 11.5M19 11.5C19 12.3 18.3 13 17.5 13S16 12.3 16 11.5 16.7 10 17.5 10S19 10.7 19 11.5Z' fill='gray'/%3E%3C/svg%3E">
     <title>智慧倉儲與銷售分析儀表板</title>
     <!-- 添加Chart.js庫 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
@@ -14,32 +12,29 @@
     <!-- 添加Font Awesome圖標 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- 添加 Litepicker 日期選擇器 -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litepicker/dist/css/litepicker.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litepicker/dist/css/litepicker.css"/>
     <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/litepicker.js"></script>
     <link rel="stylesheet" href="presentation.css">
     <link rel="stylesheet" href="replenishment.css">
-    <link rel="stylesheet" href="styles/prediction-badge.css">
-    <link rel="stylesheet" href="styles/modal.css">
     <script src="replenishment.js"></script>
     <script src="strategy.js"></script>
     <script>
-        // 偵測 iOS/Safari 並加上 is-ios-safari class
-        (function () {
-            var ua = window.navigator.userAgent;
-            var isIOS = /iP(ad|hone|od)/.test(ua);
-            var isSafari = /Safari/.test(ua) && !/Chrome/.test(ua);
-            if (isIOS || isSafari) {
-                document.addEventListener('DOMContentLoaded', function () {
-                    document.body.classList.add('is-ios-safari');
-                });
-            }
-        })();
+    // 偵測 iOS/Safari 並加上 is-ios-safari class
+    (function() {
+      var ua = window.navigator.userAgent;
+      var isIOS = /iP(ad|hone|od)/.test(ua);
+      var isSafari = /Safari/.test(ua) && !/Chrome/.test(ua);
+      if (isIOS || isSafari) {
+        document.addEventListener('DOMContentLoaded', function() {
+          document.body.classList.add('is-ios-safari');
+        });
+      }
+    })();
     </script>
 </head>
-
 <body>
     <div class="dashboard-header">
-        <h1>智慧倉儲與銷售分析儀表板</h1>
+    <h1>智慧倉儲與銷售分析儀表板</h1>
         <div class="dashboard-subtitle">Smart Warehousing and Sales Analysis Dashboard</div>
     </div>
 
@@ -97,14 +92,14 @@
                 </div>
             </div>
         </div>
-
+        
         <div class="summary-info">
             <div id="summaryText">載入中...</div>
             <div id="salesSummaryText" style="margin-top: 8px; color: var(--primary-color); font-weight: 500;"></div>
         </div>
-
+        
         <div class="toolbar">
-            <div class="toolbar-section"> <!-- Left -->
+             <div class="toolbar-section"> <!-- Left -->
                 <button id="toggleViewModeButton" class="toolbar-button">
                     <i class="fas fa-table"></i>
                     <span class="tooltip">切換詳細資料視圖</span>
@@ -123,8 +118,7 @@
                 </button>
             </div>
             <div class="toolbar-section"> <!-- Right -->
-                <input type="text" id="inventorySearchInput" class="search-input-presentation"
-                    placeholder="搜尋機台名稱/編號...">
+                <input type="text" id="inventorySearchInput" class="search-input-presentation" placeholder="搜尋機台名稱/編號...">
                 <button id="saveAsHtmlButton" class="toolbar-button">
                     <i class="fas fa-file-code"></i>
                     <span class="tooltip">另存為HTML</span>
@@ -139,7 +133,7 @@
                 </button>
             </div>
         </div>
-
+        
         <div id="chartContainer">
             <div class="loading"></div>
         </div>
@@ -201,7 +195,7 @@
             </div>
         </div>
     </div>
-    </div>
+        </div>
     </div>
 
     <!-- 銷售趨勢分頁 -->
@@ -234,68 +228,63 @@
             </div>
         </div>
         <div class="sales-controls glass" id="salesControls">
-            <div class="compare-row"
-                style="display:flex; flex-direction:column; gap:18px; align-items:stretch; max-width:700px; margin:0 auto;">
-                <div class="mainline-block glass-card">
-                    <div class="block-title">主線設定</div>
-                    <div class="block-fields param-row">
-                        <div class="date-block">
-                            <i class="fas fa-calendar-alt"></i>
-                            <label>日期</label>
-                            <input id="mainDatePicker" />
-                        </div>
-                        <div class="date-block">
-                            <i class="fas fa-store"></i>
-                            <label>分店</label>
-                            <select id="mainStoreSelect"></select>
-                        </div>
-                        <div class="date-block">
-                            <i class="fas fa-cubes"></i>
-                            <label>產品</label>
-                            <select id="mainProductSelect"></select>
-                        </div>
-                    </div>
+          <div class="compare-row" style="display:flex; flex-direction:column; gap:18px; align-items:stretch; max-width:700px; margin:0 auto;">
+            <div class="mainline-block glass-card">
+              <div class="block-title">主線設定</div>
+              <div class="block-fields param-row">
+                <div class="date-block">
+                  <i class="fas fa-calendar-alt"></i>
+                  <label>日期</label>
+                  <input id="mainDatePicker"/>
                 </div>
-                <div class="toggle-block">
-                    <label class="switch">
-                        <input type="checkbox" id="compareToggle">
-                        <span class="slider"></span>
-                    </label>
-                    <span class="toggle-label"><i class="fas fa-exchange-alt"></i> 啟用對比</span>
+                <div class="date-block">
+                  <i class="fas fa-store"></i>
+                  <label>分店</label>
+                  <select id="mainStoreSelect"></select>
                 </div>
-                <div class="compareline-block glass-card" id="compareLineBlock" style="display:none;">
-                    <div class="block-title">對比線設定</div>
-                    <div class="block-fields param-row">
-                        <div class="date-block">
-                            <i class="fas fa-calendar-check"></i>
-                            <label>日期</label>
-                            <input id="compareDatePicker" />
-                        </div>
-                        <div class="date-block">
-                            <i class="fas fa-store"></i>
-                            <label>分店</label>
-                            <select id="compareStoreSelect"></select>
-                        </div>
-                        <div class="date-block">
-                            <i class="fas fa-cubes"></i>
-                            <label>產品</label>
-                            <select id="compareProductSelect"></select>
-                        </div>
-                    </div>
+                <div class="date-block">
+                  <i class="fas fa-cubes"></i>
+                  <label>產品</label>
+                  <select id="mainProductSelect"></select>
                 </div>
+              </div>
             </div>
+            <div class="toggle-block">
+              <label class="switch">
+                <input type="checkbox" id="compareToggle">
+                <span class="slider"></span>
+              </label>
+              <span class="toggle-label"><i class="fas fa-exchange-alt"></i> 啟用對比</span>
+            </div>
+            <div class="compareline-block glass-card" id="compareLineBlock" style="display:none;">
+              <div class="block-title">對比線設定</div>
+              <div class="block-fields param-row">
+                <div class="date-block">
+                  <i class="fas fa-calendar-check"></i>
+                  <label>日期</label>
+                  <input id="compareDatePicker"/>
+                </div>
+                <div class="date-block">
+                  <i class="fas fa-store"></i>
+                  <label>分店</label>
+                  <select id="compareStoreSelect"></select>
+                </div>
+                <div class="date-block">
+                  <i class="fas fa-cubes"></i>
+                  <label>產品</label>
+                  <select id="compareProductSelect"></select>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
         <!-- 還原時間單位切換器 -->
         <div id="timeUnitSwitcher" class="time-unit-switcher"></div>
         <div class="chart-switcher">
-            <button class="chart-switch-btn active" data-chart="daily"><i class="fas fa-chart-line"></i>
-                <span>銷售趨勢</span></button>
-            <button class="chart-switch-btn" data-chart="store"><i class="fas fa-store"></i>
-                <span>各分店銷售額</span></button>
-            <button class="chart-switch-btn" data-chart="product"><i class="fas fa-cubes"></i>
-                <span>產品銷售佔比</span></button>
-            <button class="chart-switch-btn" data-chart="payment"><i class="fas fa-credit-card"></i>
-                <span>支付方式佔比</span></button>
+            <button class="chart-switch-btn active" data-chart="daily"><i class="fas fa-chart-line"></i> <span>銷售趨勢</span></button>
+            <button class="chart-switch-btn" data-chart="store"><i class="fas fa-store"></i> <span>各分店銷售額</span></button>
+            <button class="chart-switch-btn" data-chart="product"><i class="fas fa-cubes"></i> <span>產品銷售佔比</span></button>
+            <button class="chart-switch-btn" data-chart="payment"><i class="fas fa-credit-card"></i> <span>支付方式佔比</span></button>
         </div>
         <div class="main-chart-container">
             <canvas id="mainSalesChart"></canvas>
@@ -307,45 +296,11 @@
     <footer>
         <p>v4.0 | 任何問題請洽開發人員 <a href="https://line.me/ti/p/LwMjp6jZVH" target="_blank">徐</a></p>
     </footer>
-
+    
     <!-- Screenshot Loader -->
     <div id="screenshotLoader" class="screenshot-loader" style="display: none;">
         <span>正在生成高解析度圖片...</span>
     </div>
-
-<div id="predictionModal" class="glass-modal">
-    <div class="modal-content">
-        <button class="modal-close">&times;</button>
-        <h2 class="modal-title">補貨預警預測說明</h2>
-        <div class="modal-section">
-            <p class="modal-description">本系統預測某機台在幾天後庫存將低於 10%，以協助用戶及早規劃補貨。該預測結合了以下技術與資料分析方法：</p>
-        </div>
-        <div class="modal-section">
-            <h3 class="modal-section-title">預測核心技術</h3>
-            <p class="modal-description">目前主要採用 XGBoost 機器學習模型 搭配 Croston
-                方法，以提升對不規則銷售（間歇性需求）的預測準確度。此外，模型亦結合特徵工程與時間序列分析，並整合天氣資訊，以建立更全面的預測邏輯。</p>
-        </div>
-        <div class="modal-section">
-            <div class="modal-section">
-                <h3 class="modal-section-title">關鍵特徵（依重要性排序）</h3>
-                <p class="modal-description">
-                    時間序列特徵：如 14 天與 7 天移動平均、1 日延遲銷量、週數等，捕捉近期趨勢與週期性變化。<br>
-                    類別特徵：包含產品名稱、商店與日期的交互關係，用以建構更具識別性的模式。<br>
-                    天氣資料：氣溫與降雨狀況作為可能影響銷量的外部因素納入考量。<br>
-                    週期性特徵：如星期幾、年週期的 sin/cos 值，掌握周期性消費行為。<br>
-                    Croston 特徵：Croston 預測值及其移動平均，用於處理間歇性銷售的商品。<br>
-                    特殊日期：如發薪日與假日標記，對於短期銷售波動的影響特別顯著。
-                </p>
-            </div>
-        </div>
-        <div class="modal-section">
-            <h3 class="modal-section-title">目前模型表現</h3>
-            <p class="modal-description">整體預測誤差（MAPE）約為 13.28%，對於不同產品的預測精度差異略有不同，部分冷門或波動大的品項預測難度仍較高。</p>
-            <p class="modal-description">系統預測邏輯與模型仍持續優化中，後續將針對不同店點、產品特性與季節性變化進行進一步調整，以提高整體準確率與實用性。</p>
-        </div>
-    </div>
-</div>
     <script src="presentation.js"></script>
 </body>
-
-</html>
+</html> 
