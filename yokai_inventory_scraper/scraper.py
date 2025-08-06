@@ -390,12 +390,32 @@ def run_scraper(headless=True):
                     logging.error(f"  > Error: Could not find button for row {i+1}. Skipping.")
                     continue
 
-                inventory_container = wait.until(EC.visibility_of_element_located((By.XPATH, "//div[@data-v-d0a9a5c0 and @class='container']")))
-                inventory_text = inventory_container.text
-                logging.info("  > Scraped inventory data.")
+                # 收集所有頁面的庫存資料
+                all_inventory_text = ""
+                inventory_page = 1
+                
+                while True:
+                    # 等待並取得目前頁面的庫存資料
+                    inventory_container = wait.until(EC.visibility_of_element_located((By.XPATH, "//div[@data-v-d0a9a5c0 and @class='container']")))
+                    current_page_text = inventory_container.text
 
-                # Accumulate text instead of writing to file
-                all_scraped_text += f"--- Store #{total_stores_processed} ---\n{inventory_text}\n{'-'*20}\n\n"
+                    # 為每一頁創建單獨的記錄
+                    all_scraped_text += f"--- Store #{total_stores_processed} Page {inventory_page} ---\n{current_page_text}\n{'-'*20}\n\n"
+                    logging.info(f"  > 已抓取庫存查詢第 {inventory_page} 頁資料")
+                    
+                    # 檢查是否有下一頁按鈕
+                    next_page_elements = driver.find_elements(By.XPATH, f"//ul[contains(@class, 'el-pager')]//li[text()='{inventory_page + 1}']")
+                    
+                    if not next_page_elements:
+                        logging.info("  > 無更多庫存頁面")
+                        break
+                        
+                    # 點擊下一頁
+                    next_page_button = next_page_elements[0]
+                    driver.execute_script("arguments[0].click();", next_page_button)
+                    time.sleep(1)  # 等待頁面加載
+                    inventory_page += 1
+                logging.info(f"  > 完成抓取所有庫存資料，共 {inventory_page} 頁")
 
                 close_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//li[contains(@class, 'tags-li') and contains(@class, 'active')]//i[contains(@class, 'el-icon-close')]")))
                 close_button.click()
