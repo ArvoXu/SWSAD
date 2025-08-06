@@ -49,7 +49,7 @@ def generate_upload_file():
         
         # 1. 運行爬蟲獲取原始數據
         logging.info("正在運行爬蟲...")
-        raw_inventory_text = run_scraper(headless=True)
+        raw_inventory_text = run_scraper(headless=False)
         
         if not raw_inventory_text:
             logging.error("爬蟲未返回任何數據")
