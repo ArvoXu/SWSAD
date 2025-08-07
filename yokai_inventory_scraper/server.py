@@ -1811,21 +1811,30 @@ def generate_sales_detail():
             total_amount = 0  # 用於驗證總金額
             transaction_count = 0  # 用於驗證交易筆數
             
-            # 第一次遍歷：計算每個組合的總數和總額
+            # 第一次遍歷：找出每個產品的最新單價
+            product_latest_price = {}
+            for t in transactions:  # transactions已經按時間倒序排序
+                store_name = t.store_key.split('-')[0]  # 只取店名部分
+                if t.product_name not in product_latest_price and t.amount > 0:  # 只記錄第一次遇到的非零價格
+                    product_latest_price[t.product_name] = t.amount
+            
+            # 第二次遍歷：計算每個組合的總數和總額
             for t in transactions:
                 transaction_count += 1
-                store_name = t.store_key.split('-')[0]  # 只取店名部分
-                key = (store_name, t.product_name)  # 移除價格從key中，只用店名和商品名分組
+                store_name = t.store_key.split('-')[0]
+                key = (store_name, t.product_name)
                 
-                # 每筆交易金額 = 單價(amount)
+                # 每筆交易金額 = 實際交易金額
                 transaction_amount = t.amount
                 total_amount += transaction_amount
                 
                 if key not in sales_summary:
+                    # 使用最新的非零價格，如果沒有找到則使用當前交易價格
+                    price = product_latest_price.get(t.product_name, t.amount)
                     sales_summary[key] = {
                         'store': store_name,
                         'product': t.product_name,
-                        'price': t.amount,  # 使用最後一筆交易的價格
+                        'price': price,
                         'count': 0,
                         'total': 0
                     }
