@@ -1861,9 +1861,9 @@ def generate_sales_detail():
                 logging.info(f"  - Transaction count: {stats['transactions']}")
                 logging.info(f"  - Average transaction: {stats['total'] / stats['transactions']:.2f}")
 
-            # 按店家分組並排序
+            # 按店家分組並對內部產品按營收排序
             store_groups = {}
-            for sale in sorted(sales_summary.values(), key=lambda x: (x['store'], x['product'])):
+            for sale in sorted(sales_summary.values(), key=lambda x: x['store']):
                 if sale['store'] not in store_groups:
                     store_groups[sale['store']] = {
                         'sales': [],
@@ -1874,15 +1874,46 @@ def generate_sales_detail():
                 store_groups[sale['store']]['total_count'] += sale['count']
                 store_groups[sale['store']]['total_amount'] += sale['total']
 
-            # 設置樣式
-            from openpyxl.styles import Font, PatternFill
-            header_font = Font(bold=True)
-            subtotal_fill = PatternFill(start_color='E0E0E0', end_color='E0E0E0', fill_type='solid')
-            total_fill = PatternFill(start_color='CCCCCC', end_color='CCCCCC', fill_type='solid')
+            # 對每個店家的產品按營收排序
+            for store_data in store_groups.values():
+                store_data['sales'].sort(key=lambda x: x['total'], reverse=True)
 
-            # 填入標題並設置樣式
-            for col in ['A1', 'B1', 'C1', 'D1', 'E1']:
-                ws[col].font = header_font
+            # 設置樣式
+            from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
+            
+            # 字體樣式
+            header_font = Font(bold=True, size=11, name='微軟正黑體')
+            normal_font = Font(size=10, name='微軟正黑體')
+            store_font = Font(bold=True, size=12, name='微軟正黑體')
+            
+            # 填充顏色
+            header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')  # 深藍色
+            subtotal_fill = PatternFill(start_color='D9E1F2', end_color='D9E1F2', fill_type='solid')  # 淺藍色
+            total_fill = PatternFill(start_color='8EA9DB', end_color='8EA9DB', fill_type='solid')  # 中藍色
+            
+            # 邊框樣式
+            thin_border = Border(
+                left=Side(style='thin'),
+                right=Side(style='thin'),
+                top=Side(style='thin'),
+                bottom=Side(style='thin')
+            )
+            
+            # 對齊方式
+            center_alignment = Alignment(horizontal='center', vertical='center')
+            right_alignment = Alignment(horizontal='right', vertical='center')
+            
+            # 設置標題樣式
+            headers = ['店鋪', '產品', '單價', '份數', '小計']
+            for col, header in zip(['A1', 'B1', 'C1', 'D1', 'E1'], headers):
+                cell = ws[col]
+                cell.value = header
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.border = thin_border
+                cell.alignment = center_alignment
+                # 設置文字顏色為白色
+                cell.font = Font(bold=True, size=11, name='微軟正黑體', color='FFFFFF')
 
             # 填入數據，包括每個店家的小計
             current_row = 2
@@ -1890,13 +1921,33 @@ def generate_sales_detail():
             grand_total_amount = 0
 
             for store, data in store_groups.items():
+                # 店家名稱行
+                ws.merge_cells(f'A{current_row}:E{current_row}')
+                ws[f'A{current_row}'] = store
+                ws[f'A{current_row}'].font = store_font
+                ws[f'A{current_row}'].fill = subtotal_fill
+                ws[f'A{current_row}'].alignment = Alignment(horizontal='left', vertical='center')
+                for col in ['A', 'B', 'C', 'D', 'E']:
+                    ws[f'{col}{current_row}'].border = thin_border
+                current_row += 1
+
                 # 填入該店家的所有商品數據
                 for sale in data['sales']:
-                    ws[f'A{current_row}'] = sale['store']
-                    ws[f'B{current_row}'] = sale['product']
-                    ws[f'C{current_row}'] = sale['price']
-                    ws[f'D{current_row}'] = sale['count']
-                    ws[f'E{current_row}'] = sale['total']
+                    # 設置每個儲存格的樣式和數據
+                    cells = [
+                        (f'A{current_row}', sale['store'], 'left'),
+                        (f'B{current_row}', sale['product'], 'left'),
+                        (f'C{current_row}', sale['price'], 'right'),
+                        (f'D{current_row}', sale['count'], 'right'),
+                        (f'E{current_row}', sale['total'], 'right')
+                    ]
+                    
+                    for cell, value, align in cells:
+                        ws[cell] = value
+                        ws[cell].font = normal_font
+                        ws[cell].border = thin_border
+                        ws[cell].alignment = Alignment(horizontal=align, vertical='center')
+                    
                     current_row += 1
 
                 # 添加該店家的小計
@@ -1905,17 +1956,20 @@ def generate_sales_detail():
                 ws[f'E{current_row}'] = data['total_amount']
                 
                 # 設置小計行的樣式
-                for col in [f'A{current_row}', f'D{current_row}', f'E{current_row}']:
-                    ws[col].fill = subtotal_fill
-                    ws[col].font = header_font
+                for col in ['A', 'B', 'C', 'D', 'E']:
+                    ws[f'{col}{current_row}'].fill = subtotal_fill
+                    ws[f'{col}{current_row}'].font = header_font
+                    ws[f'{col}{current_row}'].border = thin_border
+                    ws[f'{col}{current_row}'].alignment = right_alignment
+                ws[f'A{current_row}'].alignment = Alignment(horizontal='left', vertical='center')
 
-                current_row += 1
-                # 添加一個空行
-                current_row += 1
+                current_row += 2  # 添加一個空行
 
                 # 累加到總計
                 grand_total_count += data['total_count']
                 grand_total_amount += data['total_amount']
+
+            current_row -= 1  # 移除最後一個多餘的空行
 
             # 添加總計行
             ws[f'A{current_row}'] = "總計"
@@ -1923,13 +1977,22 @@ def generate_sales_detail():
             ws[f'E{current_row}'] = grand_total_amount
 
             # 設置總計行的樣式
-            for col in [f'A{current_row}', f'D{current_row}', f'E{current_row}']:
-                ws[col].fill = total_fill
-                ws[col].font = header_font
-
-            # 調整欄寬
             for col in ['A', 'B', 'C', 'D', 'E']:
-                ws.column_dimensions[col].auto_size = True
+                ws[f'{col}{current_row}'].fill = total_fill
+                ws[f'{col}{current_row}'].font = header_font
+                ws[f'{col}{current_row}'].border = thin_border
+                ws[f'{col}{current_row}'].alignment = right_alignment
+            ws[f'A{current_row}'].alignment = Alignment(horizontal='left', vertical='center')
+
+            # 設置欄寬
+            ws.column_dimensions['A'].width = 20  # 店鋪名稱
+            ws.column_dimensions['B'].width = 30  # 產品名稱
+            ws.column_dimensions['C'].width = 12  # 單價
+            ws.column_dimensions['D'].width = 12  # 份數
+            ws.column_dimensions['E'].width = 15  # 小計
+
+            # 凍結首行
+            ws.freeze_panes = 'A2'
 
             # 保存文件
             date_str = datetime.now().strftime('%Y%m%d_%H%M%S')
