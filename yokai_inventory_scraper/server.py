@@ -1937,12 +1937,12 @@ def generate_sales_detail():
 
             for store, data in store_groups.items():
                 # 店家名稱行
-                ws.merge_cells(f'A{current_row}:E{current_row}')
+                ws.merge_cells(f'A{current_row}:D{current_row}')
                 ws[f'A{current_row}'] = store
                 ws[f'A{current_row}'].font = store_font
                 ws[f'A{current_row}'].fill = subtotal_fill
                 ws[f'A{current_row}'].alignment = Alignment(horizontal='left', vertical='center')
-                for col in ['A', 'B', 'C', 'D', 'E']:
+                for col in ['A', 'B', 'C', 'D']:
                     ws[f'{col}{current_row}'].border = thin_border
                 
                 last_header_row = current_row  # 記錄店家標題行的位置
@@ -1973,7 +1973,7 @@ def generate_sales_detail():
                     
                     # 使用淺色底色區分奇偶行
                     if (current_row - last_header_row) % 2 == 0:
-                        for col in ['A', 'B', 'C', 'D', 'E']:
+                        for col in ['A', 'B', 'C', 'D']:
                             ws[f'{col}{current_row}'].fill = PatternFill(start_color='F5F5F5', end_color='F5F5F5', fill_type='solid')
                     
                     current_row += 1
