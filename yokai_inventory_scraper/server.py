@@ -1778,6 +1778,9 @@ def generate_sales_detail():
 
         db: Session = next(get_db())
         try:
+            # 設定日期範圍的結束時間為當天的最後一刻
+            end_date = end_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+            
             # 獲取指定日期範圍內的所有交易
             transactions = db.query(Transaction).filter(
                 Transaction.transaction_time >= start_date,
@@ -1786,6 +1789,10 @@ def generate_sales_detail():
 
             if not transactions:
                 return jsonify({'success': False, 'message': '指定日期範圍內沒有交易記錄'}), 404
+                
+            # 記錄查詢到的交易記錄範圍
+            logging.info(f"Query date range: from {start_date} to {end_date}")
+            logging.info(f"Found {len(transactions)} transactions")
 
             # 建立 Excel 工作簿
             wb = Workbook()
@@ -1801,18 +1808,58 @@ def generate_sales_detail():
 
             # 統計數據
             sales_summary = {}
+            total_amount = 0  # 用於驗證總金額
+            transaction_count = 0  # 用於驗證交易筆數
+            
+            # 第一次遍歷：計算每個組合的總數和總額
             for t in transactions:
-                key = (t.store_key, t.product_name, t.amount)
+                transaction_count += 1
+                store_name = t.store_key.split('-')[0]  # 只取店名部分
+                key = (store_name, t.product_name)  # 移除價格從key中，只用店名和商品名分組
+                
+                # 每筆交易金額 = 單價(amount)
+                transaction_amount = t.amount
+                total_amount += transaction_amount
+                
                 if key not in sales_summary:
                     sales_summary[key] = {
-                        'store': t.store_key.split('-')[0],  # 移除機台編號
+                        'store': store_name,
                         'product': t.product_name,
-                        'price': t.amount,
+                        'price': t.amount,  # 使用最後一筆交易的價格
                         'count': 0,
                         'total': 0
                     }
+                
                 sales_summary[key]['count'] += 1
-                sales_summary[key]['total'] += t.amount
+                sales_summary[key]['total'] += transaction_amount  # 累加實際交易金額
+            
+            # 詳細的日誌記錄
+            logging.info(f"Total transactions: {transaction_count}")
+            logging.info(f"Total amount: {total_amount}")
+            logging.info(f"Unique combinations: {len(sales_summary)}")
+            
+            # 驗證彙總數據
+            summary_total = sum(item['total'] for item in sales_summary.values())
+            if summary_total != total_amount:
+                logging.error(f"Amount mismatch! Summary: {summary_total}, Transactions: {total_amount}")
+            
+            # 按店鋪分組進行統計並記錄到日誌
+            store_totals = {}
+            for key, data in sales_summary.items():
+                store = data['store']
+                if store not in store_totals:
+                    store_totals[store] = {
+                        'total': 0,
+                        'transactions': 0
+                    }
+                store_totals[store]['total'] += data['total']
+                store_totals[store]['transactions'] += data['count']
+            
+            for store, stats in store_totals.items():
+                logging.info(f"Store: {store}")
+                logging.info(f"  - Total amount: {stats['total']}")
+                logging.info(f"  - Transaction count: {stats['transactions']}")
+                logging.info(f"  - Average transaction: {stats['total'] / stats['transactions']:.2f}")
 
             # 填入數據
             for i, sale in enumerate(sorted(sales_summary.values(), key=lambda x: (x['store'], x['product'])), start=2):
