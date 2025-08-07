@@ -17,7 +17,7 @@ import pandas as pd
 import shutil
 import json
 import pytz
-from openpyxl import load_workbook
+from openpyxl import load_workbook, Workbook
 from datetime import datetime
 
 
@@ -1759,6 +1759,97 @@ def generate_replenishment_form():
 @app.route('/download-replenishment-form/<filename>')
 def download_replenishment_form(filename):
     """下載生成的補貨單"""
+    try:
+        return send_from_directory(script_dir, filename, as_attachment=True)
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 404
+
+# --- 銷售明細表生成相關功能 ---
+@app.route('/api/generate-sales-detail', methods=['POST'])
+def generate_sales_detail():
+    """根據日期範圍生成銷售明細表Excel"""
+    try:
+        data = request.get_json()
+        if not data or 'startDate' not in data or 'endDate' not in data:
+            return jsonify({'success': False, 'message': '無效的請求數據'}), 400
+
+        start_date = datetime.fromisoformat(data['startDate'])
+        end_date = datetime.fromisoformat(data['endDate'])
+
+        db: Session = next(get_db())
+        try:
+            # 獲取指定日期範圍內的所有交易
+            transactions = db.query(Transaction).filter(
+                Transaction.transaction_time >= start_date,
+                Transaction.transaction_time <= end_date
+            ).order_by(Transaction.store_key, Transaction.product_name).all()
+
+            if not transactions:
+                return jsonify({'success': False, 'message': '指定日期範圍內沒有交易記錄'}), 404
+
+            # 建立 Excel 工作簿
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "銷售明細"
+
+            # 設置標題行
+            ws['A1'] = '店鋪'
+            ws['B1'] = '產品'
+            ws['C1'] = '售價'
+            ws['D1'] = '份數'
+            ws['E1'] = '小記'
+
+            # 統計數據
+            sales_summary = {}
+            for t in transactions:
+                key = (t.store_key, t.product_name, t.amount)
+                if key not in sales_summary:
+                    sales_summary[key] = {
+                        'store': t.store_key.split('-')[0],  # 移除機台編號
+                        'product': t.product_name,
+                        'price': t.amount,
+                        'count': 0,
+                        'total': 0
+                    }
+                sales_summary[key]['count'] += 1
+                sales_summary[key]['total'] += t.amount
+
+            # 填入數據
+            for i, sale in enumerate(sorted(sales_summary.values(), key=lambda x: (x['store'], x['product'])), start=2):
+                ws[f'A{i}'] = sale['store']
+                ws[f'B{i}'] = sale['product']
+                ws[f'C{i}'] = sale['price']
+                ws[f'D{i}'] = sale['count']
+                ws[f'E{i}'] = sale['total']
+
+            # 調整欄寬
+            for col in ['A', 'B', 'C', 'D', 'E']:
+                ws.column_dimensions[col].auto_size = True
+
+            # 保存文件
+            date_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f'sales_detail_{date_str}.xlsx'
+            output_path = os.path.join(script_dir, filename)
+            wb.save(output_path)
+
+            return jsonify({
+                'success': True,
+                'message': '明細表生成成功',
+                'filename': filename
+            })
+
+        except Exception as e:
+            logging.error(f"生成明細表時發生錯誤: {str(e)}", exc_info=True)
+            return jsonify({'success': False, 'message': f'生成明細表時發生錯誤: {str(e)}'}), 500
+        finally:
+            db.close()
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+
+@app.route('/download-sales-detail/<filename>')
+def download_sales_detail(filename):
+    """下載生成的銷售明細表"""
     try:
         return send_from_directory(script_dir, filename, as_attachment=True)
     except Exception as e:

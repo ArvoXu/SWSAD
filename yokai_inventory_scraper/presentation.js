@@ -1,6 +1,78 @@
     window.chartGlassBg = 'rgba(255,255,255,0)'; // 預設全透明
         // 全局產品顏色映射表，確保跨所有圖表的一致性
         const globalProductColorMap = {};
+
+        // 處理產生明細表的功能
+        async function generateSalesDetail() {
+            const mainDateInput = document.getElementById('mainDatePicker');
+            const compareDateInput = document.getElementById('compareDatePicker');
+            
+            if (!mainDateInput.value) {
+                alert('請選擇日期範圍');
+                return;
+            }
+
+            // 解析日期範圍並格式化
+            function formatDate(dateStr) {
+                // 如果日期字符串包含時間，只取日期部分
+                return dateStr.trim().split(' ')[0];
+            }
+
+            let startDate, endDate;
+            if (mainDateInput.value.includes('-')) {
+                const dateRange = mainDateInput.value.split('-').map(d => formatDate(d));
+                if (dateRange.length === 2) {
+                    startDate = dateRange[0].trim();
+                    endDate = dateRange[1].trim();
+                } else {
+                    startDate = formatDate(mainDateInput.value);
+                    endDate = startDate;
+                }
+            } else {
+                startDate = formatDate(mainDateInput.value);
+                endDate = startDate;
+            }
+
+            // 如果有選擇比較日期，使用比較日期作為結束日期
+            if (compareDateInput && compareDateInput.value) {
+                endDate = formatDate(compareDateInput.value);
+            }
+
+            console.log('Date range:', { startDate, endDate }); // 添加日誌輸出
+
+            try {
+                const response = await fetch('/api/generate-sales-detail', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        startDate: startDate,
+                        endDate: endDate
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    // 下載生成的文件
+                    window.location.href = `/download-sales-detail/${data.filename}`;
+                } else {
+                    alert(data.message || '生成明細表失敗');
+                }
+            } catch (error) {
+                console.error('生成明細表時發生錯誤:', error);
+                alert('生成明細表時發生錯誤');
+            }
+        }
+
+        // 添加明細表按鈕的事件監聽器
+        document.addEventListener('DOMContentLoaded', function() {
+            const generateSalesDetailButton = document.getElementById('generateSalesDetailButton');
+            if (generateSalesDetailButton) {
+                generateSalesDetailButton.addEventListener('click', generateSalesDetail);
+            }
+        });
         
         // 新增：從URL獲取參數的函數
         function getDataFromUrl() {
