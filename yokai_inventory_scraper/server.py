@@ -2033,9 +2033,10 @@ def generate_sales_detail():
             ws.freeze_panes = 'A2'  # 凍結首行
             ws.sheet_view.showGridLines = False  # 隱藏網格線
 
-            # 保存文件
-            date_str = datetime.now().strftime('%Y%m%d_%H%M%S')
-            filename = f'sales_detail_{date_str}.xlsx'
+            # 生成日期範圍字串
+            start_str = start_date.strftime('%Y%m%d')
+            end_str = end_date.strftime('%Y%m%d')
+            filename = f'sales_detail_{start_str}-{end_str}.xlsx'
             output_path = os.path.join(script_dir, filename)
             wb.save(output_path)
 
