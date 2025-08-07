@@ -1861,13 +1861,71 @@ def generate_sales_detail():
                 logging.info(f"  - Transaction count: {stats['transactions']}")
                 logging.info(f"  - Average transaction: {stats['total'] / stats['transactions']:.2f}")
 
-            # 填入數據
-            for i, sale in enumerate(sorted(sales_summary.values(), key=lambda x: (x['store'], x['product'])), start=2):
-                ws[f'A{i}'] = sale['store']
-                ws[f'B{i}'] = sale['product']
-                ws[f'C{i}'] = sale['price']
-                ws[f'D{i}'] = sale['count']
-                ws[f'E{i}'] = sale['total']
+            # 按店家分組並排序
+            store_groups = {}
+            for sale in sorted(sales_summary.values(), key=lambda x: (x['store'], x['product'])):
+                if sale['store'] not in store_groups:
+                    store_groups[sale['store']] = {
+                        'sales': [],
+                        'total_count': 0,
+                        'total_amount': 0
+                    }
+                store_groups[sale['store']]['sales'].append(sale)
+                store_groups[sale['store']]['total_count'] += sale['count']
+                store_groups[sale['store']]['total_amount'] += sale['total']
+
+            # 設置樣式
+            from openpyxl.styles import Font, PatternFill
+            header_font = Font(bold=True)
+            subtotal_fill = PatternFill(start_color='E0E0E0', end_color='E0E0E0', fill_type='solid')
+            total_fill = PatternFill(start_color='CCCCCC', end_color='CCCCCC', fill_type='solid')
+
+            # 填入標題並設置樣式
+            for col in ['A1', 'B1', 'C1', 'D1', 'E1']:
+                ws[col].font = header_font
+
+            # 填入數據，包括每個店家的小計
+            current_row = 2
+            grand_total_count = 0
+            grand_total_amount = 0
+
+            for store, data in store_groups.items():
+                # 填入該店家的所有商品數據
+                for sale in data['sales']:
+                    ws[f'A{current_row}'] = sale['store']
+                    ws[f'B{current_row}'] = sale['product']
+                    ws[f'C{current_row}'] = sale['price']
+                    ws[f'D{current_row}'] = sale['count']
+                    ws[f'E{current_row}'] = sale['total']
+                    current_row += 1
+
+                # 添加該店家的小計
+                ws[f'A{current_row}'] = f"{store} 小計"
+                ws[f'D{current_row}'] = data['total_count']
+                ws[f'E{current_row}'] = data['total_amount']
+                
+                # 設置小計行的樣式
+                for col in [f'A{current_row}', f'D{current_row}', f'E{current_row}']:
+                    ws[col].fill = subtotal_fill
+                    ws[col].font = header_font
+
+                current_row += 1
+                # 添加一個空行
+                current_row += 1
+
+                # 累加到總計
+                grand_total_count += data['total_count']
+                grand_total_amount += data['total_amount']
+
+            # 添加總計行
+            ws[f'A{current_row}'] = "總計"
+            ws[f'D{current_row}'] = grand_total_count
+            ws[f'E{current_row}'] = grand_total_amount
+
+            # 設置總計行的樣式
+            for col in [f'A{current_row}', f'D{current_row}', f'E{current_row}']:
+                ws[col].fill = total_fill
+                ws[col].font = header_font
 
             # 調整欄寬
             for col in ['A', 'B', 'C', 'D', 'E']:
