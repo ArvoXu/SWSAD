@@ -4,39 +4,15 @@
 
         // 處理產生明細表的功能
         async function generateSalesDetail() {
-            const mainDateInput = document.getElementById('mainDatePicker');
-            const compareDateInput = document.getElementById('compareDatePicker');
-            
-            if (!mainDateInput.value) {
+            // 直接從 mainDatePickerInstance 獲取選擇的日期
+            if (!mainDatePickerInstance.getStartDate() || !mainDatePickerInstance.getEndDate()) {
                 alert('請選擇日期範圍');
                 return;
             }
 
-            // 解析日期範圍並格式化
-            function formatDate(dateStr) {
-                // 如果日期字符串包含時間，只取日期部分
-                return dateStr.trim().split(' ')[0];
-            }
-
-            let startDate, endDate;
-            if (mainDateInput.value.includes('-')) {
-                const dateRange = mainDateInput.value.split('-').map(d => formatDate(d));
-                if (dateRange.length === 2) {
-                    startDate = dateRange[0].trim();
-                    endDate = dateRange[1].trim();
-                } else {
-                    startDate = formatDate(mainDateInput.value);
-                    endDate = startDate;
-                }
-            } else {
-                startDate = formatDate(mainDateInput.value);
-                endDate = startDate;
-            }
-
-            // 如果有選擇比較日期，使用比較日期作為結束日期
-            if (compareDateInput && compareDateInput.value) {
-                endDate = formatDate(compareDateInput.value);
-            }
+            // 使用選擇器的日期，確保格式正確
+            const startDate = mainDatePickerInstance.getStartDate().format('YYYY-MM-DD');
+            const endDate = mainDatePickerInstance.getEndDate().format('YYYY-MM-DD');
 
             console.log('Date range:', { startDate, endDate }); // 添加日誌輸出
 
