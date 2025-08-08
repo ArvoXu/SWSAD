@@ -1,8 +1,25 @@
-    window.chartGlassBg = 'rgba(255,255,255,0)'; // 預設全透明
-        // 全局產品顏色映射表，確保跨所有圖表的一致性
-        const globalProductColorMap = {};
+    // 操作教學展開/收合功能
+    const tutorialHeader = document.querySelector('.tutorial-header');
+    const tutorialContent = document.querySelector('.tutorial-content');
+    const tutorialIcon = tutorialHeader.querySelector('.fa-chevron-down');
 
-        // 處理產生明細表的功能
+    if (tutorialHeader && tutorialContent) {
+        // 預設收合教學內容
+        tutorialContent.style.display = 'none';
+        
+        tutorialHeader.addEventListener('click', function() {
+            const isExpanded = tutorialContent.style.display === 'block';
+            tutorialContent.style.display = isExpanded ? 'none' : 'block';
+            tutorialIcon.style.transform = isExpanded ? 'rotate(0deg)' : 'rotate(180deg)';
+            tutorialIcon.style.transition = 'transform 0.3s ease';
+        });
+    }
+
+    window.chartGlassBg = 'rgba(255,255,255,0)'; // 預設全透明
+    // 全局產品顏色映射表，確保跨所有圖表的一致性
+    const globalProductColorMap = {};
+
+    // 處理產生明細表的功能
         async function generateSalesDetail() {
             // 直接從 mainDatePickerInstance 獲取選擇的日期
             if (!mainDatePickerInstance.getStartDate() || !mainDatePickerInstance.getEndDate()) {
