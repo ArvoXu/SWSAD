@@ -76,12 +76,20 @@ def run_warehouse_scraper(headless=False):
 
             # 步驟 2：導航到倉庫管理，使用穩健的邏輯
             logging.info("導航到倉庫管理...")
+            
+            # 首先確保點擊 Warehouse 主選單
+            warehouse_menu_xpath = "//div[contains(@class, 'el-submenu__title')][.//span[text()='Warehouse']]"
+            warehouse_menu = wait.until(EC.element_to_be_clickable((By.XPATH, warehouse_menu_xpath)))
+            warehouse_menu.click()
+            logging.info(" > Warehouse 主選單已點擊")
+            time.sleep(0.5)  # 給選單展開一些時間
+            
             try:
-                # 嘗試直接點擊最終選單項目（如果選單已經打開）
+                # 嘗試點擊子選單項目
                 warehouse_item_xpath = "//li[contains(@class, 'el-menu-item') and normalize-space()='Location Inventory Item']"
                 warehouse_item = wait.until(EC.element_to_be_clickable((By.XPATH, warehouse_item_xpath)))
                 warehouse_item.click()
-                logging.info(" > 直接點擊選單項目成功（選單可能已經打開）。")
+                logging.info(" > Location Inventory Item 選單項目點擊成功")
             except TimeoutException:
                 # 如果直接點擊失敗，選單可能是關閉的。先展開它
                 logging.info(" > 直接點擊失敗。先展開選單...")
@@ -122,7 +130,7 @@ def run_warehouse_scraper(headless=False):
                 logging.info("Region is already set to TW")
 
             logging.info("Proceeding to export...")
-            
+
             # 步驟 3：點擊匯出按鈕並下載檔案
             export_button_xpath = "//button[contains(@class, 'el-button--primary')]//span[contains(text(), 'Export remain stock as excel')]"
             
