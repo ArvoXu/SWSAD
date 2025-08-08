@@ -23,7 +23,7 @@ def get_credentials():
         raise ValueError("錯誤：環境變數 YOKAI_USERNAME 或 YOKAI_PASSWORD 未設定。")
     return username, password
 
-def run_sales_scraper(headless=True):
+def run_sales_scraper(headless=False):
     """
     Launches a browser, logs in, navigates, and downloads the sales report.
     Can be run in headless (default for server) or headed mode (for local debugging).
@@ -108,7 +108,34 @@ def run_sales_scraper(headless=True):
                 driver.find_element(By.TAG_NAME, 'body').click()
             time.sleep(0.5) # Brief pause to allow any JS events to fire.
 
-            logging.info("Date range set and finalized. Proceeding directly to export.")
+            logging.info("Date range set and finalized. Checking region...")
+
+            # 檢查當前選擇的 region
+            region_input = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Select region']")))
+            current_region = region_input.get_attribute("value")
+            
+            if current_region != "TW":
+                logging.info(f"Current region is {current_region}, changing to TW...")
+                # 點擊 region 選擇器
+                region_input.click()
+                time.sleep(0.5)
+                
+                # 在下拉選單中找到並點擊 TW 選項
+                tw_option = wait.until(EC.element_to_be_clickable((
+                    By.XPATH, 
+                    "//li[contains(@class, 'el-select-dropdown__item')]//span[text()='TW']"
+                )))
+                driver.execute_script("arguments[0].click();", tw_option.find_element(By.XPATH, ".."))
+                time.sleep(1.5)  # 增加等待時間確保選擇生效
+                
+                # 確認 region 已經變更為 TW
+                if region_input.get_attribute("value") != "TW":
+                    raise Exception("Failed to change region to TW")
+                logging.info("Successfully changed region to TW")
+            else:
+                logging.info("Region is already set to TW")
+
+            logging.info("Proceeding to export...")
 
             # Step 4: New robust export logic based on filesystem checks
             export_button_xpath = "//button[.//span[normalize-space()='Export as excel']]"
@@ -205,7 +232,7 @@ if __name__ == '__main__':
 
     try:
         # For local debugging, run in "headed" mode to see the browser in action.
-        downloaded_file_path = run_sales_scraper(headless=False)
+        downloaded_file_path = run_sales_scraper(headless=True)
         logging.info(f"\n--- Success! ---")
         logging.info(f"Script finished. File downloaded to: {downloaded_file_path}")
         # In a real scenario, you would now process this file.

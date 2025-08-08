@@ -21,7 +21,7 @@ def get_credentials():
         raise ValueError("錯誤：環境變數 YOKAI_USERNAME 或 YOKAI_PASSWORD 未設定。")
     return username, password
 
-def run_warehouse_scraper(headless=True):
+def run_warehouse_scraper(headless=False):
     """
     啟動瀏覽器、登入、導航並下載倉庫庫存報告。
     可以在無頭模式（伺服器默認）或有頭模式（本地調試）下運行。
@@ -96,7 +96,33 @@ def run_warehouse_scraper(headless=True):
                 logging.info(" > 展開選單並點擊項目。")
 
             logging.info("導航點擊已發送。等待頁面載入...")
+            # 檢查當前選擇的 region
+            region_input = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Select region']")))
+            current_region = region_input.get_attribute("value")
+            
+            if current_region != "TW":
+                logging.info(f"Current region is {current_region}, changing to TW...")
+                # 點擊 region 選擇器
+                region_input.click()
+                time.sleep(0.5)
+                
+                # 在下拉選單中找到並點擊 TW 選項
+                tw_option = wait.until(EC.element_to_be_clickable((
+                    By.XPATH, 
+                    "//li[contains(@class, 'el-select-dropdown__item')]//span[text()='TW']"
+                )))
+                driver.execute_script("arguments[0].click();", tw_option.find_element(By.XPATH, ".."))
+                time.sleep(1.5)  # 增加等待時間確保選擇生效
+                
+                # 確認 region 已經變更為 TW
+                if region_input.get_attribute("value") != "TW":
+                    raise Exception("Failed to change region to TW")
+                logging.info("Successfully changed region to TW")
+            else:
+                logging.info("Region is already set to TW")
 
+            logging.info("Proceeding to export...")
+            
             # 步驟 3：點擊匯出按鈕並下載檔案
             export_button_xpath = "//button[contains(@class, 'el-button--primary')]//span[contains(text(), 'Export remain stock as excel')]"
             
