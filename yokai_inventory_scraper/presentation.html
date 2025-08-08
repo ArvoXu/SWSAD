@@ -251,12 +251,12 @@
                 <div class="date-block">
                   <i class="fas fa-store"></i>
                   <label>分店</label>
-                  <select id="mainStoreSelect"></select>
+                  <div id="mainStoreSelect" class="multi-select-input" tabindex="0" style="cursor:pointer;" placeholder="請選擇分店">請選擇分店</div>
                 </div>
                 <div class="date-block">
                   <i class="fas fa-cubes"></i>
                   <label>產品</label>
-                  <select id="mainProductSelect"></select>
+                  <div id="mainProductSelect" class="multi-select-input" tabindex="0" style="cursor:pointer;" placeholder="請選擇產品">請選擇產品</div>
                 </div>
               </div>
             </div>
@@ -300,6 +300,21 @@
         <div class="main-chart-container">
             <canvas id="mainSalesChart"></canvas>
             <div id="lineLegend" class="line-legend"></div>
+        </div>
+
+        <!-- Modal for multi-select -->
+        <div id="multiSelectModal" class="modal-overlay" style="display:none;">
+          <div class="modal-content glass-card">
+            <div class="modal-header">
+              <span id="multiSelectModalTitle"></span>
+              <button id="multiSelectModalClose" class="modal-close-btn"><i class="fas fa-times"></i></button>
+            </div>
+            <div id="multiSelectModalList" class="modal-list"></div>
+            <div class="modal-footer">
+              <button id="multiSelectModalConfirm" class="modal-confirm-btn">確定</button>
+            </div>
+          </div>
+        </div>
         </div>
     </div>
 

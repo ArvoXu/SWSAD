@@ -502,12 +502,87 @@
                 if (d.shopName) storeSet.add(d.shopName);
                 if (d.product) productSet.add(d.product);
             });
-            const storeOptions = '<option value="">全部</option>' + Array.from(storeSet).sort().map(s => `<option value="${s}">${s}</option>`).join('');
-            const productOptions = '<option value="">全部</option>' + Array.from(productSet).sort().map(p => `<option value="${p}">${p}</option>`).join('');
-            document.getElementById('mainStoreSelect').innerHTML = storeOptions;
-            document.getElementById('mainProductSelect').innerHTML = productOptions;
-            document.getElementById('compareStoreSelect').innerHTML = storeOptions;
-            document.getElementById('compareProductSelect').innerHTML = productOptions;
+            const storeList = Array.from(storeSet).sort();
+            const productList = Array.from(productSet).sort();
+            // 多選狀態
+            let selectedStores = [];
+            let selectedProducts = [];
+
+            // Modal 控制
+            const modal = document.getElementById('multiSelectModal');
+            const modalTitle = document.getElementById('multiSelectModalTitle');
+            const modalList = document.getElementById('multiSelectModalList');
+            const modalClose = document.getElementById('multiSelectModalClose');
+            const modalConfirm = document.getElementById('multiSelectModalConfirm');
+            let currentMultiType = null;
+
+            // 主分店/產品輸入框
+            const mainStoreInput = document.getElementById('mainStoreSelect');
+            const mainProductInput = document.getElementById('mainProductSelect');
+
+            // 打開多選 modal
+            function openMultiSelect(type) {
+                currentMultiType = type;
+                modal.style.display = 'flex';
+                modalTitle.textContent = type === 'store' ? '選擇分店' : '選擇產品';
+                // 生成卡片
+                const list = type === 'store' ? storeList : productList;
+                const selected = type === 'store' ? selectedStores : selectedProducts;
+                modalList.innerHTML = '';
+                list.forEach(item => {
+                    const card = document.createElement('div');
+                    card.className = 'modal-card' + (selected.includes(item) ? ' selected' : '');
+                    card.textContent = item;
+                    card.addEventListener('click', () => {
+                        if (selected.includes(item)) {
+                            const idx = selected.indexOf(item);
+                            selected.splice(idx, 1);
+                            card.classList.remove('selected');
+                        } else {
+                            selected.push(item);
+                            card.classList.add('selected');
+                        }
+                    });
+                    modalList.appendChild(card);
+                });
+            }
+            // 關閉 modal
+            function closeModal() {
+                modal.style.display = 'none';
+            }
+            modalClose.onclick = closeModal;
+            modalConfirm.onclick = function() {
+                updateMultiSelectPlaceholder();
+                closeModal();
+                // 之後可觸發資料聚合
+            };
+            // 點擊外部關閉
+            modal.addEventListener('mousedown', function(e) {
+                if (e.target === modal) closeModal();
+            });
+
+            // 輸入框點擊
+            mainStoreInput.onclick = () => openMultiSelect('store');
+            mainProductInput.onclick = () => openMultiSelect('product');
+
+            // 更新 placeholder
+            function updateMultiSelectPlaceholder() {
+                if (selectedStores.length === 0) {
+                    mainStoreInput.textContent = '請選擇分店';
+                } else if (selectedStores.length === 1) {
+                    mainStoreInput.textContent = selectedStores[0];
+                } else {
+                    mainStoreInput.textContent = `${selectedStores.length}家分店`;
+                }
+                if (selectedProducts.length === 0) {
+                    mainProductInput.textContent = '請選擇產品';
+                } else if (selectedProducts.length === 1) {
+                    mainProductInput.textContent = selectedProducts[0];
+                } else {
+                    mainProductInput.textContent = `${selectedProducts.length}項產品`;
+                }
+            }
+            updateMultiSelectPlaceholder();
 
             // 2. 初始化日期選擇器
             const today = new Date();
@@ -546,15 +621,11 @@
             compareLine.start = defaultStart;
             compareLine.end = today;
 
-            // 3. 綁定主線/對比線 select 事件
-            document.getElementById('mainStoreSelect').addEventListener('change', function() {
-                mainLine.store = this.value;
-                renderSalesChart(fullSalesData);
-            });
-            document.getElementById('mainProductSelect').addEventListener('change', function() {
-                mainLine.product = this.value;
-                renderSalesChart(fullSalesData);
-            });
+            // 3. 對比線 select 維持原本單選
+            const storeOptions = '<option value="">全部</option>' + storeList.map(s => `<option value="${s}">${s}</option>`).join('');
+            const productOptions = '<option value="">全部</option>' + productList.map(p => `<option value="${p}">${p}</option>`).join('');
+            document.getElementById('compareStoreSelect').innerHTML = storeOptions;
+            document.getElementById('compareProductSelect').innerHTML = productOptions;
             document.getElementById('compareStoreSelect').addEventListener('change', function() {
                 compareLine.store = this.value;
                 renderSalesChart(fullSalesData);

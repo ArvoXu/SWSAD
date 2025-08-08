@@ -1,3 +1,111 @@
+/* 多選輸入框與 Modal 風格 */
+.multi-select-input {
+  background: rgba(255,255,255,0.7);
+  border: 1.5px solid var(--primary-color, #36A2EB);
+  border-radius: 8px;
+  padding: 6px 12px;
+  min-width: 120px;
+  min-height: 32px;
+  font-size: 1rem;
+  color: #222;
+  transition: border 0.2s;
+  outline: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.multi-select-input:focus {
+  border: 2px solid var(--primary-color, #36A2EB);
+  background: rgba(255,255,255,0.95);
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.18);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal-content {
+  background: rgba(255,255,255,0.95);
+  border-radius: 16px;
+  box-shadow: 0 4px 32px rgba(0,0,0,0.12);
+  min-width: 320px;
+  max-width: 90vw;
+  min-height: 220px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 8px 20px;
+  border-bottom: 1px solid #e0e0e0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+.modal-close-btn {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  color: #888;
+  cursor: pointer;
+}
+.modal-list {
+  padding: 18px 20px 0 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  overflow-y: auto;
+  max-height: 320px;
+}
+.modal-card {
+  background: rgba(245,250,255,0.95);
+  border: 1.5px solid var(--primary-color, #36A2EB);
+  border-radius: 10px;
+  padding: 12px 18px;
+  min-width: 90px;
+  min-height: 38px;
+  font-size: 1rem;
+  color: #222;
+  cursor: pointer;
+  transition: background 0.18s, border 0.18s;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.modal-card.selected {
+  background: var(--primary-color, #36A2EB);
+  color: #fff;
+  border: 2px solid var(--primary-color, #36A2EB);
+}
+.modal-footer {
+  padding: 12px 20px 16px 20px;
+  border-top: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: flex-end;
+}
+.modal-confirm-btn {
+  background: var(--primary-color, #36A2EB);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 22px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.18s;
+}
+.modal-confirm-btn:hover {
+  background: #1982c4;
+}
 :root {
     --primary-color: #2196F3;
     --secondary-color: #673AB7;
