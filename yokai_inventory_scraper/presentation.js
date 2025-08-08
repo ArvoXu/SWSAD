@@ -504,9 +504,15 @@
             });
             const storeList = Array.from(storeSet).sort();
             const productList = Array.from(productSet).sort();
-            // 多選狀態
-            let selectedStores = [];
-            let selectedProducts = [];
+            // 多選狀態（全域唯一）
+            if (!window._mainMultiSelect) {
+                window._mainMultiSelect = {
+                    selectedStores: [],
+                    selectedProducts: []
+                };
+            }
+            const selectedStores = window._mainMultiSelect.selectedStores;
+            const selectedProducts = window._mainMultiSelect.selectedProducts;
 
             // Modal 控制
             const modal = document.getElementById('multiSelectModal');
@@ -527,7 +533,7 @@
                 modalTitle.textContent = type === 'store' ? '選擇分店' : '選擇產品';
                 // 生成卡片
                 const list = type === 'store' ? storeList : productList;
-                const selected = type === 'store' ? selectedStores : selectedProducts;
+                const selected = type === 'store' ? window._mainMultiSelect.selectedStores : window._mainMultiSelect.selectedProducts;
                 modalList.innerHTML = '';
                 list.forEach(item => {
                     const card = document.createElement('div');
@@ -552,9 +558,13 @@
             }
             modalClose.onclick = closeModal;
             modalConfirm.onclick = function() {
+                // 強制同步 window._mainMultiSelect 的內容
+                window._mainMultiSelect.selectedStores = [...window._mainMultiSelect.selectedStores];
+                window._mainMultiSelect.selectedProducts = [...window._mainMultiSelect.selectedProducts];
                 updateMultiSelectPlaceholder();
                 closeModal();
-                // 之後可觸發資料聚合
+                // 觸發資料聚合
+                renderSalesChart(fullSalesData);
             };
             // 點擊外部關閉
             modal.addEventListener('mousedown', function(e) {
@@ -567,6 +577,8 @@
 
             // 更新 placeholder
             function updateMultiSelectPlaceholder() {
+                const selectedStores = window._mainMultiSelect.selectedStores;
+                const selectedProducts = window._mainMultiSelect.selectedProducts;
                 if (selectedStores.length === 0) {
                     mainStoreInput.textContent = '請選擇分店';
                 } else if (selectedStores.length === 1) {
@@ -728,10 +740,17 @@
 
         // 3. renderSalesChart主線/對比線聚合與繪圖
         function renderSalesChart(fullSalesData) {
-            // 過濾主線 - 排除金額為0的交易（維修測試訂單）
+            // 多選主線聚合
+            const selectedStores = window._mainMultiSelect?.selectedStores || [];
+            const selectedProducts = window._mainMultiSelect?.selectedProducts || [];
+            // 將 mainLine.store/product 設為多選狀態（供 legend 用）
+            mainLine.store = selectedStores.length === 1 ? selectedStores[0] : (selectedStores.length > 1 ? selectedStores : '');
+            mainLine.product = selectedProducts.length === 1 ? selectedProducts[0] : (selectedProducts.length > 1 ? selectedProducts : '');
             const mainFiltered = fullSalesData.filter(d => {
-                if (mainLine.store && d.shopName !== mainLine.store) return false;
-                if (mainLine.product && d.product !== mainLine.product) return false;
+                // 分店多選
+                if (selectedStores.length > 0 && !selectedStores.includes(d.shopName)) return false;
+                // 產品多選
+                if (selectedProducts.length > 0 && !selectedProducts.includes(d.product)) return false;
                 if (!d.jsDate) return false;
                 if (parseFloat(d.amount) <= 0) return false; // 排除金額為0或負數的交易
                 return d.jsDate >= mainLine.start && d.jsDate <= mainLine.end;
@@ -846,8 +865,10 @@
                 function lineDesc(line, color, label) {
                     let desc = '';
                     if (line.start && line.end) desc += `${line.start.getFullYear()}/${line.start.getMonth()+1}/${line.start.getDate()} ~ ${line.end.getFullYear()}/${line.end.getMonth()+1}/${line.end.getDate()}`;
-                    if (line.store) desc += `｜${line.store}`;
-                    if (line.product) desc += `｜${line.product}`;
+                    if (Array.isArray(line.store)) desc += `｜${line.store.length}家分店`;
+                    else if (line.store) desc += `｜${line.store}`;
+                    if (Array.isArray(line.product)) desc += `｜${line.product.length}項產品`;
+                    else if (line.product) desc += `｜${line.product}`;
                     return `<span class=\"legend-dot\" style=\"background:${color}\"></span>${label}：${desc}`;
                 }
                 legendDiv.innerHTML =
