@@ -736,8 +736,40 @@
             isCompareMode = false;
             compareBlock.style.display = 'none';
             addCompareButton.addEventListener('click', function() {
+                // 檢查主線是否已設定
+                if (!mainLine.start || !mainLine.end) {
+                    // 如果主線沒有設定日期，則設定默認日期
+                    const today = new Date();
+                    const defaultStart = new Date(today);
+                    defaultStart.setDate(today.getDate() - 29);
+                    mainDatePickerInstance.setDateRange(defaultStart, today);
+                    mainLine.start = defaultStart;
+                    mainLine.end = today;
+                }
+                if (!window._mainMultiSelect) {
+                    window._mainMultiSelect = {
+                        selectedStores: [],
+                        selectedProducts: []
+                    };
+                }
+                
+                // 設定對比線的初始日期（與主線相同）
+                if (mainLine.start && mainLine.end) {
+                    compareDatePickerInstance.setDateRange(mainLine.start, mainLine.end);
+                    compareLine.start = mainLine.start;
+                    compareLine.end = mainLine.end;
+                }
+                
                 isCompareMode = true;
                 compareBlock.style.display = '';
+                // 初始化對比線的選擇狀態
+                if (!window._compareMultiSelect) {
+                    window._compareMultiSelect = {
+                        selectedStores: [],
+                        selectedProducts: []
+                    };
+                }
+                updateCompareMultiSelectPlaceholder();
                 renderSalesChart(fullSalesData);
             });
             // 5. 預設主線/對比線條件
@@ -861,9 +893,17 @@
                     return d.jsDate >= compareLine.start && d.jsDate <= compareLine.end;
                 });
             }
-            const compareAgg = isCompareMode ? aggregateByUnit(compareFiltered, activeTimeUnit, compareLine.start, compareLine.end) : null;
-            const maxLen = mainAgg.labels.length;
-            const labels = mainAgg.labels;
+            const compareAgg = isCompareMode && compareLine.start && compareLine.end ? 
+                aggregateByUnit(compareFiltered, activeTimeUnit, compareLine.start, compareLine.end) : null;
+            
+            // 確保有有效的數據長度
+            const mainLength = mainAgg?.labels?.length || 0;
+            const compareLength = compareAgg?.labels?.length || 0;
+            const maxLen = Math.max(mainLength, compareLength);
+            
+            // 確保有有效的標籤數據
+            const labels = mainAgg?.labels || Array(maxLen).fill('');
+            
             // KPI
             renderKPI(mainFiltered, isCompareMode ? compareFiltered : null);
             // 1. 銷售趨勢（線圖）
