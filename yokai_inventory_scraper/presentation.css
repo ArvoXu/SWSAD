@@ -106,6 +106,39 @@
 .modal-confirm-btn:hover {
   background: #1982c4;
 }
+
+.add-compare-block {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0;
+}
+
+.add-compare-btn {
+  background: var(--primary-color);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 24px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 140px;
+}
+
+.add-compare-btn:hover {
+  background: #1982c4;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.add-compare-btn:active {
+  transform: translateY(0);
+}
+
 :root {
     --primary-color: #2196F3;
     --secondary-color: #673AB7;

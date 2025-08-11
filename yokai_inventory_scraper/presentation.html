@@ -260,12 +260,11 @@
                 </div>
               </div>
             </div>
-            <div class="toggle-block">
-              <label class="switch">
-                <input type="checkbox" id="compareToggle">
-                <span class="slider"></span>
-              </label>
-              <span class="toggle-label"><i class="fas fa-exchange-alt"></i> 啟用對比</span>
+            <div class="add-compare-block">
+              <button id="addCompareButton" class="add-compare-btn">
+                <i class="fas fa-plus"></i>
+                <span>新增對比</span>
+              </button>
             </div>
             <div class="compareline-block glass-card" id="compareLineBlock" style="display:none;">
               <div class="block-title">對比線設定</div>
@@ -278,12 +277,12 @@
                 <div class="date-block">
                   <i class="fas fa-store"></i>
                   <label>分店</label>
-                  <select id="compareStoreSelect"></select>
+                  <div id="compareStoreSelect" class="multi-select-input" tabindex="0" style="cursor:pointer;" placeholder="請選擇分店">請選擇分店</div>
                 </div>
                 <div class="date-block">
                   <i class="fas fa-cubes"></i>
                   <label>產品</label>
-                  <select id="compareProductSelect"></select>
+                  <div id="compareProductSelect" class="multi-select-input" tabindex="0" style="cursor:pointer;" placeholder="請選擇產品">請選擇產品</div>
                 </div>
               </div>
             </div>

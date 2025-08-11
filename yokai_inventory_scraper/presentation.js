@@ -633,28 +633,111 @@
             compareLine.start = defaultStart;
             compareLine.end = today;
 
-            // 3. 對比線 select 維持原本單選
-            const storeOptions = '<option value="">全部</option>' + storeList.map(s => `<option value="${s}">${s}</option>`).join('');
-            const productOptions = '<option value="">全部</option>' + productList.map(p => `<option value="${p}">${p}</option>`).join('');
-            document.getElementById('compareStoreSelect').innerHTML = storeOptions;
-            document.getElementById('compareProductSelect').innerHTML = productOptions;
-            document.getElementById('compareStoreSelect').addEventListener('change', function() {
-                compareLine.store = this.value;
+            // 3. 對比線多選設定
+            if (!window._compareMultiSelect) {
+                window._compareMultiSelect = {
+                    selectedStores: [],
+                    selectedProducts: []
+                };
+            }
+
+            // 對比線分店/產品輸入框
+            const compareStoreInput = document.getElementById('compareStoreSelect');
+            const compareProductInput = document.getElementById('compareProductSelect');
+
+            compareStoreInput.onclick = () => {
+                currentMultiType = 'compareStore';
+                modal.style.display = 'flex';
+                modalTitle.textContent = '選擇分店';
+                // 生成卡片
+                modalList.innerHTML = '';
+                storeList.forEach(item => {
+                    const card = document.createElement('div');
+                    card.className = 'modal-card' + (window._compareMultiSelect.selectedStores.includes(item) ? ' selected' : '');
+                    card.textContent = item;
+                    card.addEventListener('click', () => {
+                        if (window._compareMultiSelect.selectedStores.includes(item)) {
+                            const idx = window._compareMultiSelect.selectedStores.indexOf(item);
+                            window._compareMultiSelect.selectedStores.splice(idx, 1);
+                            card.classList.remove('selected');
+                        } else {
+                            window._compareMultiSelect.selectedStores.push(item);
+                            card.classList.add('selected');
+                        }
+                    });
+                    modalList.appendChild(card);
+                });
+            };
+
+            compareProductInput.onclick = () => {
+                currentMultiType = 'compareProduct';
+                modal.style.display = 'flex';
+                modalTitle.textContent = '選擇產品';
+                // 生成卡片
+                modalList.innerHTML = '';
+                productList.forEach(item => {
+                    const card = document.createElement('div');
+                    card.className = 'modal-card' + (window._compareMultiSelect.selectedProducts.includes(item) ? ' selected' : '');
+                    card.textContent = item;
+                    card.addEventListener('click', () => {
+                        if (window._compareMultiSelect.selectedProducts.includes(item)) {
+                            const idx = window._compareMultiSelect.selectedProducts.indexOf(item);
+                            window._compareMultiSelect.selectedProducts.splice(idx, 1);
+                            card.classList.remove('selected');
+                        } else {
+                            window._compareMultiSelect.selectedProducts.push(item);
+                            card.classList.add('selected');
+                        }
+                    });
+                    modalList.appendChild(card);
+                });
+            };
+
+            // 修改 modalConfirm 點擊事件處理
+            modalConfirm.onclick = function() {
+                if (currentMultiType === 'store' || currentMultiType === 'product') {
+                    // 強制同步主線的選擇
+                    window._mainMultiSelect.selectedStores = [...window._mainMultiSelect.selectedStores];
+                    window._mainMultiSelect.selectedProducts = [...window._mainMultiSelect.selectedProducts];
+                    updateMultiSelectPlaceholder();
+                } else if (currentMultiType === 'compareStore' || currentMultiType === 'compareProduct') {
+                    // 強制同步對比線的選擇
+                    window._compareMultiSelect.selectedStores = [...window._compareMultiSelect.selectedStores];
+                    window._compareMultiSelect.selectedProducts = [...window._compareMultiSelect.selectedProducts];
+                    updateCompareMultiSelectPlaceholder();
+                }
+                closeModal();
                 renderSalesChart(fullSalesData);
-            });
-            document.getElementById('compareProductSelect').addEventListener('change', function() {
-                compareLine.product = this.value;
-                renderSalesChart(fullSalesData);
-            });
-            // 4. 對比開關
-            const compareToggle = document.getElementById('compareToggle');
+            };
+
+            // 新增：更新對比線多選顯示文字
+            function updateCompareMultiSelectPlaceholder() {
+                const selectedStores = window._compareMultiSelect.selectedStores;
+                const selectedProducts = window._compareMultiSelect.selectedProducts;
+                if (selectedStores.length === 0) {
+                    compareStoreInput.textContent = '請選擇分店';
+                } else if (selectedStores.length === 1) {
+                    compareStoreInput.textContent = selectedStores[0];
+                } else {
+                    compareStoreInput.textContent = `${selectedStores.length}家分店`;
+                }
+                if (selectedProducts.length === 0) {
+                    compareProductInput.textContent = '請選擇產品';
+                } else if (selectedProducts.length === 1) {
+                    compareProductInput.textContent = selectedProducts[0];
+                } else {
+                    compareProductInput.textContent = `${selectedProducts.length}項產品`;
+                }
+            }
+            updateCompareMultiSelectPlaceholder();
+            // 4. 新增對比按鈕
+            const addCompareButton = document.getElementById('addCompareButton');
             const compareBlock = document.getElementById('compareLineBlock');
-            compareToggle.checked = false;
             isCompareMode = false;
             compareBlock.style.display = 'none';
-            compareToggle.addEventListener('change', function() {
-                isCompareMode = this.checked;
-                compareBlock.style.display = isCompareMode ? '' : 'none';
+            addCompareButton.addEventListener('click', function() {
+                isCompareMode = true;
+                compareBlock.style.display = '';
                 renderSalesChart(fullSalesData);
             });
             // 5. 預設主線/對比線條件
@@ -755,19 +838,29 @@
                 if (parseFloat(d.amount) <= 0) return false; // 排除金額為0或負數的交易
                 return d.jsDate >= mainLine.start && d.jsDate <= mainLine.end;
             });
-            // 過濾對比線 - 排除金額為0的交易（維修測試訂單）
+            // 聚合主線數據
+            const mainAgg = aggregateByUnit(mainFiltered, activeTimeUnit, mainLine.start, mainLine.end);
+            
+            // 對比線資料過濾
             let compareFiltered = [];
             if (isCompareMode) {
+                const selectedCompareStores = window._compareMultiSelect?.selectedStores || [];
+                const selectedCompareProducts = window._compareMultiSelect?.selectedProducts || [];
+
+                // 將 compareLine.store/product 設為多選狀態
+                compareLine.store = selectedCompareStores.length === 1 ? selectedCompareStores[0] : (selectedCompareStores.length > 1 ? selectedCompareStores : '');
+                compareLine.product = selectedCompareProducts.length === 1 ? selectedCompareProducts[0] : (selectedCompareProducts.length > 1 ? selectedCompareProducts : '');
+
                 compareFiltered = fullSalesData.filter(d => {
-                    if (compareLine.store && d.shopName !== compareLine.store) return false;
-                    if (compareLine.product && d.product !== compareLine.product) return false;
+                    // 分店多選
+                    if (selectedCompareStores.length > 0 && !selectedCompareStores.includes(d.shopName)) return false;
+                    // 產品多選
+                    if (selectedCompareProducts.length > 0 && !selectedCompareProducts.includes(d.product)) return false;
                     if (!d.jsDate) return false;
                     if (parseFloat(d.amount) <= 0) return false; // 排除金額為0或負數的交易
                     return d.jsDate >= compareLine.start && d.jsDate <= compareLine.end;
                 });
             }
-            // 聚合
-            const mainAgg = aggregateByUnit(mainFiltered, activeTimeUnit, mainLine.start, mainLine.end);
             const compareAgg = isCompareMode ? aggregateByUnit(compareFiltered, activeTimeUnit, compareLine.start, compareLine.end) : null;
             const maxLen = mainAgg.labels.length;
             const labels = mainAgg.labels;
