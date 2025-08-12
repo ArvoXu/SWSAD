@@ -1112,7 +1112,7 @@
                 legendDiv.innerHTML = legendHtml;
             } else {
                 // 2. 其他圖表
-                renderOtherCharts(fullSalesData, mainFiltered, compareFilteredArray);
+                renderOtherCharts(fullSalesData, mainFiltered, Array.isArray(compareFilteredArray) ? compareFilteredArray : []);
             }
         }
 
@@ -1213,18 +1213,23 @@
             }
             // 切換圖表前先 destroy
             if (mainSalesChartInstance) mainSalesChartInstance.destroy();
+
+            // 确保compareFiltered是数组
+            const compareFilteredArray = Array.isArray(compareFiltered) ? compareFiltered : 
+                                      (compareFiltered ? [compareFiltered] : []);
+
             if(activeSalesChart==='store') {
                 const main = aggStore(mainFiltered);
-                const compare = isCompareMode ? aggStore(compareFiltered) : null;
-                renderStoreSalesChart(main, compare);
+                const compareArray = compareFilteredArray.map(data => aggStore(data));
+                renderStoreSalesChart(main, compareArray.length > 0 ? compareArray : null);
             } else if(activeSalesChart==='product') {
                 const main = aggProduct(mainFiltered);
-                const compare = isCompareMode ? aggProduct(compareFiltered) : null;
-                renderProductSalesChart(main, compare);
+                const compareArray = compareFilteredArray.map(data => aggProduct(data));
+                renderProductSalesChart(main, compareArray.length > 0 ? compareArray : null);
             } else if(activeSalesChart==='payment') {
                 const main = aggPay(mainFiltered);
-                const compare = isCompareMode ? aggPay(compareFiltered) : null;
-                renderPaymentTypeChart(main, compare);
+                const compareArray = compareFilteredArray.map(data => aggPay(data));
+                renderPaymentTypeChart(main, compareArray.length > 0 ? compareArray : null);
             }
         }
 
@@ -1665,17 +1670,25 @@
         }
         
         // 修正 renderStoreSalesChart
-        function renderStoreSalesChart(primaryData, compareData) {
+        function renderStoreSalesChart(primaryData, compareDataArray) {
             // 依主線銷售額排序
             const allStoreNames = Object.keys(primaryData||{}).sort((a,b)=>(primaryData[b]||0)-(primaryData[a]||0));
+            
             // 若有對比線，補上對比線有但主線沒有的分店（排在後面）
-            if (compareData) {
-                Object.keys(compareData).forEach(store => {
-                    if (!allStoreNames.includes(store)) allStoreNames.push(store);
+            if (Array.isArray(compareDataArray)) {
+                compareDataArray.forEach(compareData => {
+                    if (compareData) {
+                        Object.keys(compareData).forEach(store => {
+                            if (!allStoreNames.includes(store)) allStoreNames.push(store);
+                        });
+                    }
                 });
             }
+            
             // 生成 datasets
             const datasets = [];
+            
+            // 主线数据
             datasets.push({
                 label: '主線',
                 data: allStoreNames.map(store => primaryData[store] || 0),
@@ -1683,13 +1696,28 @@
                 borderColor: 'rgba(54, 162, 235, 1)',
                 borderWidth: 1
             });
-            if (compareData) {
-                datasets.push({
-                    label: '對比線',
-                    data: allStoreNames.map(store => compareData[store] || 0),
-                    backgroundColor: 'rgba(170, 170, 170, 0.7)',
-                    borderColor: 'rgba(170, 170, 170, 1)',
-                    borderWidth: 1
+            
+            // 对比线颜色
+            const compareColors = [
+                { bg: 'rgba(170, 170, 170, 0.7)', border: 'rgba(170, 170, 170, 1)' },
+                { bg: 'rgba(255, 99, 132, 0.7)', border: 'rgba(255, 99, 132, 1)' },
+                { bg: 'rgba(75, 192, 192, 0.7)', border: 'rgba(75, 192, 192, 1)' },
+                { bg: 'rgba(153, 102, 255, 0.7)', border: 'rgba(153, 102, 255, 1)' }
+            ];
+            
+            // 添加对比线数据
+            if (Array.isArray(compareDataArray)) {
+                compareDataArray.forEach((compareData, index) => {
+                    if (compareData) {
+                        const color = compareColors[index % compareColors.length];
+                        datasets.push({
+                            label: `對比線 ${index + 1}`,
+                            data: allStoreNames.map(store => compareData[store] || 0),
+                            backgroundColor: color.bg,
+                            borderColor: color.border,
+                            borderWidth: 1
+                        });
+                    }
                 });
             }
             const ctx = document.getElementById('mainSalesChart').getContext('2d');
@@ -1709,7 +1737,7 @@
                         }
                     },
                     plugins: {
-                        legend: { display: !!compareData, position: 'top' },
+                        legend: { display: Array.isArray(compareDataArray) && compareDataArray.length > 0, position: 'top' },
                         glassmorphismBackground: true
                     }
                 }
@@ -1717,7 +1745,7 @@
         }
 
         // 修正 renderProductSalesChart
-        function renderProductSalesChart(primaryData, compareData) {
+        function renderProductSalesChart(primaryData, compareDataArray) {
             const ctx = document.getElementById('mainSalesChart').getContext('2d');
             
             // 計算每個產品的訂單筆數 - 排除金額為0的交易
@@ -1748,7 +1776,7 @@
             let compareFilteredArray = [];
             let compareOrderCountsArray = [];
             
-            if (isCompareMode && compareLines.length > 0) {
+            if (Array.isArray(compareDataArray) && compareDataArray.length > 0) {
                 compareFilteredArray = compareLines.map(line => {
                     return window.fullSalesData.filter(d => {
                         const selectedStores = line.multiSelect.selectedStores;
@@ -1765,31 +1793,41 @@
             
             const mainOrderCounts = calculateProductOrderCounts(mainFiltered);
             
-            if (compareData) {
+            if (Array.isArray(compareDataArray) && compareDataArray.length > 0) {
                 // 100% 堆疊 bar
                 const allLabels = Array.from(new Set([
                     ...Object.keys(primaryData||{}),
-                    ...Object.keys(compareData||{})
+                    ...compareDataArray.flatMap(data => Object.keys(data||{}))
                 ]));
+
                 const totalPrimary = Object.values(primaryData).reduce((sum, v) => sum + v, 0);
-                const totalCompare = Object.values(compareData).reduce((sum, v) => sum + v, 0);
+                const totalCompares = compareDataArray.map(data => 
+                    Object.values(data||{}).reduce((sum, v) => sum + v, 0)
+                );
+
                 const datasets = allLabels.map(label => {
                     const primaryValue = primaryData[label] || 0;
-                    const compareValue = compareData[label] || 0;
+                    const compareValues = compareDataArray.map(data => data[label] || 0);
                     const primaryPct = totalPrimary > 0 ? (primaryValue / totalPrimary) * 100 : 0;
-                    const comparePct = totalCompare > 0 ? (compareValue / totalCompare) * 100 : 0;
+                    const comparePcts = compareValues.map((val, i) => 
+                        totalCompares[i] > 0 ? (val / totalCompares[i]) * 100 : 0
+                    );
+
                     return {
                         label: label,
-                        data: [primaryPct, comparePct],
+                        data: [primaryPct, ...comparePcts],
                         backgroundColor: generateConsistentColors([label])[0],
-                        originalValues: [primaryValue, compareValue],
-                        orderCounts: [mainOrderCounts[label] || 0, compareOrderCounts[label] || 0]
+                        originalValues: [primaryValue, ...compareValues],
+                        orderCounts: [
+                            mainOrderCounts[label] || 0,
+                            ...compareOrderCountsArray.map(counts => counts[label] || 0)
+                        ]
                     };
                 });
                 mainSalesChartInstance = new Chart(ctx, {
                     type: 'bar',
                     data: {
-                        labels: ['主線', '對比線'],
+                        labels: ['主線', ...compareDataArray.map((_, i) => `對比線 ${i + 1}`)],
                         datasets: datasets
                     },
                     options: {
@@ -1875,32 +1913,41 @@
         }
 
         // 修正 renderPaymentTypeChart
-        function renderPaymentTypeChart(primaryData, compareData) {
+        function renderPaymentTypeChart(primaryData, compareDataArray) {
             const ctx = document.getElementById('mainSalesChart').getContext('2d');
-            if (compareData) {
+            if (Array.isArray(compareDataArray) && compareDataArray.length > 0) {
                 // 100% 堆疊 bar
                 const allLabels = Array.from(new Set([
                     ...Object.keys(primaryData||{}),
-                    ...Object.keys(compareData||{})
+                    ...compareDataArray.flatMap(data => Object.keys(data||{}))
                 ]));
+                
                 const totalPrimary = Object.values(primaryData).reduce((sum, v) => sum + v, 0);
-                const totalCompare = Object.values(compareData).reduce((sum, v) => sum + v, 0);
+                const totalCompares = compareDataArray.map(data => 
+                    Object.values(data||{}).reduce((sum, v) => sum + v, 0)
+                );
+
                 const datasets = allLabels.map(label => {
                     const primaryValue = primaryData[label] || 0;
-                    const compareValue = compareData[label] || 0;
+                    const compareValues = compareDataArray.map(data => data[label] || 0);
+                    
                     const primaryPct = totalPrimary > 0 ? (primaryValue / totalPrimary) * 100 : 0;
-                    const comparePct = totalCompare > 0 ? (compareValue / totalCompare) * 100 : 0;
+                    const comparePcts = compareValues.map((val, i) => 
+                        totalCompares[i] > 0 ? (val / totalCompares[i]) * 100 : 0
+                    );
+                    
                     return {
                         label: label,
-                        data: [primaryPct, comparePct],
+                        data: [primaryPct, ...comparePcts],
                         backgroundColor: generateConsistentColors([label])[0],
-                        originalValues: [primaryValue, compareValue]
+                        originalValues: [primaryValue, ...compareValues]
                     };
                 });
+
                 mainSalesChartInstance = new Chart(ctx, {
                     type: 'bar',
                     data: {
-                        labels: ['主線', '對比線'],
+                        labels: ['主線', ...compareDataArray.map((_, i) => `對比線 ${i + 1}`)],
                         datasets: datasets
                     },
                     options: {
