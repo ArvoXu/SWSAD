@@ -486,8 +486,47 @@
         let activeTimeUnit = 'daily';
         let currentChartData = {};
 
+        // 全局函数：处理可编辑标题
+        function makeEditable(span, saveFn) {
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = span.textContent;
+            input.style.width = '150px';
+            input.style.fontSize = span.style.fontSize || 'inherit';
+            input.style.padding = '2px 4px';
+            input.style.border = '1px solid #ccc';
+            input.style.borderRadius = '3px';
+            input.style.backgroundColor = 'rgba(255, 255, 255, 0.95)';
+            input.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+            input.style.transition = 'all 0.3s ease';
+            
+            const parent = span.parentNode;
+            parent.insertBefore(input, span);
+            span.style.display = 'none';
+            input.focus();
+            input.select();
+
+            function save() {
+                const newValue = input.value.trim();
+                if (newValue) {
+                    saveFn(newValue);
+                    span.textContent = newValue;
+                }
+                span.style.display = '';
+                input.remove();
+            }
+
+            input.addEventListener('blur', save);
+            input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    save();
+                }
+            });
+        }
+
         // 主線/對比線條件
-        let mainLine = { store: '', product: '', start: null, end: null };
+        let mainLine = { store: '', product: '', start: null, end: null, title: '主線' };
         let compareLines = []; // 最多4條對比線
         const MAX_COMPARE_LINES = 4;
 
@@ -496,7 +535,10 @@
             return `
               <div class="compareline-block glass-card" id="compareLineBlock_${index}" style="display:none;">
                 <div class="block-header">
-                  <div class="block-title">對比線 ${index + 1} 設定</div>
+                  <div class="block-title" id="compareLineTitle_${index}">
+                    <span class="compare-line-name">對比線 ${index + 1} 設定</span>
+                    <i class="fas fa-edit edit-title-btn" style="margin-left: 8px; cursor: pointer; font-size: 0.9em; color: #666;"></i>
+                  </div>
                   <button class="remove-compare-btn" data-index="${index}">
                     <i class="fas fa-times"></i>
                   </button>
@@ -776,6 +818,7 @@
                     product: '',
                     start: mainLine.start,
                     end: mainLine.end,
+                    title: `對比線 ${newIndex + 1} 設定`,
                     multiSelect: {
                         selectedStores: [],
                         selectedProducts: []
@@ -816,6 +859,26 @@
                     renderSalesChart(fullSalesData);
                 });
 
+                // 設置標題編輯事件
+                const editTitleBtn = newBlock.querySelector('.edit-title-btn');
+                const titleSpan = newBlock.querySelector('.compare-line-name');
+                
+                editTitleBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    const currentTitle = titleSpan.textContent;
+                    makeEditable(titleSpan, (newTitle) => {
+                        compareLines[newIndex].title = newTitle;
+                        titleSpan.textContent = newTitle;
+                        if (mainSalesChartInstance) {
+                            const datasets = mainSalesChartInstance.data.datasets;
+                            if (datasets.length > newIndex + 1) {
+                                datasets[newIndex + 1].label = newTitle;
+                                mainSalesChartInstance.update();
+                            }
+                        }
+                    });
+                });
+
                 // 設置多選輸入框事件
                 const storeSelect = document.getElementById(`compareStoreSelect_${newIndex}`);
                 const productSelect = document.getElementById(`compareProductSelect_${newIndex}`);
@@ -833,6 +896,28 @@
             // 5. 預設主線條件
             mainLine.store = '';
             mainLine.product = '';
+            // 設置主線標題編輯
+            const mainTitleSpan = document.querySelector('#mainLineTitle .compare-line-name');
+            const mainEditTitleBtn = document.querySelector('#mainLineTitle .edit-title-btn');
+            if (mainTitleSpan && mainEditTitleBtn) {
+                mainLine.title = mainTitleSpan.textContent || '主線';
+                mainEditTitleBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    const currentTitle = mainTitleSpan.textContent;
+                    makeEditable(mainTitleSpan, (newTitle) => {
+                        mainLine.title = newTitle;
+                        mainTitleSpan.textContent = newTitle;
+                        if (mainSalesChartInstance) {
+                            const datasets = mainSalesChartInstance.data.datasets;
+                            if (datasets.length > 0) {
+                                datasets[0].label = newTitle;
+                                mainSalesChartInstance.update();
+                            }
+                        }
+                    });
+                });
+            }
+
             // 6. 首次渲染
             renderSalesChart(fullSalesData);
             // 1. 時間單位切換器
@@ -982,7 +1067,7 @@
             if(activeSalesChart==='daily') {
                 const datasets = [
                     {
-                        label: '主線',
+                        label: mainLine.title || '主線',
                         data: [...mainAgg.values, ...Array(maxLen-mainAgg.values.length).fill(0)],
                         borderColor: 'rgba(54, 162, 235, 1)',
                         backgroundColor: 'rgba(54, 162, 235, 0.2)',
@@ -1009,7 +1094,7 @@
 
                         const color = compareColors[index % compareColors.length];
                         datasets.push({
-                            label: `對比線 ${index + 1}`,
+                            label: compareLines[index].title || `對比線 ${index + 1}`,
                             data: [...compareAgg.values, ...Array(maxLen - compareAgg.values.length).fill(0)],
                             borderColor: color,
                             backgroundColor: color.replace('1)', '0.2)'),
@@ -1690,7 +1775,7 @@
             
             // 主线数据
             datasets.push({
-                label: '主線',
+                label: mainLine.title || '主線',
                 data: allStoreNames.map(store => primaryData[store] || 0),
                 backgroundColor: 'rgba(54, 162, 235, 0.8)',
                 borderColor: 'rgba(54, 162, 235, 1)',
@@ -1710,8 +1795,9 @@
                 compareDataArray.forEach((compareData, index) => {
                     if (compareData) {
                         const color = compareColors[index % compareColors.length];
+                        const compareLine = compareLines[index];
                         datasets.push({
-                            label: `對比線 ${index + 1}`,
+                            label: compareLine ? (compareLine.title || `對比線 ${index + 1}`) : `對比線 ${index + 1}`,
                             data: allStoreNames.map(store => compareData[store] || 0),
                             backgroundColor: color.bg,
                             borderColor: color.border,
@@ -1827,7 +1913,7 @@
                 mainSalesChartInstance = new Chart(ctx, {
                     type: 'bar',
                     data: {
-                        labels: ['主線', ...compareDataArray.map((_, i) => `對比線 ${i + 1}`)],
+                        labels: [mainLine.title || '主線', ...compareLines.map(line => line.title || `對比線 ${line.index + 1}`)],
                         datasets: datasets
                     },
                     options: {
@@ -1947,7 +2033,7 @@
                 mainSalesChartInstance = new Chart(ctx, {
                     type: 'bar',
                     data: {
-                        labels: ['主線', ...compareDataArray.map((_, i) => `對比線 ${i + 1}`)],
+                        labels: [mainLine.title || '主線', ...compareLines.map(line => line.title || `對比線 ${line.index + 1}`)],
                         datasets: datasets
                     },
                     options: {
