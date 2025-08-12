@@ -506,21 +506,37 @@
             input.focus();
             input.select();
 
+            let isSaving = false;
+            
             function save() {
+                if (isSaving) return;
+                isSaving = true;
+                
                 const newValue = input.value.trim();
                 if (newValue) {
                     saveFn(newValue);
                     span.textContent = newValue;
                 }
                 span.style.display = '';
-                input.remove();
+                
+                try {
+                    input.remove();
+                } catch (error) {
+                    console.log('Input element already removed');
+                }
+                
+                isSaving = false;
             }
 
-            input.addEventListener('blur', save);
+            input.addEventListener('blur', () => {
+                // 使用 setTimeout 确保 keypress 事件处理完成
+                setTimeout(save, 0);
+            });
+            
             input.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
-                    save();
+                    input.blur(); // 触发 blur 事件来保存
                 }
             });
         }
@@ -1169,32 +1185,12 @@
                         }
                     }
                 });
-                // 更新 legend
-                const legendDiv = document.getElementById('lineLegend');
-                function lineDesc(line, color, label) {
-                    let desc = '';
-                    if (line.start && line.end) desc += `${line.start.getFullYear()}/${line.start.getMonth()+1}/${line.start.getDate()} ~ ${line.end.getFullYear()}/${line.end.getMonth()+1}/${line.end.getDate()}`;
-                    if (Array.isArray(line.store)) desc += `｜${line.store.length}家分店`;
-                    else if (line.store) desc += `｜${line.store}`;
-                    if (Array.isArray(line.product)) desc += `｜${line.product.length}項產品`;
-                    else if (line.product) desc += `｜${line.product}`;
-                    return `<span class=\"legend-dot\" style=\"background:${color}\"></span>${label}：${desc}`;
-                }
-                // 更新圖例
                 const compareColors = [
                     'rgba(170, 170, 170, 1)',   // 灰色
                     'rgba(255, 99, 132, 1)',    // 紅色
                     'rgba(75, 192, 192, 1)',    // 綠色
                     'rgba(153, 102, 255, 1)'    // 紫色
                 ];
-                
-                let legendHtml = lineDesc(mainLine, 'rgba(54, 162, 235, 1)', '主線');
-                if (isCompareMode) {
-                    compareLines.forEach((line, index) => {
-                        legendHtml += '　' + lineDesc(line, compareColors[index % compareColors.length], `對比線 ${index + 1}`);
-                    });
-                }
-                legendDiv.innerHTML = legendHtml;
             } else {
                 // 2. 其他圖表
                 renderOtherCharts(fullSalesData, mainFiltered, Array.isArray(compareFilteredArray) ? compareFilteredArray : []);
