@@ -43,3 +43,84 @@
 .compareline-block:nth-child(2) { border-color: rgba(255, 99, 132, 1); }
 .compareline-block:nth-child(3) { border-color: rgba(75, 192, 192, 1); }
 .compareline-block:nth-child(4) { border-color: rgba(153, 102, 255, 1); }
+
+/* 图表切换按钮样式 */
+.chart-switch-btn {
+    position: relative;
+}
+
+.chart-switch-btn.disabled {
+    opacity: 0.8;
+    cursor: not-allowed;
+    background: #f7f7f7;
+    border: 1px solid #ddd;
+    position: relative;
+    color: #999;
+}
+
+.chart-switch-btn.disabled::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: repeating-linear-gradient(
+        45deg,
+        rgba(0, 0, 0, 0.05),
+        rgba(0, 0, 0, 0.05) 10px,
+        rgba(0, 0, 0, 0.02) 10px,
+        rgba(0, 0, 0, 0.02) 20px
+    );
+    border-radius: inherit;
+    pointer-events: none;
+}
+
+.disabled-icon {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: #ff4444;
+    color: white;
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* 悬浮提示容器 */
+.chart-switch-btn:not(:disabled) {
+    pointer-events: auto;
+}
+
+.chart-switch-btn[title]:not([title=""]):hover::after {
+    content: attr(title);
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    white-space: nowrap;
+    z-index: 1000;
+    width: max-content;
+    max-width: 300px;
+}
+
+/* 提示框小三角形 */
+.chart-switch-btn[title]:not([title=""]):hover::before {
+    content: '';
+    position: absolute;
+    bottom: calc(100% + 2px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: rgba(0, 0, 0, 0.8);
+}

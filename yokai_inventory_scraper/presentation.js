@@ -686,6 +686,32 @@
                     }
                 }
                 closeModal();
+                
+                // 在关闭modal后立即更新图表按钮状态
+                const chartStatus = checkChartAvailability();
+                document.querySelectorAll('.chart-switch-btn').forEach(button => {
+                    if (button.dataset.chart !== 'daily') {
+                        if (!chartStatus.available) {
+                            button.classList.add('disabled');
+                            button.title = chartStatus.reason;
+                        } else {
+                            button.classList.remove('disabled');
+                            button.title = '';
+                        }
+                    }
+                });
+                
+                // 如果当前视图被禁用，自动切换到daily视图
+                if (!chartStatus.available && activeSalesChart !== 'daily') {
+                    activeSalesChart = 'daily';
+                    document.querySelectorAll('.chart-switch-btn').forEach(btn => {
+                        btn.classList.remove('active');
+                        if (btn.dataset.chart === 'daily') {
+                            btn.classList.add('active');
+                        }
+                    });
+                }
+                
                 renderSalesChart(fullSalesData);
             };
 
@@ -885,6 +911,9 @@
 
         // 3. renderSalesChart主線/對比線聚合與繪圖
         function renderSalesChart(fullSalesData) {
+            // 每次渲染时更新按钮状态
+            updateChartButtonsState();
+            
             // 多選主線聚合
             const selectedStores = window._mainMultiSelect?.selectedStores || [];
             const selectedProducts = window._mainMultiSelect?.selectedProducts || [];
@@ -1088,7 +1117,82 @@
         }
 
         // 4. 其他圖表聚合
+        // 检查图表是否可用的全局函数
+        function checkChartAvailability() {
+            const mainMultiSelect = window._mainMultiSelect || { selectedStores: [], selectedProducts: [] };
+            
+            // 1. 检查主线多选状态
+            if (mainMultiSelect.selectedStores.length > 1 || 
+                mainMultiSelect.selectedProducts.length > 1) {
+                return {
+                    available: false,
+                    reason: '已選擇多個分店或產品，請只選擇一個分店和一個產品以使用此圖表'
+                };
+            }
+
+            // 2. 如果有比较线，检查选择状态
+            if (compareLines && compareLines.length >= 1) {
+                // 只在有实际选择时才禁用（空选择表示选择所有）
+                const hasSpecificSelection = (selectedStores, selectedProducts) => 
+                    selectedStores.length === 1 || selectedProducts.length === 1;
+
+                if (hasSpecificSelection(mainMultiSelect.selectedStores, mainMultiSelect.selectedProducts)) {
+                    return {
+                        available: false,
+                        reason: '因有對比線且已選擇特定分店或產品，此圖表暫不可用。清除分店和產品選擇即可查看所有分店數據。'
+                    };
+                }
+
+                for (const line of compareLines) {
+                    if (line.multiSelect && hasSpecificSelection(line.multiSelect.selectedStores, line.multiSelect.selectedProducts)) {
+                        return {
+                            available: false,
+                            reason: '因有對比線且已選擇特定分店或產品，此圖表暫不可用。清除分店和產品選擇即可查看所有分店數據。'
+                        };
+                    }
+                }
+            }
+
+            return { available: true, reason: '' };
+        }
+
+        // 更新图表按钮状态的全局函数
+        function updateChartButtonsState() {
+            const chartStatus = checkChartAvailability();
+            
+            // 更新所有按钮状态
+            document.querySelectorAll('.chart-switch-btn').forEach(button => {
+                if (button.dataset.chart !== 'daily') {
+                    if (!chartStatus.available) {
+                        button.classList.add('disabled');
+                        button.title = chartStatus.reason;
+                    } else {
+                        button.classList.remove('disabled');
+                        button.title = '';
+                    }
+                }
+            });
+
+            // 如果当前视图被禁用，自动切换到daily视图
+            if (!chartStatus.available && activeSalesChart !== 'daily') {
+                activeSalesChart = 'daily';
+                document.querySelectorAll('.chart-switch-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                    if (btn.dataset.chart === 'daily') {
+                        btn.classList.add('active');
+                    }
+                });
+                return true; // 表示发生了视图切换
+            }
+            return false;
+        }
+
         function renderOtherCharts(fullSalesData, mainFiltered, compareFiltered) {
+            // 检查是否需要禁用其他图表
+            if (updateChartButtonsState()) {
+                return; // 如果发生了视图切换，终止继续渲染
+            }
+
             // 分店銷售額
             function aggStore(data) {
                 const map = {};
@@ -1128,6 +1232,34 @@
         // 在setupSalesTrendTab內部加：
         document.querySelectorAll('.chart-switch-btn').forEach(button => {
             button.addEventListener('click', () => {
+                // 如果按钮被禁用，显示提示信息
+                if (button.classList.contains('disabled')) {
+                    const tooltip = document.createElement('div');
+                    tooltip.className = 'chart-switch-tooltip';
+                    tooltip.textContent = button.title || '此圖表目前不可用';
+                    tooltip.style.position = 'absolute';
+                    tooltip.style.zIndex = '1000';
+                    tooltip.style.backgroundColor = 'rgba(51, 51, 51, 0.95)';
+                    tooltip.style.color = 'white';
+                    tooltip.style.padding = '8px 12px';
+                    tooltip.style.borderRadius = '6px';
+                    tooltip.style.fontSize = '14px';
+                    tooltip.style.maxWidth = '300px';
+                    tooltip.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+                    
+                    // 将提示添加到按钮附近
+                    document.body.appendChild(tooltip);
+                    const rect = button.getBoundingClientRect();
+                    tooltip.style.left = rect.left + (rect.width - tooltip.offsetWidth) / 2 + 'px';
+                    tooltip.style.top = rect.top - tooltip.offsetHeight - 8 + 'px';
+
+                    // 1.5秒后移除提示
+                    setTimeout(() => {
+                        tooltip.remove();
+                    }, 1500);
+                    return;
+                }
+
                 activeSalesChart = button.dataset.chart;
                 document.querySelectorAll('.chart-switch-btn').forEach(btn => btn.classList.remove('active'));
                 button.classList.add('active');
