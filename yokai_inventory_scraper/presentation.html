@@ -16,6 +16,7 @@
     <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/litepicker.js"></script>
     <link rel="stylesheet" href="presentation.css">
     <link rel="stylesheet" href="replenishment.css">
+    <link rel="stylesheet" href="compare-line.css">
     <script src="replenishment.js"></script>
     <script src="strategy.js"></script>
     <script>
@@ -266,25 +267,8 @@
                 <span>新增對比</span>
               </button>
             </div>
-            <div class="compareline-block glass-card" id="compareLineBlock" style="display:none;">
-              <div class="block-title">對比線設定</div>
-              <div class="block-fields param-row">
-                <div class="date-block">
-                  <i class="fas fa-calendar-check"></i>
-                  <label>日期</label>
-                  <input id="compareDatePicker"/>
-                </div>
-                <div class="date-block">
-                  <i class="fas fa-store"></i>
-                  <label>分店</label>
-                  <div id="compareStoreSelect" class="multi-select-input" tabindex="0" style="cursor:pointer;" placeholder="請選擇分店">請選擇分店</div>
-                </div>
-                <div class="date-block">
-                  <i class="fas fa-cubes"></i>
-                  <label>產品</label>
-                  <div id="compareProductSelect" class="multi-select-input" tabindex="0" style="cursor:pointer;" placeholder="請選擇產品">請選擇產品</div>
-                </div>
-              </div>
+            <div id="compareLineContainer">
+              <!-- 對比線區塊將由 JavaScript 動態生成 -->
             </div>
           </div>
         </div>

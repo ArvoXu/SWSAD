@@ -488,7 +488,39 @@
 
         // 主線/對比線條件
         let mainLine = { store: '', product: '', start: null, end: null };
-        let compareLine = { store: '', product: '', start: null, end: null };
+        let compareLines = []; // 最多4條對比線
+        const MAX_COMPARE_LINES = 4;
+
+        // 生成對比線區塊的HTML
+        function generateCompareLineBlock(index) {
+            return `
+              <div class="compareline-block glass-card" id="compareLineBlock_${index}" style="display:none;">
+                <div class="block-header">
+                  <div class="block-title">對比線 ${index + 1} 設定</div>
+                  <button class="remove-compare-btn" data-index="${index}">
+                    <i class="fas fa-times"></i>
+                  </button>
+                </div>
+                <div class="block-fields param-row">
+                  <div class="date-block">
+                    <i class="fas fa-calendar-check"></i>
+                    <label>日期</label>
+                    <input id="compareDatePicker_${index}"/>
+                  </div>
+                  <div class="date-block">
+                    <i class="fas fa-store"></i>
+                    <label>分店</label>
+                    <div id="compareStoreSelect_${index}" class="multi-select-input" tabindex="0" style="cursor:pointer;" placeholder="請選擇分店">請選擇分店</div>
+                  </div>
+                  <div class="date-block">
+                    <i class="fas fa-cubes"></i>
+                    <label>產品</label>
+                    <div id="compareProductSelect_${index}" class="multi-select-input" tabindex="0" style="cursor:pointer;" placeholder="請選擇產品">請選擇產品</div>
+                  </div>
+                </div>
+              </div>
+            `;
+        }
 
         function setupSalesTrendTab(fullSalesData) {
             if (!fullSalesData || fullSalesData.length === 0) {
@@ -521,19 +553,35 @@
             const modalClose = document.getElementById('multiSelectModalClose');
             const modalConfirm = document.getElementById('multiSelectModalConfirm');
             let currentMultiType = null;
+            let currentCompareIndex = null;
 
             // 主分店/產品輸入框
             const mainStoreInput = document.getElementById('mainStoreSelect');
             const mainProductInput = document.getElementById('mainProductSelect');
 
             // 打開多選 modal
-            function openMultiSelect(type) {
+            function openMultiSelect(type, compareIndex = null) {
                 currentMultiType = type;
+                currentCompareIndex = compareIndex;
                 modal.style.display = 'flex';
                 modalTitle.textContent = type === 'store' ? '選擇分店' : '選擇產品';
+
+                // 獲取當前選中的項目
+                let selected;
+                if (compareIndex === null) {
+                    // 主線
+                    selected = type === 'store' ? 
+                        window._mainMultiSelect.selectedStores : 
+                        window._mainMultiSelect.selectedProducts;
+                } else {
+                    // 對比線
+                    selected = type === 'store' ? 
+                        compareLines[compareIndex].multiSelect.selectedStores : 
+                        compareLines[compareIndex].multiSelect.selectedProducts;
+                }
+
                 // 生成卡片
                 const list = type === 'store' ? storeList : productList;
-                const selected = type === 'store' ? window._mainMultiSelect.selectedStores : window._mainMultiSelect.selectedProducts;
                 modalList.innerHTML = '';
                 list.forEach(item => {
                     const card = document.createElement('div');
@@ -613,129 +661,76 @@
                     });
                 }
             });
-            compareDatePickerInstance = new Litepicker({
-                element: document.getElementById('compareDatePicker'),
-                singleMode: false,
-                format: 'YYYY-MM-DD',
-                setup: (picker) => {
-                    picker.on('selected', (date1, date2) => {
-                        compareLine.start = date1.dateInstance;
-                        compareLine.end = new Date(date2.dateInstance);
-                        compareLine.end.setHours(23,59,59,999);
-                        renderSalesChart(fullSalesData);
-                    });
-                }
-            });
             mainDatePickerInstance.setDateRange(defaultStart, today);
-            compareDatePickerInstance.setDateRange(defaultStart, today);
             mainLine.start = defaultStart;
             mainLine.end = today;
-            compareLine.start = defaultStart;
-            compareLine.end = today;
 
             // 3. 對比線多選設定
-            if (!window._compareMultiSelect) {
-                window._compareMultiSelect = {
-                    selectedStores: [],
-                    selectedProducts: []
-                };
-            }
-
-            // 對比線分店/產品輸入框
-            const compareStoreInput = document.getElementById('compareStoreSelect');
-            const compareProductInput = document.getElementById('compareProductSelect');
-
-            compareStoreInput.onclick = () => {
-                currentMultiType = 'compareStore';
-                modal.style.display = 'flex';
-                modalTitle.textContent = '選擇分店';
-                // 生成卡片
-                modalList.innerHTML = '';
-                storeList.forEach(item => {
-                    const card = document.createElement('div');
-                    card.className = 'modal-card' + (window._compareMultiSelect.selectedStores.includes(item) ? ' selected' : '');
-                    card.textContent = item;
-                    card.addEventListener('click', () => {
-                        if (window._compareMultiSelect.selectedStores.includes(item)) {
-                            const idx = window._compareMultiSelect.selectedStores.indexOf(item);
-                            window._compareMultiSelect.selectedStores.splice(idx, 1);
-                            card.classList.remove('selected');
-                        } else {
-                            window._compareMultiSelect.selectedStores.push(item);
-                            card.classList.add('selected');
-                        }
-                    });
-                    modalList.appendChild(card);
-                });
-            };
-
-            compareProductInput.onclick = () => {
-                currentMultiType = 'compareProduct';
-                modal.style.display = 'flex';
-                modalTitle.textContent = '選擇產品';
-                // 生成卡片
-                modalList.innerHTML = '';
-                productList.forEach(item => {
-                    const card = document.createElement('div');
-                    card.className = 'modal-card' + (window._compareMultiSelect.selectedProducts.includes(item) ? ' selected' : '');
-                    card.textContent = item;
-                    card.addEventListener('click', () => {
-                        if (window._compareMultiSelect.selectedProducts.includes(item)) {
-                            const idx = window._compareMultiSelect.selectedProducts.indexOf(item);
-                            window._compareMultiSelect.selectedProducts.splice(idx, 1);
-                            card.classList.remove('selected');
-                        } else {
-                            window._compareMultiSelect.selectedProducts.push(item);
-                            card.classList.add('selected');
-                        }
-                    });
-                    modalList.appendChild(card);
-                });
-            };
+            compareLines = [];
 
             // 修改 modalConfirm 點擊事件處理
             modalConfirm.onclick = function() {
-                if (currentMultiType === 'store' || currentMultiType === 'product') {
-                    // 強制同步主線的選擇
+                if (currentCompareIndex === null) {
+                    // 主線
                     window._mainMultiSelect.selectedStores = [...window._mainMultiSelect.selectedStores];
                     window._mainMultiSelect.selectedProducts = [...window._mainMultiSelect.selectedProducts];
                     updateMultiSelectPlaceholder();
-                } else if (currentMultiType === 'compareStore' || currentMultiType === 'compareProduct') {
-                    // 強制同步對比線的選擇
-                    window._compareMultiSelect.selectedStores = [...window._compareMultiSelect.selectedStores];
-                    window._compareMultiSelect.selectedProducts = [...window._compareMultiSelect.selectedProducts];
-                    updateCompareMultiSelectPlaceholder();
+                } else {
+                    // 對比線
+                    const currentLine = compareLines[currentCompareIndex];
+                    if (currentLine) {
+                        // 更新對應對比線的選擇
+                        currentLine.multiSelect.selectedStores = [...currentLine.multiSelect.selectedStores];
+                        currentLine.multiSelect.selectedProducts = [...currentLine.multiSelect.selectedProducts];
+                        updateCompareMultiSelectPlaceholder(currentCompareIndex);
+                    }
                 }
                 closeModal();
                 renderSalesChart(fullSalesData);
             };
 
-            // 新增：更新對比線多選顯示文字
-            function updateCompareMultiSelectPlaceholder() {
-                const selectedStores = window._compareMultiSelect.selectedStores;
-                const selectedProducts = window._compareMultiSelect.selectedProducts;
-                if (selectedStores.length === 0) {
-                    compareStoreInput.textContent = '請選擇分店';
-                } else if (selectedStores.length === 1) {
-                    compareStoreInput.textContent = selectedStores[0];
-                } else {
-                    compareStoreInput.textContent = `${selectedStores.length}家分店`;
+            // 更新：更新對比線多選顯示文字
+            function updateCompareMultiSelectPlaceholder(index) {
+                const compareLine = compareLines[index];
+                if (!compareLine) return;
+
+                const storeSelect = document.getElementById(`compareStoreSelect_${index}`);
+                const productSelect = document.getElementById(`compareProductSelect_${index}`);
+                const selectedStores = compareLine.multiSelect.selectedStores;
+                const selectedProducts = compareLine.multiSelect.selectedProducts;
+
+                if (storeSelect) {
+                    if (selectedStores.length === 0) {
+                        storeSelect.textContent = '請選擇分店';
+                    } else if (selectedStores.length === 1) {
+                        storeSelect.textContent = selectedStores[0];
+                    } else {
+                        storeSelect.textContent = `${selectedStores.length}家分店`;
+                    }
                 }
-                if (selectedProducts.length === 0) {
-                    compareProductInput.textContent = '請選擇產品';
-                } else if (selectedProducts.length === 1) {
-                    compareProductInput.textContent = selectedProducts[0];
-                } else {
-                    compareProductInput.textContent = `${selectedProducts.length}項產品`;
+
+                if (productSelect) {
+                    if (selectedProducts.length === 0) {
+                        productSelect.textContent = '請選擇產品';
+                    } else if (selectedProducts.length === 1) {
+                        productSelect.textContent = selectedProducts[0];
+                    } else {
+                        productSelect.textContent = `${selectedProducts.length}項產品`;
+                    }
                 }
             }
-            updateCompareMultiSelectPlaceholder();
             // 4. 新增對比按鈕
             const addCompareButton = document.getElementById('addCompareButton');
-            const compareBlock = document.getElementById('compareLineBlock');
+            const compareLineContainer = document.getElementById('compareLineContainer');
             isCompareMode = false;
-            compareBlock.style.display = 'none';
+
+            // 初始化對比線容器
             addCompareButton.addEventListener('click', function() {
+                if (compareLines.length >= MAX_COMPARE_LINES) {
+                    alert('最多只能添加4條對比線');
+                    return;
+                }
+
                 // 檢查主線是否已設定
                 if (!mainLine.start || !mainLine.end) {
                     // 如果主線沒有設定日期，則設定默認日期
@@ -746,37 +741,72 @@
                     mainLine.start = defaultStart;
                     mainLine.end = today;
                 }
-                if (!window._mainMultiSelect) {
-                    window._mainMultiSelect = {
+
+                // 創建新的對比線
+                const newIndex = compareLines.length;
+                const newCompareLine = {
+                    index: newIndex,
+                    store: '',
+                    product: '',
+                    start: mainLine.start,
+                    end: mainLine.end,
+                    multiSelect: {
                         selectedStores: [],
                         selectedProducts: []
-                    };
-                }
-                
-                // 設定對比線的初始日期（與主線相同）
-                if (mainLine.start && mainLine.end) {
-                    compareDatePickerInstance.setDateRange(mainLine.start, mainLine.end);
-                    compareLine.start = mainLine.start;
-                    compareLine.end = mainLine.end;
-                }
-                
+                    }
+                };
+                compareLines.push(newCompareLine);
+
+                // 添加對比線區塊到容器
+                compareLineContainer.insertAdjacentHTML('beforeend', generateCompareLineBlock(newIndex));
+                const newBlock = document.getElementById(`compareLineBlock_${newIndex}`);
+                newBlock.style.display = '';
+
+                // 初始化新的日期選擇器
+                const newDatePicker = new Litepicker({
+                    element: document.getElementById(`compareDatePicker_${newIndex}`),
+                    singleMode: false,
+                    format: 'YYYY-MM-DD',
+                    setup: (picker) => {
+                        picker.on('selected', (date1, date2) => {
+                            compareLines[newIndex].start = date1.dateInstance;
+                            compareLines[newIndex].end = new Date(date2.dateInstance);
+                            compareLines[newIndex].end.setHours(23,59,59,999);
+                            renderSalesChart(fullSalesData);
+                        });
+                    }
+                });
+                newDatePicker.setDateRange(mainLine.start, mainLine.end);
+
+                // 設置刪除按鈕事件
+                const removeButton = newBlock.querySelector('.remove-compare-btn');
+                removeButton.addEventListener('click', function() {
+                    compareLines.splice(newIndex, 1);
+                    newBlock.remove();
+                    // 如果沒有對比線了，關閉對比模式
+                    if (compareLines.length === 0) {
+                        isCompareMode = false;
+                    }
+                    renderSalesChart(fullSalesData);
+                });
+
+                // 設置多選輸入框事件
+                const storeSelect = document.getElementById(`compareStoreSelect_${newIndex}`);
+                const productSelect = document.getElementById(`compareProductSelect_${newIndex}`);
+
+                storeSelect.addEventListener('click', () => {
+                    openMultiSelect('store', newIndex);
+                });
+                productSelect.addEventListener('click', () => {
+                    openMultiSelect('product', newIndex);
+                });
+
                 isCompareMode = true;
-                compareBlock.style.display = '';
-                // 初始化對比線的選擇狀態
-                if (!window._compareMultiSelect) {
-                    window._compareMultiSelect = {
-                        selectedStores: [],
-                        selectedProducts: []
-                    };
-                }
-                updateCompareMultiSelectPlaceholder();
                 renderSalesChart(fullSalesData);
             });
-            // 5. 預設主線/對比線條件
+            // 5. 預設主線條件
             mainLine.store = '';
             mainLine.product = '';
-            compareLine.store = '';
-            compareLine.product = '';
             // 6. 首次渲染
             renderSalesChart(fullSalesData);
             // 1. 時間單位切換器
@@ -874,38 +904,51 @@
             const mainAgg = aggregateByUnit(mainFiltered, activeTimeUnit, mainLine.start, mainLine.end);
             
             // 對比線資料過濾
-            let compareFiltered = [];
+            let compareFilteredArray = [];
+            let compareAggArray = [];
+            
             if (isCompareMode) {
-                const selectedCompareStores = window._compareMultiSelect?.selectedStores || [];
-                const selectedCompareProducts = window._compareMultiSelect?.selectedProducts || [];
+                compareFilteredArray = compareLines.map(compareLine => {
+                    const selectedStores = compareLine.multiSelect.selectedStores;
+                    const selectedProducts = compareLine.multiSelect.selectedProducts;
 
-                // 將 compareLine.store/product 設為多選狀態
-                compareLine.store = selectedCompareStores.length === 1 ? selectedCompareStores[0] : (selectedCompareStores.length > 1 ? selectedCompareStores : '');
-                compareLine.product = selectedCompareProducts.length === 1 ? selectedCompareProducts[0] : (selectedCompareProducts.length > 1 ? selectedCompareProducts : '');
+                    // 更新 compareLine 的顯示屬性
+                    compareLine.store = selectedStores.length === 1 ? selectedStores[0] : 
+                        (selectedStores.length > 1 ? selectedStores : '');
+                    compareLine.product = selectedProducts.length === 1 ? selectedProducts[0] : 
+                        (selectedProducts.length > 1 ? selectedProducts : '');
 
-                compareFiltered = fullSalesData.filter(d => {
-                    // 分店多選
-                    if (selectedCompareStores.length > 0 && !selectedCompareStores.includes(d.shopName)) return false;
-                    // 產品多選
-                    if (selectedCompareProducts.length > 0 && !selectedCompareProducts.includes(d.product)) return false;
-                    if (!d.jsDate) return false;
-                    if (parseFloat(d.amount) <= 0) return false; // 排除金額為0或負數的交易
-                    return d.jsDate >= compareLine.start && d.jsDate <= compareLine.end;
+                    return fullSalesData.filter(d => {
+                        if (selectedStores.length > 0 && !selectedStores.includes(d.shopName)) return false;
+                        if (selectedProducts.length > 0 && !selectedProducts.includes(d.product)) return false;
+                        if (!d.jsDate) return false;
+                        if (parseFloat(d.amount) <= 0) return false;
+                        return d.jsDate >= compareLine.start && d.jsDate <= compareLine.end;
+                    });
+                });
+
+                compareAggArray = compareLines.map((compareLine, index) => {
+                    if (compareLine.start && compareLine.end && compareFilteredArray[index]) {
+                        return aggregateByUnit(compareFilteredArray[index], activeTimeUnit, compareLine.start, compareLine.end);
+                    }
+                    return null;
                 });
             }
-            const compareAgg = isCompareMode && compareLine.start && compareLine.end ? 
-                aggregateByUnit(compareFiltered, activeTimeUnit, compareLine.start, compareLine.end) : null;
-            
-            // 確保有有效的數據長度
-            const mainLength = mainAgg?.labels?.length || 0;
-            const compareLength = compareAgg?.labels?.length || 0;
-            const maxLen = Math.max(mainLength, compareLength);
+
+            // 計算最大數據長度
+            const lengths = [mainAgg?.labels?.length || 0];
+            compareAggArray.forEach(agg => {
+                if (agg && agg.labels) {
+                    lengths.push(agg.labels.length);
+                }
+            });
+            const maxLen = Math.max(...lengths);
             
             // 確保有有效的標籤數據
             const labels = mainAgg?.labels || Array(maxLen).fill('');
             
             // KPI
-            renderKPI(mainFiltered, isCompareMode ? compareFiltered : null);
+            renderKPI(mainFiltered, isCompareMode ? compareFilteredArray[0] : null);
             // 1. 銷售趨勢（線圖）
             if(activeSalesChart==='daily') {
                 const datasets = [
@@ -923,18 +966,32 @@
                     }
                 ];
                 if (isCompareMode) {
-                    datasets.push({
-                        label: '對比線',
-                        data: [...(compareAgg ? compareAgg.values : []), ...Array(maxLen-(compareAgg?compareAgg.values.length:0)).fill(0)],
-                        borderColor: 'rgba(170, 170, 170, 1)',
-                        backgroundColor: 'rgba(170, 170, 170, 0.2)',
-                        fill: false,
-                        tension: 0.2,
-                        borderDash: [5, 5],
-                        borderWidth: 2,
-                        pointBackgroundColor: 'rgba(170, 170, 170, 1)',
-                        pointRadius: 3,
-                        pointHoverRadius: 5
+                    // 對比線顏色列表
+                    const compareColors = [
+                        'rgba(170, 170, 170, 1)',   // 灰色
+                        'rgba(255, 99, 132, 1)',    // 紅色
+                        'rgba(75, 192, 192, 1)',    // 綠色
+                        'rgba(153, 102, 255, 1)'    // 紫色
+                    ];
+
+                    // 添加每條對比線的數據
+                    compareAggArray.forEach((compareAgg, index) => {
+                        if (!compareAgg) return;
+
+                        const color = compareColors[index % compareColors.length];
+                        datasets.push({
+                            label: `對比線 ${index + 1}`,
+                            data: [...compareAgg.values, ...Array(maxLen - compareAgg.values.length).fill(0)],
+                            borderColor: color,
+                            backgroundColor: color.replace('1)', '0.2)'),
+                            fill: false,
+                            tension: 0.2,
+                            borderDash: [5, 5],
+                            borderWidth: 2,
+                            pointBackgroundColor: color,
+                            pointRadius: 3,
+                            pointHoverRadius: 5
+                        });
                     });
                 }
                 if (mainSalesChartInstance) mainSalesChartInstance.destroy();
@@ -954,9 +1011,14 @@
                                 callbacks: {
                                     title: function(context) {
                                         const idx = context[0].dataIndex;
+                                        const datasetIndex = context[0].datasetIndex;
                                         let tip = '';
-                                        if(mainAgg.dateMap[idx]) tip += `主線: ${mainAgg.dateMap[idx].start.toLocaleDateString()}~${mainAgg.dateMap[idx].end.toLocaleDateString()}`;
-                                        if(isCompareMode && compareAgg && compareAgg.dateMap[idx]) tip += `\n對比: ${compareAgg.dateMap[idx].start.toLocaleDateString()}~${compareAgg.dateMap[idx].end.toLocaleDateString()}`;
+                                        if(datasetIndex === 0 && mainAgg.dateMap[idx]) {
+                                            tip += `主線: ${mainAgg.dateMap[idx].start.toLocaleDateString()}~${mainAgg.dateMap[idx].end.toLocaleDateString()}`;
+                                        } else if(isCompareMode && compareAggArray[datasetIndex - 1]?.dateMap[idx]) {
+                                            const compareAgg = compareAggArray[datasetIndex - 1];
+                                            tip += `對比線 ${datasetIndex}: ${compareAgg.dateMap[idx].start.toLocaleDateString()}~${compareAgg.dateMap[idx].end.toLocaleDateString()}`;
+                                        }
                                         return tip;
                                     }
                                 }
@@ -1004,12 +1066,24 @@
                     else if (line.product) desc += `｜${line.product}`;
                     return `<span class=\"legend-dot\" style=\"background:${color}\"></span>${label}：${desc}`;
                 }
-                legendDiv.innerHTML =
-                    lineDesc(mainLine, 'rgba(54, 162, 235, 1)', '主線') +
-                    (isCompareMode ? ('　' + lineDesc(compareLine, 'rgba(170, 170, 170, 1)', '對比線')) : '');
+                // 更新圖例
+                const compareColors = [
+                    'rgba(170, 170, 170, 1)',   // 灰色
+                    'rgba(255, 99, 132, 1)',    // 紅色
+                    'rgba(75, 192, 192, 1)',    // 綠色
+                    'rgba(153, 102, 255, 1)'    // 紫色
+                ];
+                
+                let legendHtml = lineDesc(mainLine, 'rgba(54, 162, 235, 1)', '主線');
+                if (isCompareMode) {
+                    compareLines.forEach((line, index) => {
+                        legendHtml += '　' + lineDesc(line, compareColors[index % compareColors.length], `對比線 ${index + 1}`);
+                    });
+                }
+                legendDiv.innerHTML = legendHtml;
             } else {
                 // 2. 其他圖表
-                renderOtherCharts(fullSalesData, mainFiltered, compareFiltered);
+                renderOtherCharts(fullSalesData, mainFiltered, compareFilteredArray);
             }
         }
 
@@ -1530,26 +1604,34 @@
             
             // 獲取當前篩選的數據來計算訂單筆數 - 排除金額為0的交易
             const mainFiltered = window.fullSalesData.filter(d => {
-                if (mainLine.store && d.shopName !== mainLine.store) return false;
-                if (mainLine.product && d.product !== mainLine.product) return false;
+                const selectedStores = window._mainMultiSelect.selectedStores;
+                const selectedProducts = window._mainMultiSelect.selectedProducts;
+                if (selectedStores.length > 0 && !selectedStores.includes(d.shopName)) return false;
+                if (selectedProducts.length > 0 && !selectedProducts.includes(d.product)) return false;
                 if (!d.jsDate) return false;
                 if (parseFloat(d.amount) <= 0) return false; // 排除金額為0或負數的交易
                 return d.jsDate >= mainLine.start && d.jsDate <= mainLine.end;
             });
+
+            let compareFilteredArray = [];
+            let compareOrderCountsArray = [];
             
-            let compareFiltered = [];
-            if (isCompareMode) {
-                compareFiltered = window.fullSalesData.filter(d => {
-                    if (compareLine.store && d.shopName !== compareLine.store) return false;
-                    if (compareLine.product && d.product !== compareLine.product) return false;
-                    if (!d.jsDate) return false;
-                    if (parseFloat(d.amount) <= 0) return false; // 排除金額為0或負數的交易
-                    return d.jsDate >= compareLine.start && d.jsDate <= compareLine.end;
+            if (isCompareMode && compareLines.length > 0) {
+                compareFilteredArray = compareLines.map(line => {
+                    return window.fullSalesData.filter(d => {
+                        const selectedStores = line.multiSelect.selectedStores;
+                        const selectedProducts = line.multiSelect.selectedProducts;
+                        if (selectedStores.length > 0 && !selectedStores.includes(d.shopName)) return false;
+                        if (selectedProducts.length > 0 && !selectedProducts.includes(d.product)) return false;
+                        if (!d.jsDate) return false;
+                        if (parseFloat(d.amount) <= 0) return false;
+                        return d.jsDate >= line.start && d.jsDate <= line.end;
+                    });
                 });
+                compareOrderCountsArray = compareFilteredArray.map(filtered => calculateProductOrderCounts(filtered));
             }
             
             const mainOrderCounts = calculateProductOrderCounts(mainFiltered);
-            const compareOrderCounts = calculateProductOrderCounts(compareFiltered);
             
             if (compareData) {
                 // 100% 堆疊 bar
