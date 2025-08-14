@@ -1,6 +1,6 @@
 Flask
 Flask-Cors
-selenium>=4.11.0
+selenium
 python-dotenv
 schedule
 gunicorn
@@ -10,4 +10,3 @@ psycopg2-binary
 python-dateutil
 pandas
 openpyxl
-webdriver-manager

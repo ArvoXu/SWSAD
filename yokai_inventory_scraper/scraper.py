@@ -1,18 +1,10 @@
 import time
 import os
 import sys
-import json
-import logging
-import pytz
-import re
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from datetime import datetime
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import OperationalError
-from dateutil.parser import parse as parse_date
 from datetime import datetime
 import pytz
 import re
@@ -310,42 +302,19 @@ def run_scraper(headless=True):
         logging.error(e, file=sys.stderr)
         sys.exit(1) # 終止腳本
 
-    # --- Modern Selenium Setup with Enhanced Performance ---
+    # --- Modern Selenium Setup ---
     options = webdriver.ChromeOptions()
-    
-    # 基本設定
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
-    options.add_argument("window-size=1920,1080")
-    
-    # 效能優化設定
-    options.add_argument("--disable-extensions")
-    options.add_argument("--dns-prefetch-disable")
-    options.add_argument("--disable-infobars")
-    options.page_load_strategy = 'eager'
-    
     if headless:
-        options.add_argument("--headless=new")
-    
-    # 在Linux環境中設定Chrome路徑
-    if os.name == 'posix':
-        options.binary_location = "/usr/bin/google-chrome"
-
-    try:
-        # 嘗試使用新版Chrome配置
-        service = webdriver.ChromeService()
-        driver = webdriver.Chrome(service=service, options=options)
-        logging.info("成功使用新版Chrome配置初始化瀏覽器")
-    except Exception as e:
-        logging.warning(f"新版Chrome配置失敗，嘗試使用備用配置: {e}")
-        # 備用配置
-        options = webdriver.ChromeOptions()
+        # These are the crucial arguments for running Chrome in a containerized environment
         options.add_argument("--headless")
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
-        driver = webdriver.Chrome(options=options)
-        logging.info("成功使用備用配置初始化瀏覽器")
+        options.add_argument("--disable-gpu")
+        options.add_argument("window-size=1920,1080")
+
+    # Selenium's built-in manager will handle the chromedriver
+    service = webdriver.ChromeService() 
+    driver = webdriver.Chrome(service=service, options=options)
     
     all_scraped_text = ""
 
