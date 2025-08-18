@@ -49,12 +49,15 @@ function renderWarehouseList() {
         
         // 生成庫存預覽HTML
         const inventoryPreviewHtml = warehouseProducts
-            .map(product => `
+            .map(product => {
+                const disp = window.__maskFields ? window.__maskFields.getOrCreate('product', product.productName) : product.productName;
+                return `
                 <div class="inventory-item">
-                    <span>${product.productName}</span>
+                    <span>${disp}</span>
                     <span>${product.quantity || 0} 個</span>
                 </div>
-            `).join('');
+            `;
+            }).join('');
 
         const displayWarehouse = window.__maskFields ? window.__maskFields.getOrCreate('warehouse', warehouse) : warehouse;
         return `
@@ -263,6 +266,8 @@ function renderSuggestions(suggestions) {
     // 渲染每個機台的建議
     suggestions.forEach(suggestion => {
         const [store, machineId] = suggestion.machine.split('-');
+    const maskedStore = window.__maskFields ? window.__maskFields.getOrCreate('store', store) : store;
+    const maskedMachine = window.__maskFields ? window.__maskFields.getOrCreate('machine', machineId) : machineId;
         
         // 計算總計
         let totals = {
@@ -274,7 +279,7 @@ function renderSuggestions(suggestions) {
         
         const suggestionHTML = `
             <div class="suggestion-card">
-                <h4>${store} - ${machineId}</h4>
+                <h4>${maskedStore} - ${maskedMachine}</h4>
                 ${suggestion.warning ? `<p class="warning">${suggestion.warning}</p>` : ''}
                 <div class="suggestion-table-container">
                     <table class="suggestion-table">
@@ -314,13 +319,14 @@ function renderSuggestions(suggestions) {
                                     totals.suggestedQty += item.suggestedQty;
                                     totals.adjustment += adjustment;
                                     
+                                    const dispProduct = window.__maskFields ? window.__maskFields.getOrCreate('product', item.productName) : item.productName;
                                     return `
                                         <tr>
-                                            <td>${item.productName}</td>
+                                            <td>${dispProduct}</td>
                                             <td>${item.salesCount30d}</td>
                                             <td>${item.currentQty}</td>
                                             <td>${item.suggestedQty}</td>
-                                            <td class="${adjustment > 0 ? 'positive' : adjustment < 0 ? 'negative' : ''}">${
+                                            <td class="${adjustment > 0 ? 'positive' : adjustment < 0 ? 'negative' : ''}">$${
                                                 adjustment > 0 ? '+' + adjustment : adjustment
                                             }</td>
                                         </tr>
@@ -348,11 +354,16 @@ function renderSuggestions(suggestions) {
         if (Object.keys(shipments).length === 0) return '';
         
         // 計算送貨地點
-        const deliveryLocations = suggestions.map(s => s.machine).join('、');
+        const deliveryLocations = suggestions.map(s => {
+            const [sStore, sMachine] = s.machine.split('-');
+            const ds = window.__maskFields ? window.__maskFields.getOrCreate('store', sStore) : sStore;
+            const dm = window.__maskFields ? window.__maskFields.getOrCreate('machine', sMachine) : sMachine;
+            return `${ds}-${dm}`;
+        }).join('、');
         
         return `
             <div class="shipment-card">
-                <h4>${warehouse} 出貨清單</h4>
+                <h4>${window.__maskFields ? window.__maskFields.getOrCreate('warehouse', warehouse) : warehouse} 出貨清單</h4>
                 <p class="delivery-info">送貨地點：${deliveryLocations}</p>
                 <div class="suggestion-table-container">
                     <table class="suggestion-table">
@@ -365,7 +376,7 @@ function renderSuggestions(suggestions) {
                         <tbody>
                             ${Object.entries(shipments).map(([product, quantity]) => `
                                 <tr>
-                                    <td>${product}</td>
+                                    <td>${window.__maskFields ? window.__maskFields.getOrCreate('product', product) : product}</td>
                                     <td class="positive">+${quantity}</td>
                                 </tr>
                             `).join('')}
