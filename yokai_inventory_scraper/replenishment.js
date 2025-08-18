@@ -412,7 +412,7 @@ function renderSuggestions(suggestions) {
     // 添加生成補貨單事件監聽器
     const genFormBtn = document.getElementById('generateFormButton');
     if (genFormBtn) {
-        const isSample = window.location.pathname && window.location.pathname.indexOf('presentation_sample') !== -1;
+    const isSample = window.location.pathname && window.location.pathname.indexOf('/sample') !== -1;
         if (isSample) {
             // Add a visual marker and accessibility hint for sample-disabled state
             genFormBtn.classList.add('sample-disabled');

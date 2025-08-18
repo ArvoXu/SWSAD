@@ -1611,7 +1611,13 @@ def serve_presentation():
 
 @app.route('/presentation_sample')
 def serve_presentation_sample():
-    # Expose the sample presentation at /presentation_sample (no .html)
+    # Legacy route: redirect to the canonical sample path
+    return redirect('/sample')
+
+
+@app.route('/sample')
+def serve_sample():
+    # Canonical sample URL (no .html)
     return send_from_directory(script_dir, 'presentation_sample.html')
 
 @app.route('/<path:path>')
@@ -1621,7 +1627,7 @@ def serve_static_files(path):
     if path == 'presentation.html':
         return redirect('/presentation')
     if path == 'presentation_sample.html':
-        return redirect('/presentation_sample')
+        return redirect('/sample')
     return send_from_directory(script_dir, path)
 
 
