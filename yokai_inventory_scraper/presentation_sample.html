@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M21 17H3V5H21V17M21 3H3C1.9 3 1 3.9 1 5V17C1 18.1 1.9 19 3 19H21C22.1 19 23 18.1 23 17V5C23 3.9 22.1 3 21 3M12 16H14V14H16V12H14V10H12V12H10V14H12V16M7 11.5C7 12.3 6.3 13 5.5 13S4 12.3 4 11.5 4.7 10 5.5 10S7 10.7 7 11.5M19 11.5C19 12.3 18.3 13 17.5 13S16 12.3 16 11.5 16.7 10 17.5 10S19 10.7 19 11.5Z' fill='gray'/%3E%3C/svg%3E">
+    <title>智慧倉儲與銷售分析儀表板</title>
+    <!-- 添加Chart.js庫 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <!-- 添加html2canvas用於截圖 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- 添加Font Awesome圖標 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- 添加 Litepicker 日期選擇器 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litepicker/dist/css/litepicker.css"/>
+    <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/litepicker.js"></script>
+    <link rel="stylesheet" href="presentation.css">
+    <link rel="stylesheet" href="replenishment.css">
+    <link rel="stylesheet" href="compare-line.css">
+    <script src="replenishment.js"></script>
+    <script src="strategy.js"></script>
+    <script>
+    // 偵測 iOS/Safari 並加上 is-ios-safari class
+    (function() {
+      var ua = window.navigator.userAgent;
+      var isIOS = /iP(ad|hone|od)/.test(ua);
+      var isSafari = /Safari/.test(ua) && !/Chrome/.test(ua);
+      if (isIOS || isSafari) {
+        document.addEventListener('DOMContentLoaded', function() {
+          document.body.classList.add('is-ios-safari');
+        });
+      }
+    })();
+    </script>
+</head>
+<body>
+    <div class="dashboard-header">
+    <h1>智慧倉儲與銷售分析儀表板</h1>
+        <div class="dashboard-subtitle">Smart Warehousing and Sales Analysis Dashboard</div>
+    </div>
+
+    <!-- 分頁導航 -->
+    <div class="tab-nav">
+        <button class="tab-link active" data-tab="inventory-tab">庫存</button>
+        <button class="tab-link" data-tab="sales-tab">銷售</button>
+        <button class="tab-link" data-tab="replenishment-tab">補貨</button>
+    </div>
+
+    <!-- 庫存視圖分頁 -->
+    <div id="inventory-tab" class="tab-content active">
+        <!-- 添加教學區塊 -->
+        <div class="tutorial">
+            <div class="tutorial-header">
+                <div class="tutorial-title">
+                    <i class="fas fa-book"></i>
+                    <span>操作教學</span>
+                </div>
+                <i class="fas fa-chevron-down"></i>
+            </div>
+            <div class="tutorial-content">
+                <div class="tutorial-section">
+                    <h3><i class="fas fa-table"></i>庫存分頁功能</h3>
+                    <ul>
+                        <li><i class="fas fa-dollar-sign"></i>「按月銷售額排序」：依據各機台的月銷售額高低排序</li>
+                        <li><i class="fas fa-sort-amount-down"></i>「庫存量排序」：可選擇由多到少或由少到多排序</li>
+                        <li><i class="fas fa-search"></i>「搜尋」：可依機台名稱或編號快速查找</li>
+                        <li><i class="fas fa-chart-pie"></i>「視圖切換」：在圓餅圖和詳細資料視圖間切換</li>
+                    </ul>
+                </div>
+
+                <div class="tutorial-section">
+                    <h3><i class="fas fa-chart-line"></i>銷售分頁功能</h3>
+                    <ul>
+                        <li><i class="fas fa-chart-bar"></i>「銷售趨勢」：查看歷史銷售數據走向</li>
+                        <li><i class="fas fa-store"></i>「各分店銷售額」：比較不同門市的銷售表現</li>
+                        <li><i class="fas fa-cubes"></i>「產品銷售佔比」：分析產品組合結構</li>
+                        <li><i class="fas fa-exchange-alt"></i>「啟用對比」：可與其他時期或分店進行對比</li>
+                    </ul>
+                </div>
+
+                <div class="tutorial-section">
+                    <h3><i class="fas fa-robot"></i>補貨分頁功能</h3>
+                    <ul>
+                        <li><i class="fas fa-warehouse"></i>步驟1：選擇目標倉庫</li>
+                        <li><i class="fas fa-store-alt"></i>步驟2：選擇需要補貨的機台</li>
+                        <li><i class="fas fa-lightbulb"></i>步驟3：選擇補貨策略（穩健平衡/積極增長/探索汰換）</li>
+                        <li><i class="fas fa-magic"></i>步驟4：生成智能補貨建議</li>
+                    </ul>
+                </div>
+
+                <div class="tutorial-section">
+                    <h3><i class="fas fa-file-export"></i>匯出功能</h3>
+                    <ul>
+                        <li><i class="fas fa-camera"></i>「截圖保存」：將當前視圖儲存為高解析度圖片</li>
+                        <li><i class="fas fa-file-excel"></i>「產生明細表」：匯出詳細的銷售數據報表</li>
+                        <li><i class="fas fa-file-code"></i>「另存為HTML」：保存為可離線查看的網頁檔案</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="summary-info">
+            <div id="summaryText">載入中...</div>
+            <div id="salesSummaryText" style="margin-top: 8px; color: var(--primary-color); font-weight: 500;"></div>
+        </div>
+        
+        <div class="toolbar">
+             <div class="toolbar-section"> <!-- Left -->
+                <button id="toggleViewModeButton" class="toolbar-button">
+                    <i class="fas fa-table"></i>
+                    <span class="tooltip">切換詳細資料視圖</span>
+                </button>
+                <button id="sortBySales" class="toolbar-button" data-sort="sales" data-active="false">
+                    <i class="fas fa-dollar-sign"></i>
+                    <span class="tooltip">按月銷售額排序</span>
+                </button>
+                <button id="sortByInventoryDesc" class="toolbar-button" data-sort="desc" data-active="false">
+                    <i class="fas fa-sort-amount-down"></i>
+                    <span class="tooltip">庫存量由多到少</span>
+                </button>
+                <button id="sortByInventoryAsc" class="toolbar-button" data-sort="asc" data-active="false">
+                    <i class="fas fa-sort-amount-up"></i>
+                    <span class="tooltip">庫存量由少到多</span>
+                </button>
+            </div>
+            <div class="toolbar-section"> <!-- Right -->
+                <input type="text" id="inventorySearchInput" class="search-input-presentation" placeholder="搜尋機台名稱/編號...">
+                <button id="saveAsHtmlButton" class="toolbar-button">
+                    <i class="fas fa-file-code"></i>
+                    <span class="tooltip">另存為HTML</span>
+                </button>
+                <button id="captureButton" class="toolbar-button">
+                    <i class="fas fa-camera"></i>
+                    <span class="tooltip">截圖保存</span>
+                </button>
+                <button id="printButton" class="toolbar-button">
+                    <i class="fas fa-print"></i>
+                    <span class="tooltip">列印</span>
+                </button>
+            </div>
+        </div>
+        
+        <div id="chartContainer">
+            <div class="loading"></div>
+        </div>
+    </div>
+
+
+
+    <!-- 補貨視圖分頁 -->
+    <div id="replenishment-tab" class="tab-content">
+        <div class="replenishment-container">
+            <div class="step-container">
+                <h3><i class="fas fa-warehouse"></i> 步驟 1：選擇倉庫</h3>
+                <div class="warehouse-selection">
+                    <div class="warehouse-grid" id="warehouseList">
+                        <!-- 倉庫列表將由 JavaScript 動態生成 -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="step-container">
+                <h3><i class="fas fa-robot"></i> 步驟 2：選擇補貨機台</h3>
+                <div class="machine-selection" id="machineList">
+                    <!-- 機台列表將由 JavaScript 動態生成，按地區分組 -->
+                </div>
+            </div>
+
+            <div class="step-container">
+                <h3><i class="fas fa-lightbulb"></i> 步驟 3：選擇補貨策略</h3>
+                <div class="strategy-selection">
+                    <div class="strategy-card" data-strategy="stable">
+                        <i class="fas fa-balance-scale"></i>
+                        <h4>穩健平衡</h4>
+                        <p>依據過去30天銷售量佔比，等比例分配庫存，確保穩定滿足市場需求。</p>
+                    </div>
+                    <div class="strategy-card" data-strategy="aggressive">
+                        <i class="fas fa-rocket"></i>
+                        <h4>積極增長</h4>
+                        <p>集中80%庫存於銷量前3名的明星商品，最大化頂尖產品的營收潛力。</p>
+                    </div>
+                    <div class="strategy-card" data-strategy="exploratory">
+                        <i class="fas fa-search-dollar"></i>
+                        <h4>探索汰換</h4>
+                        <p>優先汰除零銷量商品，並保留20%彈性空間，用於測試新品或補充潛力股。</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="step-container">
+                <h3><i class="fas fa-magic"></i> 步驟 4：生成建議</h3>
+                <div class="suggestion-generation">
+                    <button id="generateReplenishmentButton" class="generate-button">
+                        <i class="fas fa-magic"></i>
+                        生成補貨建議
+                    </button>
+                </div>
+                <div id="replenishmentResult" class="replenishment-result">
+                    <!-- 補貨建議結果將由 JavaScript 動態生成 -->
+                </div>
+            </div>
+        </div>
+    </div>
+        </div>
+    </div>
+
+    <!-- 銷售趨勢分頁 -->
+    <div id="sales-tab" class="tab-content">
+        <div class="report-header">
+            <h2 id="salesReportTitle" contenteditable="true" spellcheck="false"></h2>
+            <div class="report-buttons">
+                <button id="captureSalesTabButton" class="toolbar-button">
+                    <i class="fas fa-camera"></i>
+                    <span class="tooltip">截圖保存</span>
+                </button>
+                <button id="generateSalesDetailButton" class="toolbar-button">
+                    <i class="fas fa-file-excel"></i>
+                    <span class="tooltip">產生明細表</span>
+                </button>
+            </div>
+        </div>
+        <div class="kpi-container">
+            <div class="kpi-card">
+                <h4>總銷售額</h4>
+                <div id="kpi-total-sales" class="kpi-value-container">
+                    <p>--</p>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <h4>總交易筆數</h4>
+                <div id="kpi-total-transactions" class="kpi-value-container">
+                    <p>--</p>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <h4>平均客單價</h4>
+                <div id="kpi-avg-transaction-value" class="kpi-value-container">
+                    <p>--</p>
+                </div>
+            </div>
+        </div>
+        <div class="sales-controls glass" id="salesControls">
+          <div class="compare-row" style="display:flex; flex-direction:column; gap:18px; align-items:stretch; max-width:700px; margin:0 auto;">
+            <div class="mainline-block glass-card">
+              <div class="block-title" id="mainLineTitle">
+                <span class="compare-line-name">主線設定</span>
+                <i class="fas fa-edit edit-title-btn" style="margin-left: 8px; cursor: pointer; font-size: 0.9em; color: #666;"></i>
+              </div>
+              <div class="block-fields param-row">
+                <div class="date-block">
+                  <i class="fas fa-calendar-alt"></i>
+                  <label>日期</label>
+                  <input id="mainDatePicker"/>
+                </div>
+                <div class="date-block">
+                  <i class="fas fa-store"></i>
+                  <label>分店</label>
+                  <div id="mainStoreSelect" class="multi-select-input" tabindex="0" style="cursor:pointer;" placeholder="請選擇分店">請選擇分店</div>
+                </div>
+                <div class="date-block">
+                  <i class="fas fa-cubes"></i>
+                  <label>產品</label>
+                  <div id="mainProductSelect" class="multi-select-input" tabindex="0" style="cursor:pointer;" placeholder="請選擇產品">請選擇產品</div>
+                </div>
+              </div>
+            </div>
+            <div class="add-compare-block">
+              <button id="addCompareButton" class="add-compare-btn">
+                <i class="fas fa-plus"></i>
+                <span>新增對比</span>
+              </button>
+            </div>
+            <div id="compareLineContainer">
+              <!-- 對比線區塊將由 JavaScript 動態生成 -->
+            </div>
+          </div>
+        </div>
+        <!-- 還原時間單位切換器 -->
+        <div id="timeUnitSwitcher" class="time-unit-switcher"></div>
+        <div class="chart-switcher">
+            <button class="chart-switch-btn active" data-chart="daily"><i class="fas fa-chart-line"></i> <span>銷售趨勢</span></button>
+            <button class="chart-switch-btn" data-chart="store"><i class="fas fa-store"></i> <span>各分店銷售額</span></button>
+            <button class="chart-switch-btn" data-chart="product"><i class="fas fa-cubes"></i> <span>產品銷售佔比</span></button>
+            <button class="chart-switch-btn" data-chart="payment"><i class="fas fa-credit-card"></i> <span>支付方式佔比</span></button>
+        </div>
+        <div class="main-chart-container">
+            <canvas id="mainSalesChart"></canvas>
+            <div id="lineLegend" class="line-legend"></div>
+        </div>
+
+        <!-- Modal for multi-select -->
+        <div id="multiSelectModal" class="modal-overlay" style="display:none;">
+          <div class="modal-content glass-card">
+            <div class="modal-header">
+              <span id="multiSelectModalTitle"></span>
+              <button id="multiSelectModalClose" class="modal-close-btn"><i class="fas fa-times"></i></button>
+            </div>
+            <div id="multiSelectModalList" class="modal-list"></div>
+            <div class="modal-footer">
+              <button id="multiSelectModalConfirm" class="modal-confirm-btn">確定</button>
+            </div>
+          </div>
+        </div>
+        </div>
+    </div>
+
+
+    <footer>
+        <p>v4.2 | 任何問題請洽開發人員 <a href="https://line.me/ti/p/LwMjp6jZVH" target="_blank">徐</a></p>
+    </footer>
+    
+    <!-- Screenshot Loader -->
+    <div id="screenshotLoader" class="screenshot-loader" style="display: none;">
+        <span>正在生成高解析度圖片...</span>
+    </div>
+    <script src="presentation.js"></script>
+</body>
+</html> 
