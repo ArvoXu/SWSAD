@@ -1644,6 +1644,29 @@ def run_scheduler():
     schedule.every().day.at("15:55").do(run_sales_scraper_background)
     logging.info("Scheduler started for sales: will run daily at 15:55 UTC (23:55 Taiwan Time).")
 
+
+@app.route('/debug/db-stats')
+def debug_db_stats():
+    """Temporary diagnostic endpoint: returns counts of key tables and DB config."""
+    # WARNING: This endpoint may expose counts of rows; keep it temporary and remove after debugging.
+    db: Session = next(get_db())
+    try:
+        inv_count = db.query(Inventory).count()
+        wh_count = db.query(Warehouse).count()
+        store_count = db.query(Store).count()
+        return jsonify({
+            "success": True,
+            "inventory_count": inv_count,
+            "warehouse_count": wh_count,
+            "store_count": store_count,
+            "uses_external_database": bool(os.getenv('DATABASE_URL'))
+        })
+    except Exception as e:
+        logging.exception('Error while gathering DB stats')
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        db.close()
+
     # Schedule the warehouse scraper to run daily at 23:50 Taiwan Time (UTC+8), which is 15:50 UTC.
     schedule.every().day.at("15:50").do(run_warehouse_scraper_background)
     logging.info("Scheduler started for warehouse: will run daily at 15:50 UTC (23:50 Taiwan Time).")
