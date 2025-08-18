@@ -2114,7 +2114,15 @@
             chartContainer.innerHTML = '';
             
             storeGroupsArray.forEach(({ key, store, machineId, lastUpdated, lastCleaned, products, totalQuantity }) => {
-                const noteData = storeNotesAndAddresses[key] || { address: '', note: '', sales: 0 };
+                // Create masked display values (do not mutate originals)
+                const maskedStoreDisplay = window.__maskFields ? window.__maskFields.maskStoreKeyForDisplay(`${store}-${machineId}`).split('-')[0] : store;
+                const maskedMachineDisplay = window.__maskFields ? window.__maskFields.maskStoreKeyForDisplay(`${store}-${machineId}`).split('-').slice(-1)[0] : machineId;
+                const maskedProductsForDisplay = window.__maskFields ? products.map(p => ({ name: window.__maskFields.getOrCreate ? window.__maskFields.getOrCreate('product', p.name) : (window.__maskFields.maskInventoryItemForDisplay ? window.__maskFields.maskInventoryItemForDisplay(p).productName : p.name), quantity: p.quantity })) : products;
+
+                // Helper to mask address/note
+                const noteDataRaw = storeNotesAndAddresses[key] || { address: '', note: '', sales: 0 };
+                const maskedNoteData = window.__maskFields ? { address: window.__maskFields.getOrCreate ? window.__maskFields.getOrCreate('address', noteDataRaw.address) : (noteDataRaw.address), note: window.__maskFields.getOrCreate ? window.__maskFields.getOrCreate('note', noteDataRaw.note) : (noteDataRaw.note), sales: noteDataRaw.sales } : noteDataRaw;
+                const noteData = noteDataRaw;
                 const maxCapacity = 50;
                 const usagePercentage = Math.min(Math.round((totalQuantity / maxCapacity) * 100), 100);
                 
@@ -2141,7 +2149,7 @@
                 // 圓餅圖視圖內容
                 cardDiv.innerHTML = `
                     <div class="chart-card-title">
-                        ${store}<br>${machineId}
+                        ${maskedStoreDisplay}<br>${maskedMachineDisplay}
                         ${(machineSalesTotal > 0 || machineSalesCount > 0) ? `<div class="sales-info">過去一個月銷售: ${machineSalesTotal.toLocaleString()} 元 / ${machineSalesCount} 份</div>` : ''}
                     </div>
                     <div class="chart-card-chart">
@@ -2163,12 +2171,12 @@
                     </div>
                 `;
                 
-                if (noteData.address || noteData.note) {
-                    if (noteData.address) {
-                        detailHtml += `<div class="detail-address">地址: ${noteData.address}</div>`;
+                if (maskedNoteData.address || maskedNoteData.note) {
+                    if (maskedNoteData.address) {
+                        detailHtml += `<div class="detail-address">地址: ${maskedNoteData.address}</div>`;
                     }
-                    if (noteData.note) {
-                        detailHtml += `<div class="detail-address">備註: ${noteData.note}</div>`;
+                    if (maskedNoteData.note) {
+                        detailHtml += `<div class="detail-address">備註: ${maskedNoteData.note}</div>`;
                     }
                 }
                 
@@ -2184,11 +2192,11 @@
                     ...(machineSalesData ? Object.keys(machineSalesData) : [])
                 ]);
 
-                let processedProducts = [];
+        let processedProducts = [];
                 allProductNames.forEach(productName => {
                     const salesInfo = machineSalesData ? machineSalesData[productName] : null;
                     processedProducts.push({
-                        name: productName,
+            name: productName,
                         quantity: inStockProducts.get(productName) || 0, // 如果不在庫存列表，數量為0
                         sales: salesInfo ? salesInfo.count : 0,
                         lastSoldDate: salesInfo ? salesInfo.lastSoldDate : ''
@@ -2216,9 +2224,10 @@
                             quantityDisplay = '⚠️';
                         }
                         
+                        const dispName = window.__maskFields ? (window.__maskFields._internal && window.__maskFields._internal.maps && window.__maskFields._internal.maps.product[product.name] ? window.__maskFields._internal.maps.product[product.name] : window.__maskFields.maskInventoryItemForDisplay ? window.__maskFields.maskInventoryItemForDisplay({ productName: product.name }).productName : product.name) : product.name;
                         detailHtml += `
                             <div class="detail-item">
-                                <div>${medals[i]} ${product.name}</div>
+                                <div>${medals[i]} ${dispName}</div>
                                 <div>${quantityDisplay}</div>
                                 <span class="detail-tooltip">${tooltipParts.join('，')}</span>
                             </div>
@@ -2247,9 +2256,10 @@
                             tooltipParts.push(`已在 ${product.lastSoldDate} 完售，請盡早補貨`);
                         }
 
+                        const dispName = window.__maskFields ? (window.__maskFields._internal && window.__maskFields._internal.maps && window.__maskFields._internal.maps.product[product.name] ? window.__maskFields._internal.maps.product[product.name] : window.__maskFields.maskInventoryItemForDisplay ? window.__maskFields.maskInventoryItemForDisplay({ productName: product.name }).productName : product.name) : product.name;
                         detailHtml += `
                             <div class="detail-item">
-                                <div>${product.name}</div>
+                                <div>${dispName}</div>
                                 <div>${quantityDisplay}</div>
                                 <span class="detail-tooltip">${tooltipParts.join('，')}</span>
                             </div>
@@ -2259,9 +2269,10 @@
                
                 // --- 渲染無銷售紀錄的產品 ---
                 productsWithoutSales.forEach(product => {
+                     const dispName = window.__maskFields ? (window.__maskFields._internal && window.__maskFields._internal.maps && window.__maskFields._internal.maps.product[product.name] ? window.__maskFields._internal.maps.product[product.name] : window.__maskFields.maskInventoryItemForDisplay ? window.__maskFields.maskInventoryItemForDisplay({ productName: product.name }).productName : product.name) : product.name;
                      detailHtml += `
                         <div class="detail-item">
-                            <div>${product.name}</div>
+                            <div>${dispName}</div>
                             <div>${product.quantity}</div>
                             <span class="detail-tooltip">該產品於過去一個月未有銷售紀錄</span>
                         </div>
