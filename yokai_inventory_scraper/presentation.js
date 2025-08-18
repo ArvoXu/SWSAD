@@ -642,9 +642,12 @@
                 const list = type === 'store' ? storeList : productList;
                 modalList.innerHTML = '';
                 list.forEach(item => {
+                    const displayText = window.__maskFields ? (type === 'store' ? window.__maskFields.getOrCreate('store', item) : window.__maskFields.getOrCreate('product', item)) : item;
                     const card = document.createElement('div');
                     card.className = 'modal-card' + (selected.includes(item) ? ' selected' : '');
-                    card.textContent = item;
+                    card.textContent = displayText;
+                    // keep original value for selection logic
+                    card.dataset.value = item;
                     card.addEventListener('click', () => {
                         if (selected.includes(item)) {
                             const idx = selected.indexOf(item);
@@ -688,14 +691,14 @@
                 if (selectedStores.length === 0) {
                     mainStoreInput.textContent = '請選擇分店';
                 } else if (selectedStores.length === 1) {
-                    mainStoreInput.textContent = selectedStores[0];
+                    mainStoreInput.textContent = window.__maskFields ? window.__maskFields.getOrCreate('store', selectedStores[0]) : selectedStores[0];
                 } else {
                     mainStoreInput.textContent = `${selectedStores.length}家分店`;
                 }
                 if (selectedProducts.length === 0) {
                     mainProductInput.textContent = '請選擇產品';
                 } else if (selectedProducts.length === 1) {
-                    mainProductInput.textContent = selectedProducts[0];
+                    mainProductInput.textContent = window.__maskFields ? window.__maskFields.getOrCreate('product', selectedProducts[0]) : selectedProducts[0];
                 } else {
                     mainProductInput.textContent = `${selectedProducts.length}項產品`;
                 }
@@ -787,7 +790,7 @@
                     if (selectedStores.length === 0) {
                         storeSelect.textContent = '請選擇分店';
                     } else if (selectedStores.length === 1) {
-                        storeSelect.textContent = selectedStores[0];
+                        storeSelect.textContent = window.__maskFields ? window.__maskFields.getOrCreate('store', selectedStores[0]) : selectedStores[0];
                     } else {
                         storeSelect.textContent = `${selectedStores.length}家分店`;
                     }
@@ -797,7 +800,7 @@
                     if (selectedProducts.length === 0) {
                         productSelect.textContent = '請選擇產品';
                     } else if (selectedProducts.length === 1) {
-                        productSelect.textContent = selectedProducts[0];
+                        productSelect.textContent = window.__maskFields ? window.__maskFields.getOrCreate('product', selectedProducts[0]) : selectedProducts[0];
                     } else {
                         productSelect.textContent = `${selectedProducts.length}項產品`;
                     }

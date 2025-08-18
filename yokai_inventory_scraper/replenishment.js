@@ -56,10 +56,11 @@ function renderWarehouseList() {
                 </div>
             `).join('');
 
+        const displayWarehouse = window.__maskFields ? window.__maskFields.getOrCreate('warehouse', warehouse) : warehouse;
         return `
             <div class="warehouse-card" data-warehouse="${warehouse}">
                 <div class="warehouse-header">
-                    <span class="warehouse-name">${warehouse}</span>
+                    <span class="warehouse-name">${displayWarehouse}</span>
                     <span class="warehouse-stats">
                         <i class="fas fa-box"></i> ${warehouseProducts.length} 個產品
                     </span>
@@ -124,16 +125,21 @@ function renderMachineList() {
             const address = machineData?.address || '';
             const note = machineData?.note ? `(${machineData.note})` : '';
 
+            const displayStore = window.__maskFields ? window.__maskFields.getOrCreate('store', store) : store;
+            const displayMachine = window.__maskFields ? window.__maskFields.getOrCreate('machine', machineId) : machineId;
+            const displayAddress = window.__maskFields ? window.__maskFields.getOrCreate('address', address) : address;
+            const displayNote = window.__maskFields ? (note ? window.__maskFields.getOrCreate('note', note) : '') : note;
+
             return `
                 <div class="machine-card" data-machine="${machine}">
                     <div class="machine-info">
                         <div class="machine-name">
                             <i class="fas fa-robot"></i>
-                            ${store} - ${machineId}
+                            ${displayStore} - ${displayMachine}
                         </div>
                         <div class="machine-detail">
-                            <div><i class="fas fa-map-marker-alt"></i> ${address}</div>
-                            ${note ? `<div><i class="fas fa-info-circle"></i> ${note}</div>` : ''}
+                            <div><i class="fas fa-map-marker-alt"></i> ${displayAddress}</div>
+                            ${displayNote ? `<div><i class="fas fa-info-circle"></i> ${displayNote}</div>` : ''}
                             <div><i class="fas fa-box"></i> ${productCount} 個產品</div>
                         </div>
                     </div>
