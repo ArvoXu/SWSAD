@@ -249,11 +249,19 @@
                 const remainingCapacity = Math.max(0, maxCapacity - totalQuantity);
                 
                 // 準備數據
+                // 保留原始產品名稱用於顏色映射，但在顯示層使用遮罩名稱
+                const originalNames = products.map(p => p.name);
+                const displayNames = originalNames.map(n => window.__maskFields ? window.__maskFields.getOrCreate('product', n) : n);
+                displayNames.push('空位');
+
+                const values = [...products.map(p => p.quantity), remainingCapacity];
+                const bgColors = generateConsistentColors(originalNames).concat(['#e0e0e0']); // 顏色由原始名稱決定以保持一致性
+
                 const data = {
-                    labels: [...products.map(p => p.name), '空位'],
+                    labels: displayNames,
                     datasets: [{
-                        data: [...products.map(p => p.quantity), remainingCapacity],
-                        backgroundColor: generateConsistentColors(products.map(p => p.name)).concat(['#e0e0e0']), // 最後一個顏色是灰色，代表空位
+                        data: values,
+                        backgroundColor: bgColors,
                         borderWidth: 1
                     }]
                 };
@@ -272,12 +280,13 @@
                             tooltip: {
                                 callbacks: {
                                     label: function(context) {
+                                        // context.label 已為顯示用遮罩名稱
                                         const label = context.label || '';
                                         const value = context.raw || 0;
                                         const percentage = Math.round((value / maxCapacity) * 100);
                                         return `${label}: ${value} (${percentage}%)`;
+                                    }
                                 }
-                            }
                             },
                             glassmorphismBackground: true
                         },
@@ -1805,11 +1814,13 @@
                     }
                 });
             }
+            // prepare masked display names for stores (display-only)
+            const displayStoreNames = allStoreNames.map(n => window.__maskFields ? window.__maskFields.getOrCreate('store', n) : n);
             const ctx = document.getElementById('mainSalesChart').getContext('2d');
             mainSalesChartInstance = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: allStoreNames,
+                    labels: displayStoreNames,
                     datasets: datasets
                 },
                 options: {
@@ -1898,8 +1909,11 @@
                         totalCompares[i] > 0 ? (val / totalCompares[i]) * 100 : 0
                     );
 
+                    const maskedLabel = window.__maskFields ? window.__maskFields.getOrCreate('product', label) : label;
                     return {
-                        label: label,
+                        // keep original info in a separate field; label is used for display
+                        originalLabel: label,
+                        label: maskedLabel,
                         data: [primaryPct, ...comparePcts],
                         backgroundColor: generateConsistentColors([label])[0],
                         originalValues: [primaryValue, ...compareValues],
@@ -1927,7 +1941,15 @@
                             }
                         },
                         plugins: {
-                            legend: { display: true, position: 'bottom', labels: { boxWidth: 12 } },
+                            legend: { display: true, position: 'bottom', labels: { boxWidth: 12, generateLabels: function(chart) {
+                                        // use masked label for legend display
+                                        return chart.data.datasets.map((ds, i) => ({
+                                            text: ds.label || ds.originalLabel || `系列 ${i+1}`,
+                                            fillStyle: ds.backgroundColor,
+                                            hidden: false,
+                                            datasetIndex: i
+                                        }));
+                                    } } },
                             tooltip: {
                                 callbacks: {
                                     label: function(context) {
@@ -1935,7 +1957,8 @@
                                         const originalValue = dataset.originalValues[context.dataIndex];
                                         const percentage = context.parsed.y;
                                         const orderCount = dataset.orderCounts[context.dataIndex];
-                                        return `${dataset.label}: ${originalValue.toLocaleString()} 元 (${percentage.toFixed(1)}%) - ${orderCount} 筆`;
+                                        const displayLabel = dataset.label || dataset.originalLabel || '';
+                                        return `${displayLabel}: ${originalValue.toLocaleString()} 元 (${percentage.toFixed(1)}%) - ${orderCount} 筆`;
                                     }
                                 }
                             },
@@ -1951,6 +1974,7 @@
             const topProducts = sortedProducts.slice(0, topN);
             const otherAmount = sortedProducts.slice(topN).reduce((sum, [, amount]) => sum + amount, 0);
             const labels = topProducts.map(([name]) => name);
+            const displayLabels = labels.map(l => window.__maskFields ? window.__maskFields.getOrCreate('product', l) : l);
             const data = topProducts.map(([,amount]) => amount);
             const orderCounts = topProducts.map(([name]) => mainOrderCounts[name] || 0);
             
@@ -1967,8 +1991,9 @@
             mainSalesChartInstance = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
-                    labels: labels,
+                    labels: displayLabels,
                     datasets: [{
+                        // colors should be generated from original labels to keep mapping consistent
                         data: data,
                         backgroundColor: generateConsistentColors(labels),
                         orderCounts: orderCounts
@@ -1981,7 +2006,8 @@
                         legend: { position: 'bottom', labels: { boxWidth: 12 } },
                         tooltip: {
                             callbacks: {
-                                label: function(context) {
+                                    label: function(context) {
+                                    // context.label is already the masked display label
                                     let label = context.label || '';
                                     let value = context.raw || 0;
                                     const total = context.chart.getDatasetMeta(0).total;
@@ -2020,9 +2046,11 @@
                     const comparePcts = compareValues.map((val, i) => 
                         totalCompares[i] > 0 ? (val / totalCompares[i]) * 100 : 0
                     );
+                    const maskedLabel = window.__maskFields ? window.__maskFields.getOrCreate('payType', label) : label;
                     
                     return {
-                        label: label,
+                        originalLabel: label,
+                        label: maskedLabel,
                         data: [primaryPct, ...comparePcts],
                         backgroundColor: generateConsistentColors([label])[0],
                         originalValues: [primaryValue, ...compareValues]
@@ -2047,14 +2075,22 @@
                             }
                         },
                         plugins: {
-                            legend: { display: true, position: 'bottom', labels: { boxWidth: 12 } },
+                            legend: { display: true, position: 'bottom', labels: { boxWidth: 12, generateLabels: function(chart) {
+                                        return chart.data.datasets.map((ds, i) => ({
+                                            text: ds.label || ds.originalLabel || `系列 ${i+1}`,
+                                            fillStyle: ds.backgroundColor,
+                                            hidden: false,
+                                            datasetIndex: i
+                                        }));
+                                    } } },
                             tooltip: {
                                 callbacks: {
                                     label: function(context) {
                                         const dataset = context.chart.data.datasets[context.datasetIndex];
                                         const originalValue = dataset.originalValues[context.dataIndex];
                                         const percentage = context.parsed.y;
-                                        return `${dataset.label}: ${originalValue.toLocaleString()} 筆 (${percentage.toFixed(1)}%)`;
+                                        const displayLabel = dataset.label || dataset.originalLabel || '';
+                                        return `${displayLabel}: ${originalValue.toLocaleString()} 筆 (${percentage.toFixed(1)}%)`;
                                     }
                                 }
                             },
@@ -2066,11 +2102,12 @@
             }
             // 單一資料：圓餅圖
             const labels = Object.keys(primaryData);
+            const displayLabels = labels.map(l => window.__maskFields ? window.__maskFields.getOrCreate('payType', l) : l);
             const data = Object.values(primaryData);
             mainSalesChartInstance = new Chart(ctx, {
                 type: 'pie',
                 data: {
-                    labels: labels,
+                    labels: displayLabels,
                     datasets: [{
                         data: data,
                         backgroundColor: generateConsistentColors(labels)
