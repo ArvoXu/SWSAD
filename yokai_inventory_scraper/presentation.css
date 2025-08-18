@@ -1963,3 +1963,17 @@ body.is-capturing .dashboard-header h1 {
     display: grid !important;
     grid-template-columns: repeat(7, 1fr) !important;
 }
+
+/* Sample mode visual helpers */
+.sample-disabled {
+    background: linear-gradient(180deg,#e0e0e0,#cfcfcf) !important;
+    color: #333 !important;
+    border: 1px solid #b3b3b3 !important;
+    box-shadow: none !important;
+    cursor: not-allowed !important;
+    opacity: 0.95 !important;
+}
+.sample-disabled:hover {
+    transform: none !important;
+    box-shadow: none !important;
+}

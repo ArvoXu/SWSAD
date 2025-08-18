@@ -39,6 +39,11 @@
         <div class="dashboard-subtitle">Smart Warehousing and Sales Analysis Dashboard</div>
     </div>
 
+    <!-- Sample banner: clearly indicate demo data only -->
+    <div id="sampleBanner" style="background: linear-gradient(90deg,#ffefc2,#ffd6a5); color:#663300; padding:12px 18px; border-left:6px solid #ff8c00; margin:12px 18px; border-radius:6px; font-weight:600; text-align:center;">
+        展示版 — 本頁僅示範功能，所有顯示資料已去識別化或為範例資料，請勿將此版本用於生產或分享真實公司資料。
+    </div>
+
     <!-- 分頁導航 -->
     <div class="tab-nav">
         <button class="tab-link active" data-tab="inventory-tab">庫存</button>
@@ -125,18 +130,12 @@
             </div>
             <div class="toolbar-section"> <!-- Right -->
                 <input type="text" id="inventorySearchInput" class="search-input-presentation" placeholder="搜尋機台名稱/編號...">
-                <button id="saveAsHtmlButton" class="toolbar-button">
-                    <i class="fas fa-file-code"></i>
-                    <span class="tooltip">另存為HTML</span>
-                </button>
                 <button id="captureButton" class="toolbar-button">
                     <i class="fas fa-camera"></i>
                     <span class="tooltip">截圖保存</span>
                 </button>
-                <button id="printButton" class="toolbar-button">
-                    <i class="fas fa-print"></i>
-                    <span class="tooltip">列印</span>
-                </button>
+                
+                <!-- Save/Print removed for presentation sample -->
             </div>
         </div>
         
@@ -306,7 +305,7 @@
 
 
     <footer>
-        <p>v4.2 | 任何問題請洽開發人員 <a href="https://line.me/ti/p/LwMjp6jZVH" target="_blank">徐</a></p>
+        <p>v5.0 | 任何問題請洽開發人員 <a href="https://line.me/ti/p/LwMjp6jZVH" target="_blank">徐</a></p>
     </footer>
     
     <!-- Screenshot Loader -->
@@ -314,6 +313,36 @@
         <span>正在生成高解析度圖片...</span>
     </div>
     <script src="mask_fields.js"></script>
+    <script>
+    // Presentation SAMPLE: disable certain actions
+    document.addEventListener('DOMContentLoaded', function() {
+        const showDisabledMsg = (btn) => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                e.stopPropagation();
+                // small inline toast
+                const msg = document.createElement('div');
+                msg.textContent = '展示版無法提供此功能';
+                msg.style.position = 'fixed';
+                msg.style.right = '20px';
+                msg.style.bottom = '20px';
+                msg.style.background = 'rgba(0,0,0,0.8)';
+                msg.style.color = 'white';
+                msg.style.padding = '10px 14px';
+                msg.style.borderRadius = '6px';
+                msg.style.zIndex = 9999;
+                document.body.appendChild(msg);
+                setTimeout(() => msg.remove(), 2200);
+            });
+        };
+
+        const genSales = document.getElementById('generateSalesDetailButton');
+        if (genSales) showDisabledMsg(genSales);
+
+    // Allow '生成補貨建議' (generate suggestions) in SAMPLE. Only disable actions that export company data.
+    });
+    </script>
     <script src="presentation.js"></script>
 </body>
 </html> 

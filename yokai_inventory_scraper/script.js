@@ -407,7 +407,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if(saveDataButton) saveDataButton.addEventListener('click', () => alert('此功能已過時。'));
     if(openChartWindowButton) {
         openChartWindowButton.addEventListener('click', () => {
-            window.open('presentation.html', '_blank');
+        window.open('/presentation', '_blank');
         });
     }
     

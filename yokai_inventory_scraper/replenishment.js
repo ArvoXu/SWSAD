@@ -32,8 +32,11 @@ async function initReplenishmentTab() {
         console.error('Error loading inventory data:', error);
     }
 
-    // 添加事件監聽器
-    document.getElementById('generateReplenishmentButton').addEventListener('click', generateReplenishmentSuggestion);
+    // 綁定生成補貨建議按鈕（展示版也允許生成建議）
+    const genReplBtn = document.getElementById('generateReplenishmentButton');
+    if (genReplBtn) {
+        genReplBtn.addEventListener('click', generateReplenishmentSuggestion);
+    }
 }
 
 // 渲染倉庫列表
@@ -110,7 +113,6 @@ function renderMachineList() {
     
     // 按地區名稱排序（台北市、新竹市、桃園市等）
     const sortedRegions = Object.keys(machinesByRegion).sort();
-    
     // 生成HTML，每個地區一個區塊
     machineList.innerHTML = sortedRegions.map(region => {
         const machines = [...machinesByRegion[region]];
@@ -247,7 +249,7 @@ function renderSuggestions(suggestions) {
                 );
                 
                 if (productWarehouses.length > 0) {
-                    // 假設使用第一個有該產品的倉庫
+                    // 假設使用第一个有該產品的倉庫
                     const warehouse = productWarehouses[0].warehouseName;
                     if (!warehouseShipments[warehouse]) {
                         warehouseShipments[warehouse] = {};
@@ -266,8 +268,8 @@ function renderSuggestions(suggestions) {
     // 渲染每個機台的建議
     suggestions.forEach(suggestion => {
         const [store, machineId] = suggestion.machine.split('-');
-    const maskedStore = window.__maskFields ? window.__maskFields.getOrCreate('store', store) : store;
-    const maskedMachine = window.__maskFields ? window.__maskFields.getOrCreate('machine', machineId) : machineId;
+        const maskedStore = window.__maskFields ? window.__maskFields.getOrCreate('store', store) : store;
+        const maskedMachine = window.__maskFields ? window.__maskFields.getOrCreate('machine', machineId) : machineId;
         
         // 計算總計
         let totals = {
@@ -326,7 +328,7 @@ function renderSuggestions(suggestions) {
                                             <td>${item.salesCount30d}</td>
                                             <td>${item.currentQty}</td>
                                             <td>${item.suggestedQty}</td>
-                                            <td class="${adjustment > 0 ? 'positive' : adjustment < 0 ? 'negative' : ''}">$${
+                                            <td class="${adjustment > 0 ? 'positive' : adjustment < 0 ? 'negative' : ''}">${
                                                 adjustment > 0 ? '+' + adjustment : adjustment
                                             }</td>
                                         </tr>
@@ -352,7 +354,7 @@ function renderSuggestions(suggestions) {
     // 顯示每個倉庫的出貨清單
     const shipmentCards = Object.entries(warehouseShipments).map(([warehouse, shipments]) => {
         if (Object.keys(shipments).length === 0) return '';
-        
+
         // 計算送貨地點
         const deliveryLocations = suggestions.map(s => {
             const [sStore, sMachine] = s.machine.split('-');
@@ -360,7 +362,7 @@ function renderSuggestions(suggestions) {
             const dm = window.__maskFields ? window.__maskFields.getOrCreate('machine', sMachine) : sMachine;
             return `${ds}-${dm}`;
         }).join('、');
-        
+
         return `
             <div class="shipment-card">
                 <h4>${window.__maskFields ? window.__maskFields.getOrCreate('warehouse', warehouse) : warehouse} 出貨清單</h4>
@@ -390,7 +392,7 @@ function renderSuggestions(suggestions) {
             </div>
         `;
     }).join('');
-        
+
     // 如果有出貨清單，添加到結果HTML的開頭
     if (shipmentCards) {
         resultHTML = shipmentCards + resultHTML;
@@ -408,31 +410,57 @@ function renderSuggestions(suggestions) {
     resultContainer.innerHTML = resultHTML;
 
     // 添加生成補貨單事件監聽器
-    document.getElementById('generateFormButton').addEventListener('click', async () => {
-        try {
-            // 生成補貨單
-            const response = await fetch('/api/generate-replenishment-form', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    suggestions: suggestions
-                })
+    const genFormBtn = document.getElementById('generateFormButton');
+    if (genFormBtn) {
+        const isSample = window.location.pathname && window.location.pathname.indexOf('presentation_sample') !== -1;
+        if (isSample) {
+            // Add a visual marker and accessibility hint for sample-disabled state
+            genFormBtn.classList.add('sample-disabled');
+            genFormBtn.setAttribute('aria-disabled', 'true');
+            genFormBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                // Show inline disabled toast for sample mode
+                const msg = document.createElement('div');
+                msg.textContent = '\u5c55\u793a\u7248\u7121\u6cd5\u63d0\u4f9b\u6b64\u529f\u80fd';
+                msg.style.position = 'fixed';
+                msg.style.right = '20px';
+                msg.style.bottom = '20px';
+                msg.style.background = 'rgba(0,0,0,0.8)';
+                msg.style.color = 'white';
+                msg.style.padding = '10px 14px';
+                msg.style.borderRadius = '6px';
+                msg.style.zIndex = 9999;
+                document.body.appendChild(msg);
+                setTimeout(() => msg.remove(), 2200);
             });
+        } else {
+            genFormBtn.addEventListener('click', async () => {
+                try {
+                    // 生成補貨單
+                    const response = await fetch('/api/generate-replenishment-form', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            suggestions: suggestions
+                        })
+                    });
 
-            const result = await response.json();
-            if (result.success) {
-                // 創建下載鏈接
-                window.location.href = `/download-replenishment-form/${result.filename}`;
-            } else {
-                alert('生成補貨單失敗：' + result.message);
-            }
-        } catch (error) {
-            console.error('Error generating replenishment form:', error);
-            alert('生成補貨單時發生錯誤');
+                    const result = await response.json();
+                    if (result.success) {
+                        // 創建下載鏈接
+                        window.location.href = `/download-replenishment-form/${result.filename}`;
+                    } else {
+                        alert('生成補貨單失敗：' + result.message);
+                    }
+                } catch (error) {
+                    console.error('Error generating replenishment form:', error);
+                    alert('生成補貨單時發生錯誤');
+                }
+            });
         }
-    });
+    }
 }
 
 // 當頁面加載完成時初始化

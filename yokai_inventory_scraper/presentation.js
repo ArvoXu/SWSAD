@@ -2344,8 +2344,10 @@
             });
         }
         
-        // 另存為HTML
-        document.getElementById('saveAsHtmlButton').addEventListener('click', function() {
+        // 另存為HTML (only attach if button exists)
+        const saveBtn = document.getElementById('saveAsHtmlButton');
+        if (saveBtn) {
+            saveBtn.addEventListener('click', function() {
             try {
                 // 獲取當前數據現在直接从全局变量获取
                 const data = window.inventoryData;
@@ -2402,7 +2404,8 @@
                 console.error('保存文件時出錯:', error);
                 alert('保存失敗: ' + error.message);
             }
-        });
+            });
+        }
         
         // 截圖按鈕事件處理
         document.getElementById('captureButton').addEventListener('click', function() {
@@ -2462,10 +2465,13 @@
             }, 300); // 增加延遲到300毫秒確保渲染完成
         });
         
-        // 列印
-        document.getElementById('printButton').addEventListener('click', function() {
-            window.print();
-        });
+        // 列印 (attach only if button exists)
+        const printBtn = document.getElementById('printButton');
+        if (printBtn) {
+            printBtn.addEventListener('click', function() {
+                window.print();
+            });
+        }
         
         // 修改視圖切換按鈕事件處理
         let currentViewMode = 'chart';

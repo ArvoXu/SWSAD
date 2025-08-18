@@ -1608,13 +1608,21 @@ def serve_index():
 def serve_presentation():
     return send_from_directory(script_dir, 'presentation.html')
 
+
+@app.route('/presentation_sample')
+def serve_presentation_sample():
+    # Expose the sample presentation at /presentation_sample (no .html)
+    return send_from_directory(script_dir, 'presentation_sample.html')
+
 @app.route('/<path:path>')
 def serve_static_files(path):
     # This will serve other files like script.js
-    if path != 'presentation.html':
-        return send_from_directory(script_dir, path)
-    # Redirect to the clean URL if someone tries to access the .html version directly
-    return redirect('/presentation')
+    # Allow presentation_sample.html to be requested directly but prefer clean URL
+    if path == 'presentation.html':
+        return redirect('/presentation')
+    if path == 'presentation_sample.html':
+        return redirect('/presentation_sample')
+    return send_from_directory(script_dir, path)
 
 
 # --- Scheduler Setup ---
