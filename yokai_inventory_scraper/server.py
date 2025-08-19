@@ -1643,6 +1643,15 @@ def run_scheduler():
     # Schedule the sales scraper to run daily at 23:55 Taiwan Time (UTC+8), which is 15:55 UTC.
     schedule.every().day.at("15:55").do(run_sales_scraper_background)
     logging.info("Scheduler started for sales: will run daily at 15:55 UTC (23:55 Taiwan Time).")
+    
+    # Schedule the warehouse scraper to run daily at 23:50 Taiwan Time (UTC+8), which is 15:50 UTC.
+    schedule.every().day.at("15:50").do(run_warehouse_scraper_background)
+    logging.info("Scheduler started for warehouse: will run daily at 15:50 UTC (23:50 Taiwan Time).")
+    
+    # Run the scheduler loop
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
 
 
 @app.route('/debug/db-stats')
@@ -1666,14 +1675,6 @@ def debug_db_stats():
         return jsonify({"success": False, "error": str(e)}), 500
     finally:
         db.close()
-
-    # Schedule the warehouse scraper to run daily at 23:50 Taiwan Time (UTC+8), which is 15:50 UTC.
-    schedule.every().day.at("15:50").do(run_warehouse_scraper_background)
-    logging.info("Scheduler started for warehouse: will run daily at 15:50 UTC (23:50 Taiwan Time).")
-    
-    while True:
-        schedule.run_pending()
-        time.sleep(1)
 
 # --- Endpoints for Manual Testing ---
 @app.route('/test-run-warehouse-scraper', methods=['GET'])
