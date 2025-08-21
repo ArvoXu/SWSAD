@@ -2021,12 +2021,18 @@ def generate_sales_detail():
                 current_row += 1
 
                 # 填入該店家的所有商品數據（支援同商品多價格）
+                # 使用 product_block_idx 來對整個商品區塊進行交替底色，
+                # 以避免因為同商品多價格造成的列數差異而導致視覺上跨店家錯位。
+                product_block_idx = 0
                 for sale in data['sales']:
                     product_name = sale['product']
                     price_rows = sale.get('prices', [])
                     if not price_rows:
-                        # 若沒有價格資料，跳過
+                        # 若沒有價格資料，跳過（且不計入交替序列）
                         continue
+
+                    # 決定該商品區塊是否需要填充背景（保持整個商品區塊同色）
+                    should_fill_block = (product_block_idx % 2 == 1)
 
                     start_row_for_product = current_row
                     # 為每個價格列寫入一行
@@ -2045,19 +2051,22 @@ def generate_sales_detail():
                             else:
                                 ws[col].number_format = '#,##0'
 
-                        # 交替底色
-                        if (current_row - last_header_row) % 2 == 0:
+                        # 如果該商品區塊需要填色，對整行所有列填充
+                        if should_fill_block:
                             for col in ['A', 'B', 'C', 'D']:
                                 ws[f'{col}{current_row}'].fill = PatternFill(start_color='F5F5F5', end_color='F5F5F5', fill_type='solid')
 
                         current_row += 1
 
                     end_row_for_product = current_row - 1
-                    # 合併 A 欄為產品名稱以提高可讀性（不在此處再插入空行，保持緊湊）
+                    # 合併 A 欄為產品名稱以提高可讀性（整個商品區塊不另加空行）
                     ws.merge_cells(start_row=start_row_for_product, start_column=1, end_row=end_row_for_product, end_column=1)
                     ws[f'A{start_row_for_product}'] = product_name
                     ws[f'A{start_row_for_product}'].font = normal_font
                     ws[f'A{start_row_for_product}'].alignment = Alignment(horizontal='left', vertical='center')
+
+                    # 商品區塊處理完畢，移動到下一個商品塊
+                    product_block_idx += 1
 
                 # 添加該店家的小計
                 ws[f'A{current_row}'] = f"{store} 小計"
