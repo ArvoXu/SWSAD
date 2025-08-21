@@ -34,6 +34,12 @@
             console.log('Date range:', { startDate, endDate }); // 添加日誌輸出
 
             try {
+                // 取得目前主線多選的分店與產品
+                const selectedStores = window._mainMultiSelect?.selectedStores || [];
+                const selectedProducts = window._mainMultiSelect?.selectedProducts || [];
+
+                console.log('Generating sales detail with filters:', { startDate, endDate, selectedStores, selectedProducts });
+
                 const response = await fetch('/api/generate-sales-detail', {
                     method: 'POST',
                     headers: {
@@ -41,7 +47,9 @@
                     },
                     body: JSON.stringify({
                         startDate: startDate,
-                        endDate: endDate
+                        endDate: endDate,
+                        stores: selectedStores,
+                        products: selectedProducts
                     })
                 });
 

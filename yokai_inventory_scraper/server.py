@@ -1814,23 +1814,46 @@ def generate_sales_detail():
         start_date = datetime.fromisoformat(data['startDate'])
         end_date = datetime.fromisoformat(data['endDate'])
 
+        # 可選的分店/產品過濾條件（來自前端多選）
+        selected_stores = data.get('stores') or []
+        selected_products = data.get('products') or []
+
+        logging.info(f"Received generate-sales-detail request with stores={selected_stores} products={selected_products}")
+
         db: Session = next(get_db())
         try:
             # 設定日期範圍的結束時間為當天的最後一刻
             end_date = end_date.replace(hour=23, minute=59, second=59, microsecond=999999)
             
             # 獲取指定日期範圍內的所有交易
-            transactions = db.query(Transaction).filter(
+            transactions_query = db.query(Transaction).filter(
                 Transaction.transaction_time >= start_date,
                 Transaction.transaction_time <= end_date
-            ).order_by(Transaction.store_key, Transaction.product_name).all()
+            )
+
+            # 如果前端有提供分店過濾，將 store_key 的店名部分比對
+            if selected_stores:
+                # store_key 格式為 'StoreName-machineId'，因此比對以 store_key.startswith(storeName)
+                store_filters = [Transaction.store_key.startswith(s) for s in selected_stores]
+                # SQLAlchemy 不能直接使用 python list of expressions like this; 使用 OR 組合
+                from sqlalchemy import or_
+                or_conditions = [Transaction.store_key.startswith(s) for s in selected_stores]
+                transactions_query = transactions_query.filter(or_(*or_conditions))
+
+            # 如果前端有提供產品過濾
+            if selected_products:
+                from sqlalchemy import or_
+                prod_conditions = [Transaction.product_name == p for p in selected_products]
+                transactions_query = transactions_query.filter(or_(*prod_conditions))
+
+            transactions = transactions_query.order_by(Transaction.store_key, Transaction.product_name).all()
 
             if not transactions:
                 return jsonify({'success': False, 'message': '指定日期範圍內沒有交易記錄'}), 404
                 
             # 記錄查詢到的交易記錄範圍
             logging.info(f"Query date range: from {start_date} to {end_date}")
-            logging.info(f"Found {len(transactions)} transactions")
+            logging.info(f"Found {len(transactions)} transactions after applying filters (stores/products)")
 
             # 建立 Excel 工作簿
             wb = Workbook()
