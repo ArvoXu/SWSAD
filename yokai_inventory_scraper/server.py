@@ -1849,11 +1849,27 @@ def generate_sales_detail():
             transaction_count = 0  # 用於驗證交易筆數
             
             # 第一次遍歷：找出每個產品的最新單價
+            # 有些交易包含固定加價(例如加筷子 +2)，導致單價個位數變為1或2。
+            # 真實的商品單價個位數只會是0或9，因此當看到尾數為1或2時，我們減去2以還原原始單價。
             product_latest_price = {}
             for t in transactions:  # transactions已經按時間倒序排序
                 store_name = t.store_key.split('-')[0]  # 只取店名部分
                 if t.product_name not in product_latest_price and t.amount > 0:  # 只記錄第一次遇到的非零價格
-                    product_latest_price[t.product_name] = t.amount
+                    # 使用整數價格並處理可能的小數/浮點情況
+                    try:
+                        price = int(round(t.amount))
+                    except Exception:
+                        # 若無法轉換（非常罕見），回退到原始值的整數部分
+                        price = int(t.amount)
+
+                    last_digit = price % 10
+                    if last_digit in (1, 2):
+                        # 減去2以恢復到尾數為9或0的原始單價
+                        normalized_price = price - 2
+                    else:
+                        normalized_price = price
+
+                    product_latest_price[t.product_name] = normalized_price
             
             # 第二次遍歷：計算每個組合的總數和總額
             for t in transactions:
