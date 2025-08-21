@@ -1871,74 +1871,65 @@ def generate_sales_detail():
             total_amount = 0  # 用於驗證總金額
             transaction_count = 0  # 用於驗證交易筆數
             
-            # 第一次遍歷：找出每個產品的最新單價
-            # 有些交易包含固定加價(例如加筷子 +2)，導致單價個位數變為1或2。
-            # 真實的商品單價個位數只會是0或9，因此當看到尾數為1或2時，我們減去2以還原原始單價。
-            product_latest_price = {}
-            for t in transactions:  # transactions已經按時間倒序排序
-                store_name = t.store_key.split('-')[0]  # 只取店名部分
-                if t.product_name not in product_latest_price and t.amount > 0:  # 只記錄第一次遇到的非零價格
-                    # 使用整數價格並處理可能的小數/浮點情況
-                    try:
-                        price = int(round(t.amount))
-                    except Exception:
-                        # 若無法轉換（非常罕見），回退到原始值的整數部分
-                        price = int(t.amount)
-
-                    last_digit = price % 10
-                    if last_digit in (1, 2):
-                        # 減去2以恢復到尾數為9或0的原始單價
-                        normalized_price = price - 2
-                    else:
-                        normalized_price = price
-
-                    product_latest_price[t.product_name] = normalized_price
+            # 第一次遍歷：找出每個產品的最新單價（用於單價回復），
+            # 但我們允許同一產品存在多個不同的已還原單價，
+            # 因此此階段只負責計算單筆交易的還原單價。
+            def normalized_unit_price(amount):
+                try:
+                    price = int(round(amount))
+                except Exception:
+                    price = int(amount)
+                last_digit = price % 10
+                if last_digit in (1, 2):
+                    return price - 2
+                return price
             
-            # 第二次遍歷：計算每個組合的總數和總額
+            # 第二次遍歷：計算每個店家的每個產品在不同（還原後）單價下的數量與營收
+            # 結構：sales_summary[store][product][price] -> {'count': n, 'total': x}
+            sales_summary = {}
             for t in transactions:
                 transaction_count += 1
                 store_name = t.store_key.split('-')[0]
-                key = (store_name, t.product_name)
-                
+                product_name = t.product_name or 'UNKNOWN'
+
                 # 每筆交易金額 = 實際交易金額
-                transaction_amount = t.amount
+                transaction_amount = t.amount or 0
                 total_amount += transaction_amount
-                
-                if key not in sales_summary:
-                    # 使用最新的非零價格，如果沒有找到則使用當前交易價格
-                    price = product_latest_price.get(t.product_name, t.amount)
-                    sales_summary[key] = {
-                        'store': store_name,
-                        'product': t.product_name,
-                        'price': price,
-                        'count': 0,
-                        'total': 0
-                    }
-                
-                sales_summary[key]['count'] += 1
-                sales_summary[key]['total'] += transaction_amount  # 累加實際交易金額
+
+                # 以還原後的單價作為 group key
+                unit_price = normalized_unit_price(t.amount)
+
+                store_map = sales_summary.setdefault(store_name, {})
+                product_map = store_map.setdefault(product_name, {})
+                price_entry = product_map.setdefault(unit_price, {'count': 0, 'total': 0})
+                price_entry['count'] += 1
+                price_entry['total'] += transaction_amount
             
             # 詳細的日誌記錄
             logging.info(f"Total transactions: {transaction_count}")
             logging.info(f"Total amount: {total_amount}")
-            logging.info(f"Unique combinations: {len(sales_summary)}")
-            
-            # 驗證彙總數據
-            summary_total = sum(item['total'] for item in sales_summary.values())
+
+            # 計算唯一的 product-price 組合數與驗證總金額
+            unique_price_combinations = 0
+            summary_total = 0
+            for store_name, products in sales_summary.items():
+                for product_name, price_map in products.items():
+                    for price, rec in price_map.items():
+                        unique_price_combinations += 1
+                        summary_total += rec.get('total', 0)
+
+            logging.info(f"Unique product-price combinations: {unique_price_combinations}")
             if summary_total != total_amount:
                 logging.error(f"Amount mismatch! Summary: {summary_total}, Transactions: {total_amount}")
-            
-            # 按店鋪分組進行統計並記錄到日誌
+
+            # 按店鋪匯總統計以供日誌顯示
             store_totals = {}
-            for key, data in sales_summary.items():
-                store = data['store']
-                if store not in store_totals:
-                    store_totals[store] = {
-                        'total': 0,
-                        'transactions': 0
-                    }
-                store_totals[store]['total'] += data['total']
-                store_totals[store]['transactions'] += data['count']
+            for store_name, products in sales_summary.items():
+                store_totals.setdefault(store_name, {'total': 0, 'transactions': 0})
+                for product_name, price_map in products.items():
+                    for price, rec in price_map.items():
+                        store_totals[store_name]['total'] += rec.get('total', 0)
+                        store_totals[store_name]['transactions'] += rec.get('count', 0)
             
             for store, stats in store_totals.items():
                 logging.info(f"Store: {store}")
@@ -1946,22 +1937,26 @@ def generate_sales_detail():
                 logging.info(f"  - Transaction count: {stats['transactions']}")
                 logging.info(f"  - Average transaction: {stats['total'] / stats['transactions']:.2f}")
 
-            # 按店家分組並對內部產品按營收排序
+            # 按店家分組並支援每個產品多個價格（以還原後的單價為鍵）
+            # sales_summary 現在以 store->product->price 聚合
             store_groups = {}
-            for sale in sorted(sales_summary.values(), key=lambda x: x['store']):
-                if sale['store'] not in store_groups:
-                    store_groups[sale['store']] = {
-                        'sales': [],
-                        'total_count': 0,
-                        'total_amount': 0
-                    }
-                store_groups[sale['store']]['sales'].append(sale)
-                store_groups[sale['store']]['total_count'] += sale['count']
-                store_groups[sale['store']]['total_amount'] += sale['total']
+            for store_name in sorted(sales_summary.keys()):
+                store_entry = {'sales': [], 'total_count': 0, 'total_amount': 0}
+                for product_name in sorted(sales_summary[store_name].keys()):
+                    price_map = sales_summary[store_name][product_name]
+                    # 將不同價格按價格高到低排序
+                    price_rows = []
+                    for price in sorted(price_map.keys(), reverse=True):
+                        rec = price_map[price]
+                        price_rows.append({'price': price, 'count': rec['count'], 'total': rec['total']})
+                        store_entry['total_count'] += rec['count']
+                        store_entry['total_amount'] += rec['total']
 
-            # 對每個店家的產品按營收排序
-            for store_data in store_groups.values():
-                store_data['sales'].sort(key=lambda x: x['total'], reverse=True)
+                    store_entry['sales'].append({'product': product_name, 'prices': price_rows})
+
+                # 根據店內總收入排序產品（主要顯示順序）
+                store_entry['sales'].sort(key=lambda p: sum(r['total'] for r in p['prices']), reverse=True)
+                store_groups[store_name] = store_entry
 
             # 設置樣式
             from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
@@ -2025,35 +2020,44 @@ def generate_sales_detail():
                 last_header_row = current_row  # 記錄店家標題行的位置
                 current_row += 1
 
-                # 填入該店家的所有商品數據
+                # 填入該店家的所有商品數據（支援同商品多價格）
                 for sale in data['sales']:
-                    # 設置每個儲存格的樣式和數據
-                    cells = [
-                        (f'A{current_row}', sale['product'], 'left'),
-                        (f'B{current_row}', sale['price'], 'right'),
-                        (f'C{current_row}', sale['count'], 'right'),
-                        (f'D{current_row}', sale['total'], 'right')
-                    ]
-                    
-                    for cell, value, align in cells:
-                        ws[cell] = value
-                        ws[cell].font = normal_font
-                        ws[cell].border = thin_border
-                        ws[cell].alignment = Alignment(horizontal=align, vertical='center')
-                        # 為數值欄位添加千分位分隔符
-                        if cell.startswith('B'):
-                            ws[cell].number_format = '#,##0'  # 單價使用千分位
-                        elif cell.startswith('C'):
-                            ws[cell].number_format = '#,##0'  # 份數使用千分位
-                        elif cell.startswith('D'):
-                            ws[cell].number_format = '#,##0'  # 小計使用千分位
-                    
-                    # 使用淺色底色區分奇偶行
-                    if (current_row - last_header_row) % 2 == 0:
-                        for col in ['A', 'B', 'C', 'D']:
-                            ws[f'{col}{current_row}'].fill = PatternFill(start_color='F5F5F5', end_color='F5F5F5', fill_type='solid')
-                    
-                    current_row += 1
+                    product_name = sale['product']
+                    price_rows = sale.get('prices', [])
+                    if not price_rows:
+                        # 若沒有價格資料，跳過
+                        continue
+
+                    start_row_for_product = current_row
+                    # 為每個價格列寫入一行
+                    for pr in price_rows:
+                        ws[f'B{current_row}'] = pr['price']
+                        ws[f'C{current_row}'] = pr['count']
+                        ws[f'D{current_row}'] = pr['total']
+
+                        # 設定樣式
+                        for col, value in [(f'B{current_row}', pr['price']), (f'C{current_row}', pr['count']), (f'D{current_row}', pr['total'])]:
+                            ws[col].font = normal_font
+                            ws[col].border = thin_border
+                            ws[col].alignment = Alignment(horizontal='right', vertical='center')
+                            if col.startswith('B'):
+                                ws[col].number_format = '#,##0'
+                            else:
+                                ws[col].number_format = '#,##0'
+
+                        # 交替底色
+                        if (current_row - last_header_row) % 2 == 0:
+                            for col in ['A', 'B', 'C', 'D']:
+                                ws[f'{col}{current_row}'].fill = PatternFill(start_color='F5F5F5', end_color='F5F5F5', fill_type='solid')
+
+                        current_row += 1
+
+                    end_row_for_product = current_row - 1
+                    # 合併 A 欄為產品名稱以提高可讀性（不在此處再插入空行，保持緊湊）
+                    ws.merge_cells(start_row=start_row_for_product, start_column=1, end_row=end_row_for_product, end_column=1)
+                    ws[f'A{start_row_for_product}'] = product_name
+                    ws[f'A{start_row_for_product}'].font = normal_font
+                    ws[f'A{start_row_for_product}'].alignment = Alignment(horizontal='left', vertical='center')
 
                 # 添加該店家的小計
                 ws[f'A{current_row}'] = f"{store} 小計"
