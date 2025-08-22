@@ -45,6 +45,28 @@
         <button class="tab-link" data-tab="sales-tab">銷售</button>
         <button class="tab-link" data-tab="replenishment-tab">補貨</button>
     </div>
+    
+        <!-- User login modal for franchisee -->
+        <div id="userLoginModal" class="modal" style="display:none;">
+            <div class="modal-content" style="max-width:360px;">
+                <span class="close" id="loginModalClose">&times;</span>
+                <h2>加盟主登入</h2>
+                <div class="form-group">
+                    <label for="loginUsername">帳號</label>
+                    <input type="text" id="loginUsername" placeholder="username" />
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">密碼</label>
+                    <input type="password" id="loginPassword" placeholder="password" />
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <button id="loginBtn" class="btn-primary">登入</button>
+                    <button id="openLoginBtn" class="btn-view">打開登入視窗</button>
+                    <button id="logoutBtn" class="btn-clear" style="display:none;">登出</button>
+                </div>
+                <div id="loginStatus" style="margin-top:8px;color:#666"></div>
+            </div>
+        </div>
 
     <!-- 庫存視圖分頁 -->
     <div id="inventory-tab" class="tab-content active">

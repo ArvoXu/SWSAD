@@ -19,10 +19,11 @@ import json
 import pytz
 from openpyxl import load_workbook, Workbook
 from datetime import datetime
+from werkzeug.security import generate_password_hash, check_password_hash
 
 
 # --- Custom Imports ---
-from database import init_db, get_db, Inventory, Store, Transaction, UpdateLog, Warehouse
+from database import init_db, get_db, Inventory, Store, Transaction, UpdateLog, Warehouse, User
 from scraper import run_scraper as run_inventory_scraper_function, parse_inventory_from_text, save_to_database, save_to_json
 from salesscraper import run_sales_scraper
 from warehousescraper import run_warehouse_scraper
@@ -593,7 +594,25 @@ def get_data():
     """
     db: Session = next(get_db())
     try:
-        inventory_items = db.query(Inventory).all()
+        # If a normal user is logged in (session['user_id']), restrict results to their assigned stores
+        user_id = session.get('user_id')
+        if user_id:
+            user = db.query(User).filter(User.id == int(user_id)).first()
+            allowed_store_keys = set()
+            if user:
+                # user's stores contain store_key strings
+                allowed_store_keys = set(s.store_key for s in user.stores)
+            # Query inventory only for allowed stores
+            inventory_items = []
+            for sk in allowed_store_keys:
+                try:
+                    store_name, machine_id = sk.split('-', 1)
+                except Exception:
+                    continue
+                items = db.query(Inventory).filter(Inventory.store == store_name, Inventory.machine_id == machine_id).all()
+                inventory_items.extend(items)
+        else:
+            inventory_items = db.query(Inventory).all()
         
         # 2. Fetch all custom store data
         stores = db.query(Store).all()
@@ -625,6 +644,114 @@ def get_data():
         
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
+    finally:
+        db.close()
+
+
+def is_admin():
+    """Helper: current session indicates admin if session['logged_in']==True (existing behavior)."""
+    return bool(session.get('logged_in'))
+
+
+@app.route('/api/stores-list', methods=['GET'])
+def api_stores_list():
+    """Return list of all store_key values (for admin forms)."""
+    db: Session = next(get_db())
+    try:
+        stores = db.query(Store).all()
+        return jsonify({'success': True, 'stores': [s.store_key for s in stores]})
+    except Exception as e:
+        logging.error(f"Error getting stores list: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/users', methods=['POST'])
+def api_create_user():
+    """Admin-only: create a user and assign stores. Request JSON: {username, password, displayName, stores: []} """
+    if not is_admin():
+        return jsonify({'success': False, 'message': '未授權'}), 403
+
+    data = request.get_json() or {}
+    username = data.get('username')
+    password = data.get('password')
+    display_name = data.get('displayName') or ''
+    stores = data.get('stores') or []
+
+    if not username or not password:
+        return jsonify({'success': False, 'message': 'username 和 password 為必填'}), 400
+
+    db: Session = next(get_db())
+    try:
+        existing = db.query(User).filter(User.username == username).first()
+        if existing:
+            return jsonify({'success': False, 'message': 'username 已存在'}), 400
+
+        hashed = generate_password_hash(password)
+        user = User(username=username, password_hash=hashed, display_name=display_name)
+        # assign stores if exist
+        for sk in stores:
+            store = db.query(Store).filter(Store.store_key == sk).first()
+            if store:
+                user.stores.append(store)
+
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return jsonify({'success': True, 'user': user.to_dict()})
+    except Exception as e:
+        db.rollback()
+        logging.error(f"Error creating user: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/user-login', methods=['POST'])
+def api_user_login():
+    """User login for presentation page. JSON: {username, password} sets session['user_id'] on success."""
+    data = request.get_json() or {}
+    username = data.get('username')
+    password = data.get('password')
+    if not username or not password:
+        return jsonify({'success': False, 'message': 'username/password required'}), 400
+
+    db: Session = next(get_db())
+    try:
+        user = db.query(User).filter(User.username == username).first()
+        if not user or not check_password_hash(user.password_hash, password):
+            return jsonify({'success': False, 'message': '帳號或密碼錯誤'}), 401
+        # set session user id; keep admin separate
+        session['user_id'] = user.id
+        return jsonify({'success': True, 'user': user.to_dict()})
+    except Exception as e:
+        logging.error(f"Error during user login: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/user-logout', methods=['POST'])
+def api_user_logout():
+    session.pop('user_id', None)
+    return jsonify({'success': True})
+
+
+@app.route('/api/user-info', methods=['GET'])
+def api_user_info():
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'logged_in': False}), 200
+    db: Session = next(get_db())
+    try:
+        user = db.query(User).filter(User.id == int(user_id)).first()
+        if not user:
+            return jsonify({'logged_in': False}), 200
+        return jsonify({'logged_in': True, 'user': user.to_dict()})
+    except Exception as e:
+        logging.error(f"Error fetching user info: {e}")
+        return jsonify({'logged_in': False}), 500
     finally:
         db.close()
 

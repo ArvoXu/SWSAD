@@ -1,5 +1,5 @@
 import os
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, Text, DateTime, ForeignKey
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, Text, DateTime, ForeignKey, Table
 from sqlalchemy.orm import sessionmaker, declarative_base, relationship
 from sqlalchemy.pool import NullPool
 from datetime import datetime
@@ -108,6 +108,40 @@ class Store(Base):
     def to_dict(self):
         """Converts the object to a dictionary."""
         return {c.name: getattr(self, c.name) for c in self.__table__.columns}
+
+
+# --- Association table: users <-> stores (many-to-many)
+user_stores = Table(
+    'user_stores',
+    Base.metadata,
+    Column('user_id', Integer, ForeignKey('users.id'), primary_key=True),
+    Column('store_key', String, ForeignKey('stores.store_key'), primary_key=True)
+)
+
+
+class User(Base):
+    """
+    Represents an application user (franchisee). Passwords are stored as hashes.
+    """
+    __tablename__ = 'users'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String, unique=True, nullable=False, index=True)
+    password_hash = Column(String, nullable=False)
+    display_name = Column(String, default='')
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(pytz.utc))
+
+    # Many-to-many relationship to stores
+    stores = relationship('Store', secondary=user_stores, backref='users')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'username': self.username,
+            'display_name': self.display_name,
+            'stores': [s.store_key for s in self.stores],
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
 
 
 class Transaction(Base):

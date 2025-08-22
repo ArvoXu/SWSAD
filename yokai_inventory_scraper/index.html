@@ -108,6 +108,34 @@
                     <!-- Log entries will be inserted here by script.js -->
                 </div>
             </div>
+        
+            <!-- Admin: User management (MVP) -->
+            <div class="admin-section" style="margin-top:20px; padding-top:10px; border-top:1px solid #eee;">
+                <h3>使用者管理（Admin）</h3>
+                <p>此處僅限管理員使用：建立帳號並指派機台給加盟主。</p>
+                <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-start;">
+                    <div style="flex:1; min-width:260px;">
+                        <label>帳號 (username)</label>
+                        <input type="text" id="newUserUsername" placeholder="username" style="width:100%" />
+                    </div>
+                    <div style="flex:1; min-width:260px;">
+                        <label>密碼 (password)</label>
+                        <input type="password" id="newUserPassword" placeholder="password" style="width:100%" />
+                    </div>
+                    <div style="flex:1; min-width:260px;">
+                        <label>顯示名稱 (display name)</label>
+                        <input type="text" id="newUserDisplayName" placeholder="顯示名稱" style="width:100%" />
+                    </div>
+                </div>
+                <div style="margin-top:8px;">
+                    <label>指派機台（從下拉選擇，多選請用 Ctrl / Cmd）</label>
+                    <select id="assignStoresSelect" multiple style="width:100%; min-height:120px;"></select>
+                </div>
+                <div style="margin-top:8px; display:flex; gap:8px;">
+                    <button id="createUserBtn" class="btn-primary">建立使用者</button>
+                    <span id="createUserStatus" style="line-height:32px;color:#666"></span>
+                </div>
+            </div>
         </div>
         
         <div class="output-section">

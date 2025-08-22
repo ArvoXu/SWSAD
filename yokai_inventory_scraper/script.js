@@ -393,7 +393,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if(closeDialogButton) closeDialogButton.addEventListener('click', () => { editDialog.style.display = 'none'; });
     window.addEventListener('click', (event) => { if (event.target === editDialog) editDialog.style.display = 'none'; });
     
-    if(clearStorageButton) {
+    if (clearStorageButton) {
         clearStorageButton.addEventListener('click', () => {
             if (confirm('此操作將清除本地暫存的「銷售導入」相關數據，但不會影響伺服器上的永久資料。是否繼續?')) {
                 // We only clear the sales-related data that is truly local now
@@ -404,6 +404,60 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     }
+
+    // --- Admin: load stores into assign select and create user handler ---
+    async function loadStoresForAssign() {
+        const sel = document.getElementById('assignStoresSelect');
+        if (!sel) return;
+        try {
+            const res = await fetch('/api/stores-list');
+            const data = await res.json();
+            if (!data.success) throw new Error(data.message || '無法取得 stores');
+            sel.innerHTML = '';
+            data.stores.forEach(sk => {
+                const opt = document.createElement('option');
+                opt.value = sk;
+                opt.textContent = sk;
+                sel.appendChild(opt);
+            });
+        } catch (err) {
+            console.error('載入 stores 失敗', err);
+        }
+    }
+
+    const createUserBtn = document.getElementById('createUserBtn');
+    if (createUserBtn) {
+        createUserBtn.addEventListener('click', async () => {
+            const username = document.getElementById('newUserUsername').value.trim();
+            const password = document.getElementById('newUserPassword').value.trim();
+            const displayName = document.getElementById('newUserDisplayName').value.trim();
+            const sel = document.getElementById('assignStoresSelect');
+            const statusSpan = document.getElementById('createUserStatus');
+            const selected = Array.from(sel.selectedOptions).map(o => o.value);
+            statusSpan.textContent = '建立中...';
+            try {
+                const res = await fetch('/api/users', {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({ username, password, displayName, stores: selected })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message || '建立失敗');
+                statusSpan.textContent = '建立成功';
+                // clear inputs
+                document.getElementById('newUserUsername').value = '';
+                document.getElementById('newUserPassword').value = '';
+                document.getElementById('newUserDisplayName').value = '';
+                sel.selectedIndex = -1;
+            } catch (err) {
+                statusSpan.textContent = `錯誤: ${err.message}`;
+                console.error('create user error', err);
+            }
+            setTimeout(() => { statusSpan.textContent = ''; }, 4000);
+        });
+    }
+
+    // load stores for admin assign on start
+    loadStoresForAssign();
     if(saveDataButton) saveDataButton.addEventListener('click', () => alert('此功能已過時。'));
     if(openChartWindowButton) {
         openChartWindowButton.addEventListener('click', () => {
