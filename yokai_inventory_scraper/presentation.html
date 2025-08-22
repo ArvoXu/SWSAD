@@ -61,11 +61,15 @@
                 </div>
                 <div style="display:flex; gap:8px;">
                     <button id="loginBtn" class="btn-primary">登入</button>
-                    <button id="openLoginBtn" class="btn-view">打開登入視窗</button>
-                    <button id="logoutBtn" class="btn-clear" style="display:none;">登出</button>
                 </div>
                 <div id="loginStatus" style="margin-top:8px;color:#666"></div>
             </div>
+        </div>
+
+        <!-- Visible auth controls (open login / logout) placed in header area -->
+        <div class="auth-controls" style="position: absolute; top: 18px; right: 18px;">
+            <button id="openLoginBtn" class="btn-view">登入</button>
+            <button id="logoutBtn" class="btn-clear" style="display:none;">登出</button>
         </div>
 
     <!-- 庫存視圖分頁 -->

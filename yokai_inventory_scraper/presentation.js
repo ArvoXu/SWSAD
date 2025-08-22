@@ -2565,6 +2565,61 @@
         
         // 載入數據並顯示圖表
         window.addEventListener('DOMContentLoaded', async function() {
+                    // --- Auth UI handlers: open modal, login, logout ---
+                    try {
+                        const openLoginBtn = document.getElementById('openLoginBtn');
+                        const logoutBtn = document.getElementById('logoutBtn');
+                        const loginBtn = document.getElementById('loginBtn');
+                        const loginModal = document.getElementById('userLoginModal');
+                        const loginModalClose = document.getElementById('loginModalClose');
+                        const loginStatus = document.getElementById('loginStatus');
+
+                        function showLoginModal() { loginModal.style.display = 'flex'; }
+                        function hideLoginModal() { loginModal.style.display = 'none'; }
+
+                        if (openLoginBtn) openLoginBtn.addEventListener('click', showLoginModal);
+                        if (loginModalClose) loginModalClose.addEventListener('click', hideLoginModal);
+
+                        if (loginBtn) {
+                            loginBtn.addEventListener('click', async () => {
+                                const username = document.getElementById('loginUsername').value;
+                                const password = document.getElementById('loginPassword').value;
+                                loginStatus.textContent = '登入中...';
+                                try {
+                                    const res = await fetch('/api/user-login', {method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({username,password})});
+                                    const j = await res.json();
+                                    if (res.ok && j.success) {
+                                        loginStatus.textContent = '登入成功';
+                                        hideLoginModal();
+                                        if (openLoginBtn) openLoginBtn.style.display = 'none';
+                                        if (logoutBtn) logoutBtn.style.display = '';
+                                        // reload data view
+                                        await loadAllData();
+                                        displayCharts(window.inventoryData);
+                                        setupSalesTrendTab(window.fullSalesData);
+                                    } else {
+                                        loginStatus.textContent = j.message || '登入失敗';
+                                    }
+                                } catch (e) {
+                                    loginStatus.textContent = '登入發生錯誤';
+                                }
+                            });
+                        }
+
+                        if (logoutBtn) {
+                            logoutBtn.addEventListener('click', async () => {
+                                await fetch('/api/user-logout', {method: 'POST'});
+                                if (openLoginBtn) openLoginBtn.style.display = '';
+                                if (logoutBtn) logoutBtn.style.display = 'none';
+                                // reset data to admin/full view
+                                await loadAllData();
+                                displayCharts(window.inventoryData);
+                                setupSalesTrendTab(window.fullSalesData);
+                            });
+                        }
+                    } catch (e) {
+                        console.error('Auth handlers setup failed', e);
+                    }
             // 新增: 設置報告標題
             const today = new Date();
             const year = today.getFullYear();

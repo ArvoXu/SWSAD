@@ -1318,10 +1318,30 @@ def get_transactions():
     """
     db: Session = next(get_db())
     try:
-        transactions = db.query(Transaction).all()
-        
+        # If a user is logged in, restrict transactions to user's assigned stores
+        user_id = session.get('user_id')
+        transactions_query = db.query(Transaction)
+        if user_id:
+            user = db.query(User).filter(User.id == int(user_id)).first()
+            if user:
+                user_store_keys = [s.store_key for s in user.stores]
+                # build filters similar to inventory matching
+                trans_filters = []
+                for sk in user_store_keys:
+                    if '-' in sk:
+                        left = sk.rsplit('-', 1)[0]
+                        trans_filters.append(Transaction.store_key == sk)
+                        trans_filters.append(Transaction.store_key.ilike(f"{left}%"))
+                        trans_filters.append(Transaction.store_key.ilike(f"%{left}%"))
+                    else:
+                        trans_filters.append(Transaction.store_key.ilike(sk))
+                        trans_filters.append(Transaction.store_key.ilike(f"%{sk}%"))
+                if trans_filters:
+                    transactions_query = transactions_query.filter(or_(*trans_filters))
+
+        transactions = transactions_query.all()
+
         # Create a map of store_key to store_name for quick lookup
-        # The store name is the part of the key before the last hyphen
         stores = {s.store_key: s.store_key.rsplit('-', 1)[0] for s in db.query(Store).all()}
 
         result = [
