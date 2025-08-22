@@ -9,6 +9,7 @@ import threading
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import OperationalError
+from sqlalchemy import or_, and_
 import subprocess
 import logging
 import traceback
@@ -602,15 +603,30 @@ def get_data():
             if user:
                 # user's stores contain store_key strings
                 allowed_store_keys = set(s.store_key for s in user.stores)
-            # Query inventory only for allowed stores
+            # Query inventory with flexible matching: allow matching by
+            # 1) exact store + machine (if applicable),
+            # 2) Inventory.store equals the prefix part of store_key,
+            # 3) Inventory.store LIKE prefix% fallback.
             inventory_items = []
+            filters = []
             for sk in allowed_store_keys:
-                try:
-                    store_name, machine_id = sk.split('-', 1)
-                except Exception:
-                    continue
-                items = db.query(Inventory).filter(Inventory.store == store_name, Inventory.machine_id == machine_id).all()
-                inventory_items.extend(items)
+                # if store_key looks like 'store-machine', try exact match first
+                if '-' in sk:
+                    left, right = sk.rsplit('-', 1)
+                    # exact store+machine
+                    filters.append(and_(Inventory.store == left, Inventory.machine_id == right))
+                    # any machine for that store (case-insensitive)
+                    filters.append(Inventory.store.ilike(left))
+                    # fallback patterns: startswith and contains (case-insensitive)
+                    filters.append(Inventory.store.ilike(f"{left}%"))
+                    filters.append(Inventory.store.ilike(f"%{left}%"))
+                else:
+                    filters.append(Inventory.store.ilike(sk))
+                    filters.append(Inventory.store.ilike(f"{sk}%"))
+                    filters.append(Inventory.store.ilike(f"%{sk}%"))
+            if filters:
+                # combine with OR and query
+                inventory_items = db.query(Inventory).filter(or_(*filters)).all()
         else:
             inventory_items = db.query(Inventory).all()
         
@@ -655,11 +671,24 @@ def is_admin():
 
 @app.route('/api/stores-list', methods=['GET'])
 def api_stores_list():
-    """Return list of all store_key values (for admin forms)."""
+    """Return list of stores for admin forms.
+
+    By default this endpoint returns distinct `Inventory.store` values (so admins
+    can assign users based on the inventory naming). If callers want the older
+    `Store.store_key` list, pass ?source=stores.
+    """
+    source = (request.args.get('source') or 'inventory').lower()
     db: Session = next(get_db())
     try:
-        stores = db.query(Store).all()
-        return jsonify({'success': True, 'stores': [s.store_key for s in stores]})
+        if source == 'stores':
+            stores = db.query(Store).all()
+            result = [s.store_key for s in stores]
+        else:
+            # default: distinct Inventory.store values
+            rows = db.query(Inventory.store).distinct().order_by(Inventory.store).all()
+            # rows is list of 1-tuples like [('台北天文館 左邊',), ...]
+            result = [r[0] for r in rows if r and r[0]]
+        return jsonify({'success': True, 'stores': result})
     except Exception as e:
         logging.error(f"Error getting stores list: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -690,9 +719,24 @@ def api_create_user():
 
         hashed = generate_password_hash(password)
         user = User(username=username, password_hash=hashed, display_name=display_name)
-        # assign stores if exist
+        # assign stores if exist. Accept either a Store.store_key (legacy) or
+        # an Inventory.store name. We try to map the provided value to an
+        # existing Store by exact match, prefix match, or by creating a
+        # provisional store_key if nothing matches.
         for sk in stores:
             store = db.query(Store).filter(Store.store_key == sk).first()
+            if not store:
+                # try prefix/pattern match (e.g., inventory name matches the
+                # left part of store_key like '台北天文館 左邊' -> '台北天文館 左邊-...')
+                store = db.query(Store).filter(Store.store_key.like(f"{sk}%")).first()
+            if not store:
+                # fallback: create a provisional store entry using a common suffix
+                new_key = f"{sk}-provisional_sales"
+                store = db.query(Store).filter(Store.store_key == new_key).first()
+                if not store:
+                    store = Store(store_key=new_key)
+                    db.add(store)
+                    db.flush()
             if store:
                 user.stores.append(store)
 
