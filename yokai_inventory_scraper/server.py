@@ -799,6 +799,38 @@ def api_user_info():
     finally:
         db.close()
 
+
+@app.route('/presentation-login', methods=['GET'])
+def presentation_login_page():
+    """Serve a standalone presentation login page for franchisee users.
+
+    The page posts to /api/user-login via fetch and redirects back to
+    /presentation.html on success. A `next` query parameter is accepted.
+    """
+    return send_from_directory(script_dir, 'presentation_login.html')
+
+
+@app.route('/presentation-logout', methods=['POST'])
+def presentation_logout():
+    """Optional helper to log out a franchisee and return JSON."""
+    session.pop('user_id', None)
+    return jsonify({'success': True})
+
+
+# Serve presentation page but redirect unauthenticated users to the presentation login
+@app.route('/presentation.html', methods=['GET'])
+def presentation_page():
+    user_id = session.get('user_id')
+    if not user_id:
+        # Redirect to presentation-login and include next param
+        return redirect(f"/presentation-login?next=/presentation.html")
+    return send_from_directory(script_dir, 'presentation.html')
+
+
+@app.route('/presentation', methods=['GET'])
+def presentation_short():
+    return redirect('/presentation.html')
+
 @app.route('/api/update-logs', methods=['GET'])
 def get_update_logs():
     """Returns the last 50 update log entries, newest first."""

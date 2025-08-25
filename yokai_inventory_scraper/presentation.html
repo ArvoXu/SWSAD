@@ -66,9 +66,9 @@
             </div>
         </div>
 
-        <!-- Visible auth controls (open login / logout) placed in header area -->
+        <!-- Visible auth controls (login link / logout) placed in header area -->
         <div class="auth-controls" style="position: absolute; top: 18px; right: 18px;">
-            <button id="openLoginBtn" class="btn-view">登入</button>
+            <a href="/presentation-login" class="btn-view" style="text-decoration:none; display:inline-block; padding:6px 10px;">登入</a>
             <button id="logoutBtn" class="btn-clear" style="display:none;">登出</button>
         </div>
 
@@ -332,6 +332,35 @@
     <div id="screenshotLoader" class="screenshot-loader" style="display: none;">
         <span>正在生成高解析度圖片...</span>
     </div>
+    <script>
+    // Auth UI toggle: show logout when user is logged in, otherwise login link is visible
+    (async function(){
+        try {
+            const res = await fetch('/api/user-info');
+            if (!res.ok) return;
+            const info = await res.json();
+            const logoutBtn = document.getElementById('logoutBtn');
+            const authControls = document.querySelector('.auth-controls');
+            if (info.logged_in) {
+                // show logout button, hide login link
+                if (logoutBtn) logoutBtn.style.display = 'inline-block';
+                const loginLink = authControls.querySelector('a[href="/presentation-login"]');
+                if (loginLink) loginLink.style.display = 'none';
+                logoutBtn.addEventListener('click', async function(){
+                    await fetch('/api/user-logout', {method: 'POST'});
+                    // reload so server-side guard can redirect if needed
+                    window.location.reload();
+                });
+            } else {
+                if (logoutBtn) logoutBtn.style.display = 'none';
+                const loginLink = authControls.querySelector('a[href="/presentation-login"]');
+                if (loginLink) loginLink.style.display = 'inline-block';
+            }
+        } catch (e) {
+            console.error('auth UI check failed', e);
+        }
+    })();
+    </script>
     <script src="presentation.js"></script>
 </body>
 </html> 

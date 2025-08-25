@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>加盟主登入</title>
+    <link rel="stylesheet" href="presentation.css">
+</head>
+<body>
+    <div class="login-page" style="max-width:420px;margin:40px auto;padding:20px;">
+        <h2>加盟主登入</h2>
+        <p>請使用管理員提供的帳號密碼登入，登入後會自動導向儀表板。</p>
+        <div class="form-group">
+            <label for="loginUsername">帳號</label>
+            <input type="text" id="loginUsername" placeholder="username" style="width:100%;padding:8px;margin-top:6px;" />
+        </div>
+        <div class="form-group" style="margin-top:8px;">
+            <label for="loginPassword">密碼</label>
+            <input type="password" id="loginPassword" placeholder="password" style="width:100%;padding:8px;margin-top:6px;" />
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px;align-items:center;">
+            <button id="loginBtn" class="btn-primary">登入</button>
+        </div>
+        <div id="loginStatus" style="margin-top:12px;color:#d32f2f;"></div>
+    </div>
+
+    <script>
+        async function doLogin() {
+            const u = document.getElementById('loginUsername').value;
+            const p = document.getElementById('loginPassword').value;
+            const status = document.getElementById('loginStatus');
+            status.textContent = '';
+            try {
+                const res = await fetch('/api/user-login', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({username: u, password: p})
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    // Redirect to presentation page after successful login
+                    const next = new URLSearchParams(window.location.search).get('next') || '/presentation.html';
+                    window.location.href = next;
+                } else {
+                    status.textContent = data.message || '登入失敗';
+                }
+            } catch (err) {
+                console.error('Login error', err);
+                status.textContent = '登入時發生錯誤';
+            }
+        }
+        document.getElementById('loginBtn').addEventListener('click', doLogin);
+        document.addEventListener('keydown', function(e){ if(e.key === 'Enter'){ doLogin(); }});
+    </script>
+</body>
+</html>
