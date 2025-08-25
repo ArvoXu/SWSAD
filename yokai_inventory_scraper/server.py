@@ -872,29 +872,40 @@ def api_user_profile():
 
 def send_email_if_configured(to_email, subject, body):
     smtp_server = os.getenv('SMTP_SERVER')
-    smtp_port = int(os.getenv('SMTP_PORT', '25'))
+    smtp_port = int(os.getenv('SMTP_PORT', '587'))
     smtp_user = os.getenv('SMTP_USER')
     smtp_pass = os.getenv('SMTP_PASS')
-    if not smtp_server or not to_email:
-        logging.info(f"Email not sent (SMTP not configured or missing recipient): to={to_email} subject={subject}")
-        return False
+    from_email = os.getenv('FROM_EMAIL') or smtp_user
+    if not smtp_server or not to_email or not from_email:
+        logging.warning(f"Email not sent (missing config): smtp={smtp_server} to={to_email} from={from_email}")
+        return {'ok': False, 'error': 'SMTP or from/to address missing'}
     try:
         msg = EmailMessage()
         msg['Subject'] = subject
-        msg['From'] = smtp_user or f"noreply@{os.getenv('MAIL_DOMAIN','example.local')}"
+        msg['From'] = from_email
         msg['To'] = to_email
         msg.set_content(body)
 
+        # Connect and send via TLS (SendGrid uses TLS on 587)
         with smtplib.SMTP(smtp_server, smtp_port, timeout=10) as s:
-            if smtp_user and smtp_pass:
+            s.ehlo()
+            try:
                 s.starttls()
-                s.login(smtp_user, smtp_pass)
+                s.ehlo()
+            except Exception:
+                logging.debug('starttls not supported or failed, continuing without it')
+            if smtp_user and smtp_pass:
+                try:
+                    s.login(smtp_user, smtp_pass)
+                except Exception as e:
+                    logging.error(f"SMTP login failed for {smtp_user}: {e}")
+                    return {'ok': False, 'error': f'SMTP login failed: {e}'}
             s.send_message(msg)
-        logging.info(f"Sent email to {to_email}")
-        return True
+        logging.info(f"Sent email to {to_email} from {from_email} via {smtp_server}:{smtp_port}")
+        return {'ok': True}
     except Exception as e:
-        logging.error(f"Failed to send email to {to_email}: {e}")
-        return False
+        logging.error(f"Failed to send email to {to_email}: {e}", exc_info=True)
+        return {'ok': False, 'error': str(e)}
 
 
 @app.route('/api/notify-low-inventory', methods=['POST'])
@@ -903,36 +914,56 @@ def api_notify_low_inventory():
 
     This can be used in a scheduled job; here it's exposed for testing.
     """
+    result = _notify_low_inventory_internal()
+    if result.get('error'):
+        return jsonify({'success': False, 'message': result['error']}), 500
+    return jsonify({'success': True, 'notifications': result.get('notifications', [])})
+    
+
+def _notify_low_inventory_internal():
     db: Session = next(get_db())
+    notifications = []
     try:
         users = db.query(User).all()
-        notifications = []
+        logging.info(f'Checking low-inventory for {len(users)} users')
         for u in users:
             try:
                 thresh = int(u.low_inventory_threshold or 0)
             except Exception:
                 thresh = 0
             if not u.email or thresh <= 0:
+                logging.debug(f"Skipping user {u.username}: no email or threshold={thresh}")
                 continue
             # compute totalQuantity for user's assigned stores
             total_for_user = 0
             for s in u.stores:
-                # s.store_key could be 'store-machine' or 'store-...'
                 left = s.store_key.split('-')[0]
-                qty = db.query(Inventory).filter(Inventory.store.ilike(f"%{left}%")).with_entities(Inventory.quantity).all()
-                total_for_store = sum([q[0] or 0 for q in qty])
+                qty_rows = db.query(Inventory).filter(Inventory.store.ilike(f"%{left}%")).with_entities(Inventory.quantity).all()
+                total_for_store = sum([q[0] or 0 for q in qty_rows])
                 total_for_user += total_for_store
+            logging.info(f"User {u.username} totalQuantity={total_for_user} threshold={thresh}")
             if total_for_user <= thresh:
                 subject = f"低庫存通知: 您的機台總庫存 {total_for_user} <= {thresh}"
                 body = f"親愛的 {u.display_name or u.username},\n\n系統偵測到您被指派的機台總庫存為 {total_for_user}，低於您設定的閾值 {thresh}。請檢查並安排補貨。\n\n此為系統自動通知。"
-                sent = send_email_if_configured(u.email, subject, body)
-                notifications.append({'user': u.username, 'email': u.email, 'total': total_for_user, 'threshold': thresh, 'sent': sent})
-        return jsonify({'success': True, 'notifications': notifications})
+                send_result = send_email_if_configured(u.email, subject, body)
+                notifications.append({'user': u.username, 'email': u.email, 'total': total_for_user, 'threshold': thresh, 'sent': send_result})
+            else:
+                logging.debug(f"User {u.username} has sufficient stock: {total_for_user} > {thresh}")
+        return {'notifications': notifications}
     except Exception as e:
-        logging.error(f"Error in notify-low-inventory: {e}")
-        return jsonify({'success': False, 'message': str(e)}), 500
+        logging.error(f"Error in notify-low-inventory internal: {e}", exc_info=True)
+        return {'error': str(e)}
     finally:
         db.close()
+
+
+@app.route('/api/notify-low-inventory/trigger', methods=['GET'])
+def api_notify_low_inventory_trigger():
+    """Convenience GET endpoint to trigger low-inventory notifications (for testing via browser)."""
+    result = _notify_low_inventory_internal()
+    if result.get('error'):
+        return jsonify({'success': False, 'message': result['error']}), 500
+    return jsonify({'success': True, 'notifications': result.get('notifications', [])})
 
 
 # Serve presentation page but redirect unauthenticated users to the presentation login
