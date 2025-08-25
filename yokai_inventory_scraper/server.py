@@ -934,21 +934,28 @@ def _notify_low_inventory_internal():
             if not u.email or thresh <= 0:
                 logging.debug(f"Skipping user {u.username}: no email or threshold={thresh}")
                 continue
-            # compute totalQuantity for user's assigned stores
-            total_for_user = 0
+            # Check each assigned store individually (single-machine total), and notify if any store <= threshold
+            low_stores = []
             for s in u.stores:
                 left = s.store_key.split('-')[0]
                 qty_rows = db.query(Inventory).filter(Inventory.store.ilike(f"%{left}%")).with_entities(Inventory.quantity).all()
                 total_for_store = sum([q[0] or 0 for q in qty_rows])
-                total_for_user += total_for_store
-            logging.info(f"User {u.username} totalQuantity={total_for_user} threshold={thresh}")
-            if total_for_user <= thresh:
-                subject = f"低庫存通知: 您的機台總庫存 {total_for_user} <= {thresh}"
-                body = f"親愛的 {u.display_name or u.username},\n\n系統偵測到您被指派的機台總庫存為 {total_for_user}，低於您設定的閾值 {thresh}。請檢查並安排補貨。\n\n此為系統自動通知。"
+                logging.info(f"User {u.username} store {s.store_key} totalQuantity={total_for_store} threshold={thresh}")
+                if total_for_store <= thresh:
+                    low_stores.append({'store_key': s.store_key, 'total': total_for_store})
+
+            if low_stores:
+                # Compose a single email listing all low stores for this user
+                subject = f"低庫存通知: {len(low_stores)} 個機台低於閾值"
+                body_lines = [f"親愛的 {u.display_name or u.username},", "", "系統偵測到以下被指派的機台庫存低於您設定的閾值：", ""]
+                for ls in low_stores:
+                    body_lines.append(f"- {ls['store_key']}: {ls['total']}")
+                body_lines.extend(["", "請檢查並安排補貨。", "", "此為系統自動通知。"])
+                body = "\n".join(body_lines)
                 send_result = send_email_if_configured(u.email, subject, body)
-                notifications.append({'user': u.username, 'email': u.email, 'total': total_for_user, 'threshold': thresh, 'sent': send_result})
+                notifications.append({'user': u.username, 'email': u.email, 'lowStores': low_stores, 'threshold': thresh, 'sent': send_result})
             else:
-                logging.debug(f"User {u.username} has sufficient stock: {total_for_user} > {thresh}")
+                logging.debug(f"User {u.username} has no assigned stores below threshold {thresh}")
         return {'notifications': notifications}
     except Exception as e:
         logging.error(f"Error in notify-low-inventory internal: {e}", exc_info=True)
