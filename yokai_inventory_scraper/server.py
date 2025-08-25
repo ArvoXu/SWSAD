@@ -817,6 +817,50 @@ def presentation_logout():
     return jsonify({'success': True})
 
 
+@app.route('/api/user-profile', methods=['GET', 'POST'])
+def api_user_profile():
+    """Get or update the current logged-in user's profile (display_name, email).
+
+    GET -> {logged_in, user}
+    POST -> accepts JSON {displayName, email} and updates DB
+    """
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'message': '未登入'}), 401
+
+    db: Session = next(get_db())
+    try:
+        user = db.query(User).filter(User.id == int(user_id)).first()
+        if not user:
+            return jsonify({'success': False, 'message': 'user not found'}), 404
+
+        if request.method == 'GET':
+            return jsonify({'success': True, 'user': user.to_dict()})
+
+        # POST -> update
+        data = request.get_json() or {}
+        display_name = data.get('displayName')
+        email = data.get('email')
+        changed = False
+        if display_name is not None:
+            user.display_name = display_name
+            changed = True
+        if email is not None:
+            user.email = email
+            changed = True
+        if changed:
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        return jsonify({'success': True, 'user': user.to_dict()})
+    except Exception as e:
+        db.rollback()
+        logging.error(f"Error in user-profile: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        db.close()
+
+
 # Serve presentation page but redirect unauthenticated users to the presentation login
 @app.route('/presentation.html', methods=['GET'])
 def presentation_page():

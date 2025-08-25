@@ -66,10 +66,17 @@
             </div>
         </div>
 
-        <!-- Visible auth controls (login link / logout) placed in header area -->
+        <!-- Visible auth controls (avatar + logout) placed in header area -->
         <div class="auth-controls" style="position: absolute; top: 18px; right: 18px;">
-            <a href="/presentation-login" class="btn-view" style="text-decoration:none; display:inline-block; padding:6px 10px;">登入</a>
-            <button id="logoutBtn" class="btn-clear" style="display:none;">登出</button>
+            <a id="loginLink" href="/presentation-login" class="btn-view" style="text-decoration:none; display:inline-block; padding:6px 10px;">登入</a>
+            <div id="userAvatarWrapper" style="display:none; position:relative;">
+                <div id="userAvatar" title="使用者選單" style="width:36px;height:36px;border-radius:50%;background:#bbb;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;font-weight:700;">U</div>
+                <div id="avatarPopover" style="display:none; position:absolute; right:0; top:44px; background:#fff; border:1px solid #ddd; box-shadow:0 6px 12px rgba(0,0,0,0.08); padding:8px; border-radius:6px; min-width:160px; z-index:40;">
+                    <div style="margin-bottom:8px; font-weight:600;">User</div>
+                    <button id="openProfileBtn" class="btn-view" style="width:100%; text-align:left; margin-bottom:6px;">使用者設定</button>
+                    <button id="avatarLogoutBtn" class="btn-clear" style="width:100%; text-align:left;">登出</button>
+                </div>
+            </div>
         </div>
 
     <!-- 庫存視圖分頁 -->
@@ -362,5 +369,58 @@
     })();
     </script>
     <script src="presentation.js"></script>
+    <script>
+    // Auth UI: toggle login link / avatar based on session
+    async function refreshAuthUI(){
+        try{
+            const res = await fetch('/api/user-info');
+            const info = await res.json();
+            const loginLink = document.getElementById('loginLink');
+            const avatarWrapper = document.getElementById('userAvatarWrapper');
+            const avatar = document.getElementById('userAvatar');
+            const popover = document.getElementById('avatarPopover');
+            if(info.logged_in){
+                // show avatar, hide login link
+                if(loginLink) loginLink.style.display = 'none';
+                if(avatarWrapper) avatarWrapper.style.display = 'inline-block';
+                // set initials or display name
+                const name = info.user && (info.user.display_name || info.user.username) || 'U';
+                const initial = name.trim().length ? name.trim().charAt(0).toUpperCase() : 'U';
+                if(avatar) avatar.textContent = initial;
+
+                // setup hover handlers
+                if(avatar){
+                    avatar.addEventListener('mouseenter', ()=>{ if(popover) popover.style.display='block'; });
+                    avatar.addEventListener('mouseleave', ()=>{ setTimeout(()=>{ if(popover && !popover.matches(':hover')) popover.style.display='none'; }, 150); });
+                }
+                if(popover){
+                    popover.addEventListener('mouseleave', ()=>{ popover.style.display='none'; });
+                    popover.addEventListener('mouseenter', ()=>{ popover.style.display='block'; });
+                }
+
+                // open profile
+                const openProfileBtn = document.getElementById('openProfileBtn');
+                if(openProfileBtn){
+                    openProfileBtn.onclick = ()=>{ window.location.href = '/user-settings.html'; };
+                }
+
+                // logout
+                const avatarLogoutBtn = document.getElementById('avatarLogoutBtn');
+                if(avatarLogoutBtn){
+                    avatarLogoutBtn.onclick = async ()=>{
+                        await fetch('/api/user-logout', {method:'POST'});
+                        window.location.reload();
+                    };
+                }
+            } else {
+                if(loginLink) loginLink.style.display = 'inline-block';
+                if(avatarWrapper) avatarWrapper.style.display = 'none';
+            }
+        }catch(e){
+            console.error('refreshAuthUI error', e);
+        }
+    }
+    document.addEventListener('DOMContentLoaded', refreshAuthUI);
+    </script>
 </body>
 </html> 

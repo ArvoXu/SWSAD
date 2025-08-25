@@ -1,5 +1,5 @@
 import os
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, Text, DateTime, ForeignKey, Table
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, Text, DateTime, ForeignKey, Table, text
 from sqlalchemy.orm import sessionmaker, declarative_base, relationship
 from sqlalchemy.pool import NullPool
 from datetime import datetime
@@ -129,6 +129,7 @@ class User(Base):
     username = Column(String, unique=True, nullable=False, index=True)
     password_hash = Column(String, nullable=False)
     display_name = Column(String, default='')
+    email = Column(String, nullable=True, default='')
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(pytz.utc))
 
     # Many-to-many relationship to stores
@@ -139,6 +140,7 @@ class User(Base):
             'id': self.id,
             'username': self.username,
             'display_name': self.display_name,
+            'email': self.email,
             'stores': [s.store_key for s in self.stores],
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
@@ -177,6 +179,20 @@ def init_db():
     try:
         Base.metadata.create_all(bind=engine)
         print("Database tables created successfully (if they didn't exist).")
+
+        # Runtime migration: ensure `email` column exists on users table for older DBs.
+        try:
+            conn = engine.connect()
+            # PRAGMA table_info returns rows where index 1 is the column name
+            existing = [r[1] for r in conn.execute(text("PRAGMA table_info('users')")).fetchall()]
+            if 'email' not in existing:
+                # Add the email column with a nullable text type
+                conn.execute(text("ALTER TABLE users ADD COLUMN email VARCHAR"))
+                print("Migrated users table: added 'email' column.")
+            conn.close()
+        except Exception as me:
+            print(f"Runtime migration check failed: {me}")
+
     except Exception as e:
         print(f"An error occurred during database initialization: {e}")
 

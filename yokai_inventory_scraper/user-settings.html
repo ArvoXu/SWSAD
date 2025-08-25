@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>使用者設定</title>
+    <link rel="stylesheet" href="presentation.css" />
+</head>
+<body>
+    <div style="max-width:640px;margin:28px auto;padding:20px;">
+        <h2>使用者設定</h2>
+        <div id="profileContainer">載入中...</div>
+    </div>
+    <script>
+        async function loadProfile(){
+            const c = document.getElementById('profileContainer');
+            c.innerHTML = '載入中...';
+            try{
+                const res = await fetch('/api/user-profile');
+                if(!res.ok){ c.innerHTML = '<p>請先登入</p><p><a href="/presentation-login">登入</a></p>'; return; }
+                const data = await res.json();
+                if(!data.success){ c.innerHTML = '<p>無法載入使用者資料</p>'; return; }
+                const user = data.user;
+                c.innerHTML = `
+                    <div style="display:flex;flex-direction:column;gap:8px;">
+                        <label>顯示名稱</label>
+                        <input id="displayName" value="${user.display_name || ''}" style="padding:8px;" />
+                        <label>Email</label>
+                        <input id="email" value="${user.email || ''}" style="padding:8px;" />
+                        <div style="display:flex;gap:8px;margin-top:12px;">
+                            <button id="saveBtn" class="btn-primary">儲存</button>
+                            <button id="backBtn" class="btn-clear">返回</button>
+                        </div>
+                        <div id="saveStatus" style="color:#d32f2f;margin-top:8px;"></div>
+                    </div>
+                `;
+                document.getElementById('backBtn').addEventListener('click', ()=>{ window.location.href='/presentation.html'; });
+                document.getElementById('saveBtn').addEventListener('click', async ()=>{
+                    const dn = document.getElementById('displayName').value;
+                    const email = document.getElementById('email').value;
+                    const status = document.getElementById('saveStatus');
+                    status.textContent = '';
+                    try{
+                        const r = await fetch('/api/user-profile', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({displayName: dn, email})});
+                        const j = await r.json();
+                        if(r.ok && j.success){ status.style.color='green'; status.textContent='已儲存'; setTimeout(()=>{ window.location.href='/presentation.html'; },800); }
+                        else { status.style.color='#d32f2f'; status.textContent = j.message || '儲存失敗'; }
+                    }catch(err){ status.style.color='#d32f2f'; status.textContent='儲存時發生錯誤'; }
+                });
+            }catch(e){ console.error(e); c.innerHTML = '<p>載入失敗</p>'; }
+        }
+        document.addEventListener('DOMContentLoaded', loadProfile);
+    </script>
+</body>
+</html>
