@@ -130,6 +130,7 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     display_name = Column(String, default='')
     email = Column(String, nullable=True, default='')
+    low_inventory_threshold = Column(Integer, nullable=True, default=0)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(pytz.utc))
 
     # Many-to-many relationship to stores
@@ -141,6 +142,7 @@ class User(Base):
             'username': self.username,
             'display_name': self.display_name,
             'email': self.email,
+            'low_inventory_threshold': self.low_inventory_threshold,
             'stores': [s.store_key for s in self.stores],
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
@@ -189,6 +191,10 @@ def init_db():
                 # Add the email column with a nullable text type
                 conn.execute(text("ALTER TABLE users ADD COLUMN email VARCHAR"))
                 print("Migrated users table: added 'email' column.")
+            if 'low_inventory_threshold' not in existing:
+                # Add low inventory threshold integer column for user notification settings
+                conn.execute(text("ALTER TABLE users ADD COLUMN low_inventory_threshold INTEGER DEFAULT 0"))
+                print("Migrated users table: added 'low_inventory_threshold' column.")
             conn.close()
         except Exception as me:
             print(f"Runtime migration check failed: {me}")

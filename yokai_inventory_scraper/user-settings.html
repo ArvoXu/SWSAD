@@ -27,6 +27,10 @@
                         <input id="displayName" value="${user.display_name || ''}" style="padding:8px;" />
                         <label>Email</label>
                         <input id="email" value="${user.email || ''}" style="padding:8px;" />
+                        <label>低庫存通知閾值 (總庫存低於此值即發送通知)</label>
+                        <select id="lowThreshold" style="padding:8px; max-width:220px;">
+                            ${[5,10,15,20,25,30,35,40,45].map(n => `<option value="${n}" ${user.low_inventory_threshold==n? 'selected':''}>${n}</option>`).join('')}
+                        </select>
                         <div style="display:flex;gap:8px;margin-top:12px;">
                             <button id="saveBtn" class="btn-primary">儲存</button>
                             <button id="backBtn" class="btn-clear">返回</button>
@@ -38,10 +42,11 @@
                 document.getElementById('saveBtn').addEventListener('click', async ()=>{
                     const dn = document.getElementById('displayName').value;
                     const email = document.getElementById('email').value;
+                    const low = document.getElementById('lowThreshold').value;
                     const status = document.getElementById('saveStatus');
                     status.textContent = '';
                     try{
-                        const r = await fetch('/api/user-profile', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({displayName: dn, email})});
+                        const r = await fetch('/api/user-profile', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({displayName: dn, email, lowInventoryThreshold: low})});
                         const j = await r.json();
                         if(r.ok && j.success){ status.style.color='green'; status.textContent='已儲存'; setTimeout(()=>{ window.location.href='/presentation.html'; },800); }
                         else { status.style.color='#d32f2f'; status.textContent = j.message || '儲存失敗'; }

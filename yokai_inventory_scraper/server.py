@@ -21,6 +21,8 @@ import pytz
 from openpyxl import load_workbook, Workbook
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
+import smtplib
+from email.message import EmailMessage
 
 
 # --- Custom Imports ---
@@ -841,6 +843,7 @@ def api_user_profile():
         data = request.get_json() or {}
         display_name = data.get('displayName')
         email = data.get('email')
+        low_threshold = data.get('lowInventoryThreshold')
         changed = False
         if display_name is not None:
             user.display_name = display_name
@@ -848,6 +851,12 @@ def api_user_profile():
         if email is not None:
             user.email = email
             changed = True
+        if low_threshold is not None:
+            try:
+                user.low_inventory_threshold = int(low_threshold)
+                changed = True
+            except Exception:
+                pass
         if changed:
             db.add(user)
             db.commit()
@@ -856,6 +865,71 @@ def api_user_profile():
     except Exception as e:
         db.rollback()
         logging.error(f"Error in user-profile: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        db.close()
+
+
+def send_email_if_configured(to_email, subject, body):
+    smtp_server = os.getenv('SMTP_SERVER')
+    smtp_port = int(os.getenv('SMTP_PORT', '25'))
+    smtp_user = os.getenv('SMTP_USER')
+    smtp_pass = os.getenv('SMTP_PASS')
+    if not smtp_server or not to_email:
+        logging.info(f"Email not sent (SMTP not configured or missing recipient): to={to_email} subject={subject}")
+        return False
+    try:
+        msg = EmailMessage()
+        msg['Subject'] = subject
+        msg['From'] = smtp_user or f"noreply@{os.getenv('MAIL_DOMAIN','example.local')}"
+        msg['To'] = to_email
+        msg.set_content(body)
+
+        with smtplib.SMTP(smtp_server, smtp_port, timeout=10) as s:
+            if smtp_user and smtp_pass:
+                s.starttls()
+                s.login(smtp_user, smtp_pass)
+            s.send_message(msg)
+        logging.info(f"Sent email to {to_email}")
+        return True
+    except Exception as e:
+        logging.error(f"Failed to send email to {to_email}: {e}")
+        return False
+
+
+@app.route('/api/notify-low-inventory', methods=['POST'])
+def api_notify_low_inventory():
+    """Manual trigger: check all users and send notification to those below threshold.
+
+    This can be used in a scheduled job; here it's exposed for testing.
+    """
+    db: Session = next(get_db())
+    try:
+        users = db.query(User).all()
+        notifications = []
+        for u in users:
+            try:
+                thresh = int(u.low_inventory_threshold or 0)
+            except Exception:
+                thresh = 0
+            if not u.email or thresh <= 0:
+                continue
+            # compute totalQuantity for user's assigned stores
+            total_for_user = 0
+            for s in u.stores:
+                # s.store_key could be 'store-machine' or 'store-...'
+                left = s.store_key.split('-')[0]
+                qty = db.query(Inventory).filter(Inventory.store.ilike(f"%{left}%")).with_entities(Inventory.quantity).all()
+                total_for_store = sum([q[0] or 0 for q in qty])
+                total_for_user += total_for_store
+            if total_for_user <= thresh:
+                subject = f"低庫存通知: 您的機台總庫存 {total_for_user} <= {thresh}"
+                body = f"親愛的 {u.display_name or u.username},\n\n系統偵測到您被指派的機台總庫存為 {total_for_user}，低於您設定的閾值 {thresh}。請檢查並安排補貨。\n\n此為系統自動通知。"
+                sent = send_email_if_configured(u.email, subject, body)
+                notifications.append({'user': u.username, 'email': u.email, 'total': total_for_user, 'threshold': thresh, 'sent': sent})
+        return jsonify({'success': True, 'notifications': notifications})
+    except Exception as e:
+        logging.error(f"Error in notify-low-inventory: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
     finally:
         db.close()
