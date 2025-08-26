@@ -172,6 +172,27 @@ class UpdateLog(Base):
     details = Column(Text, nullable=True)  # e.g., 'Updated 62 items' or error message
 
 
+class NotificationSent(Base):
+    """
+    Tracks notifications sent to users for specific stores.
+    Used to enforce "one notification per store per day" and global daily limits.
+    """
+    __tablename__ = 'notification_sent'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    store_key = Column(String, nullable=False, index=True)
+    sent_at = Column(DateTime(timezone=True), default=lambda: datetime.now(pytz.utc))
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'store_key': self.store_key,
+            'sent_at': self.sent_at.isoformat() if self.sent_at else None
+        }
+
+
 def init_db():
     """
     Creates all the tables in the database.

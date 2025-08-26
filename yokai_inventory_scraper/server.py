@@ -26,7 +26,7 @@ from email.message import EmailMessage
 
 
 # --- Custom Imports ---
-from database import init_db, get_db, Inventory, Store, Transaction, UpdateLog, Warehouse, User
+from database import init_db, get_db, Inventory, Store, Transaction, UpdateLog, Warehouse, User, NotificationSent
 from scraper import run_scraper as run_inventory_scraper_function, parse_inventory_from_text, save_to_database, save_to_json
 from salesscraper import run_sales_scraper
 from warehousescraper import run_warehouse_scraper
@@ -930,6 +930,12 @@ def api_notify_low_inventory():
 def _notify_low_inventory_internal():
     db: Session = next(get_db())
     notifications = []
+    # Daily limits and tracking
+    DAILY_EMAIL_LIMIT = int(os.getenv('DAILY_EMAIL_LIMIT', '100'))
+    emails_sent_today = 0
+    # compute today's UTC date floor for querying NotificationSent
+    from datetime import datetime, timedelta
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     try:
         users = db.query(User).all()
         logging.info(f'Checking low-inventory for {len(users)} users')
@@ -952,15 +958,48 @@ def _notify_low_inventory_internal():
                     low_stores.append({'store_key': s.store_key, 'total': total_for_store})
 
             if low_stores:
-                # Compose a single email listing all low stores for this user
-                subject = f"低庫存通知: {len(low_stores)} 個機台低於閾值"
-                body_lines = [f"親愛的 {u.display_name or u.username},", "", "系統偵測到以下被指派的機台庫存低於您設定的閾值：", ""]
+                # Filter out stores that have already triggered a notification for this user today
+                filtered_low_stores = []
                 for ls in low_stores:
+                    already = db.query(NotificationSent).filter(
+                        NotificationSent.user_id == u.id,
+                        NotificationSent.store_key == ls['store_key'],
+                        NotificationSent.sent_at >= today_start
+                    ).first()
+                    if not already:
+                        filtered_low_stores.append(ls)
+
+                if not filtered_low_stores:
+                    logging.debug(f"User {u.username}: all low stores already notified today; skipping.")
+                    continue
+
+                # Check global daily limit
+                if emails_sent_today >= DAILY_EMAIL_LIMIT:
+                    logging.warning(f"Daily email limit reached ({DAILY_EMAIL_LIMIT}). Skipping notifications.")
+                    break
+
+                # We'll send one email per user containing all filtered_low_stores
+                # Compose a single email listing all low stores for this user
+                subject = f"低庫存通知: {len(filtered_low_stores)} 個機台低於閾值"
+                body_lines = [f"親愛的 {u.display_name or u.username},", "", "系統偵測到以下被指派的機台庫存低於您設定的閾值：", ""]
+                for ls in filtered_low_stores:
                     body_lines.append(f"- {ls['store_key']}: {ls['total']}")
                 body_lines.extend(["", "請檢查並安排補貨。", "", "此為系統自動通知。"])
                 body = "\n".join(body_lines)
                 send_result = send_email_if_configured(u.email, subject, body)
-                notifications.append({'user': u.username, 'email': u.email, 'lowStores': low_stores, 'threshold': thresh, 'sent': send_result})
+
+                # If sent successfully (or attempted), record sent notifications for each store
+                try:
+                    for ls in filtered_low_stores:
+                        ns = NotificationSent(user_id=u.id, store_key=ls['store_key'])
+                        db.add(ns)
+                    db.commit()
+                except Exception as e:
+                    db.rollback()
+                    logging.error(f"Failed to record NotificationSent: {e}", exc_info=True)
+
+                emails_sent_today += 1
+                notifications.append({'user': u.username, 'email': u.email, 'lowStores': filtered_low_stores, 'threshold': thresh, 'sent': send_result})
             else:
                 logging.debug(f"User {u.username} has no assigned stores below threshold {thresh}")
         return {'notifications': notifications}
