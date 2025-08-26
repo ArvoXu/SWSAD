@@ -141,11 +141,20 @@ def run_inventory_scraper_background():
             save_to_database(structured_data)
 
             # After saving inventory to database, immediately run low-inventory notifications
+            # Run notifications in a non-blocking daemon thread to avoid delaying the scraper
             try:
-                notify_result = _notify_low_inventory_internal()
-                logging.info(f"Low-inventory notification run after scraper: {notify_result}")
+                def _notify_runner():
+                    try:
+                        res = _notify_low_inventory_internal()
+                        logging.info(f"Low-inventory notification run after scraper: {res}")
+                    except Exception as e:
+                        logging.error(f"Error running notifications in background thread: {e}", exc_info=True)
+
+                t = threading.Thread(target=_notify_runner, daemon=True)
+                t.start()
+                logging.info("Started background notification thread after scraper run.")
             except Exception as e:
-                logging.error(f"Error running notifications after scraper: {e}", exc_info=True)
+                logging.error(f"Failed to start notification thread: {e}", exc_info=True)
 
             output = f"Scraper finished successfully. Processed {items_saved_count} items. Notifications run." 
             status = "success"
@@ -933,9 +942,16 @@ def _notify_low_inventory_internal():
     # Daily limits and tracking
     DAILY_EMAIL_LIMIT = int(os.getenv('DAILY_EMAIL_LIMIT', '100'))
     emails_sent_today = 0
-    # compute today's UTC date floor for querying NotificationSent
+    # compute today's reset boundary at 16:00 UTC (which corresponds to Taiwan midnight)
+    # This means notifications are considered "same day" if sent after the previous 16:00 UTC.
     from datetime import datetime, timedelta
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    now_utc = datetime.utcnow()
+    # reset happens at 16:00 UTC each UTC day
+    reset_hour_utc = 16
+    today_start = now_utc.replace(hour=reset_hour_utc, minute=0, second=0, microsecond=0)
+    if now_utc.hour < reset_hour_utc:
+        # If current UTC time is before 16:00, the 'today' start is the previous day's 16:00
+        today_start = today_start - timedelta(days=1)
     try:
         users = db.query(User).all()
         logging.info(f'Checking low-inventory for {len(users)} users')
@@ -950,12 +966,28 @@ def _notify_low_inventory_internal():
             # Check each assigned store individually (single-machine total), and notify if any store <= threshold
             low_stores = []
             for s in u.stores:
+                # Respect the authoritative Store.is_hidden value from the DB (admin may toggle this)
+                try:
+                    db_store = db.query(Store).filter(Store.store_key == s.store_key).first()
+                except Exception:
+                    db_store = None
+
+                if db_store and getattr(db_store, 'is_hidden', False):
+                    logging.debug(f"Skipping hidden store {s.store_key} for user {u.username} because is_hidden")
+                    continue
+
                 left = s.store_key.split('-')[0]
                 qty_rows = db.query(Inventory).filter(Inventory.store.ilike(f"%{left}%")).with_entities(Inventory.quantity).all()
                 total_for_store = sum([q[0] or 0 for q in qty_rows])
-                logging.info(f"User {u.username} store {s.store_key} totalQuantity={total_for_store} threshold={thresh}")
+
+                # Only log and include stores that are actually below threshold
                 if total_for_store <= thresh:
-                    low_stores.append({'store_key': s.store_key, 'total': total_for_store})
+                    logging.info(f"User {u.username} store {s.store_key} totalQuantity={total_for_store} threshold={thresh}")
+                    # Prepare display name without provisional suffix
+                    display_name = s.store_key
+                    if display_name.endswith('-provisional_sales'):
+                        display_name = display_name.replace('-provisional_sales', '')
+                    low_stores.append({'store_key': s.store_key, 'display': display_name, 'total': total_for_store})
 
             if low_stores:
                 # Filter out stores that have already triggered a notification for this user today
@@ -978,17 +1010,19 @@ def _notify_low_inventory_internal():
                     logging.warning(f"Daily email limit reached ({DAILY_EMAIL_LIMIT}). Skipping notifications.")
                     break
 
-                # We'll send one email per user containing all filtered_low_stores
+                # We'll send one email per user containing ALL current low_stores (for context),
+                # but only record NotificationSent for the newly-notified stores (filtered_low_stores).
                 # Compose a single email listing all low stores for this user
                 subject = f"低庫存通知: {len(filtered_low_stores)} 個機台低於閾值"
                 body_lines = [f"親愛的 {u.display_name or u.username},", "", "系統偵測到以下被指派的機台庫存低於您設定的閾值：", ""]
-                for ls in filtered_low_stores:
-                    body_lines.append(f"- {ls['store_key']}: {ls['total']}")
+                # For clarity include ALL current low stores (display name), not only newly-notified ones
+                for ls in low_stores:
+                    body_lines.append(f"- {ls.get('display', ls['store_key'])}: {ls['total']}")
                 body_lines.extend(["", "請檢查並安排補貨。", "", "此為系統自動通知。"])
                 body = "\n".join(body_lines)
                 send_result = send_email_if_configured(u.email, subject, body)
 
-                # If sent successfully (or attempted), record sent notifications for each store
+                # If sent successfully (or attempted), record sent notifications for each newly-notified store only
                 try:
                     for ls in filtered_low_stores:
                         ns = NotificationSent(user_id=u.id, store_key=ls['store_key'])
@@ -999,7 +1033,7 @@ def _notify_low_inventory_internal():
                     logging.error(f"Failed to record NotificationSent: {e}", exc_info=True)
 
                 emails_sent_today += 1
-                notifications.append({'user': u.username, 'email': u.email, 'lowStores': filtered_low_stores, 'threshold': thresh, 'sent': send_result})
+                notifications.append({'user': u.username, 'email': u.email, 'lowStores': filtered_low_stores, 'allLowStores': low_stores, 'threshold': thresh, 'sent': send_result})
             else:
                 logging.debug(f"User {u.username} has no assigned stores below threshold {thresh}")
         return {'notifications': notifications}
