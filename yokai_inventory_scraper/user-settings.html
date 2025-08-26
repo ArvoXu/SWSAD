@@ -7,9 +7,11 @@
     <link rel="stylesheet" href="presentation.css" />
 </head>
 <body>
-    <div style="max-width:640px;margin:28px auto;padding:20px;">
-        <h2>使用者設定</h2>
-        <div id="profileContainer">載入中...</div>
+    <div style="max-width:720px;margin:28px auto;padding:20px;">
+        <div class="user-settings-page">
+            <h2 style="text-align:center;margin-bottom:12px;color:var(--primary-color);">使用者設定</h2>
+            <div id="profileContainer">載入中...</div>
+        </div>
     </div>
     <script>
         async function loadProfile(){
@@ -22,16 +24,22 @@
                 if(!data.success){ c.innerHTML = '<p>無法載入使用者資料</p>'; return; }
                 const user = data.user;
                 c.innerHTML = `
-                    <div style="display:flex;flex-direction:column;gap:8px;">
-                        <label>顯示名稱</label>
-                        <input id="displayName" value="${user.display_name || ''}" style="padding:8px;" />
-                        <label>Email</label>
-                        <input id="email" value="${user.email || ''}" style="padding:8px;" />
-                        <label>低庫存通知閾值 (總庫存低於此值即發送通知)</label>
-                        <select id="lowThreshold" style="padding:8px; max-width:220px;">
-                            ${[5,10,15,20,25,30,35,40,45].map(n => `<option value="${n}" ${user.low_inventory_threshold==n? 'selected':''}>${n}</option>`).join('')}
-                        </select>
-                        <div style="display:flex;gap:8px;margin-top:12px;">
+                    <div class="user-settings-card">
+                        <div class="user-settings-row">
+                            <label class="form-label">顯示名稱</label>
+                            <input id="displayName" class="form-control" value="${user.display_name || ''}" />
+                        </div>
+                        <div class="user-settings-row">
+                            <label class="form-label">Email</label>
+                            <input id="email" class="form-control" value="${user.email || ''}" />
+                        </div>
+                        <div class="user-settings-row">
+                            <label class="form-label">低庫存通知閾值</label>
+                            <select id="lowThreshold" class="form-control" style="max-width:240px;">
+                                ${[5,10,15,20,25,30,35,40,45].map(n => `<option value="${n}" ${user.low_inventory_threshold==n? 'selected':''}>${n}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="form-actions" style="margin-top:12px;">
                             <button id="saveBtn" class="btn-primary">儲存</button>
                             <button id="backBtn" class="btn-clear">返回</button>
                         </div>
