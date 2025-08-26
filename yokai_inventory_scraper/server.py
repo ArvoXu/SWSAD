@@ -886,7 +886,7 @@ def api_user_profile():
         db.close()
 
 
-def send_email_if_configured(to_email, subject, body):
+def send_email_if_configured(to_email, subject, body, html_content=False):
     smtp_server = os.getenv('SMTP_SERVER')
     smtp_port = int(os.getenv('SMTP_PORT', '587'))
     smtp_user = os.getenv('SMTP_USER')
@@ -900,7 +900,14 @@ def send_email_if_configured(to_email, subject, body):
         msg['Subject'] = subject
         msg['From'] = from_email
         msg['To'] = to_email
-        msg.set_content(body)
+        # Support HTML content when requested. Provide a plain-text fallback.
+        if html_content:
+            # Simple plain-text fallback; avoid stripping HTML aggressively here.
+            fallback = '此郵件包含 HTML 內容，請使用支援 HTML 的郵件客戶端查看。'
+            msg.set_content(fallback)
+            msg.add_alternative(body, subtype='html')
+        else:
+            msg.set_content(body)
 
         # Connect and send via TLS (SendGrid uses TLS on 587)
         with smtplib.SMTP(smtp_server, smtp_port, timeout=10) as s:
@@ -1013,15 +1020,42 @@ def _notify_low_inventory_internal():
                 # We'll send one email per user containing ALL current low_stores (for context),
                 # but only record NotificationSent for the newly-notified stores (filtered_low_stores).
                 # Compose a single email listing all low stores for this user
-                subject = f"低庫存通知: {len(filtered_low_stores)} 個機台低於閾值"
-                body_lines = [f"親愛的 {u.display_name or u.username},", "", "系統偵測到以下被指派的機台庫存低於您設定的閾值：", ""]
-                # For clarity include ALL current low stores (display name), not only newly-notified ones
-                for ls in low_stores:
-                    body_lines.append(f"- {ls.get('display', ls['store_key'])}: {ls['total']}")
-                body_lines.extend(["", "請檢查並安排補貨。", "", "此為系統自動通知。"])
-                body = "\n".join(body_lines)
-                send_result = send_email_if_configured(u.email, subject, body)
+                subject = f"【SWSAD】庫存通知 - {len(filtered_low_stores)} 個機台需要您的關注"
 
+                # 使用 HTML 格式
+                body_html_lines = [
+                    f"<!DOCTYPE html><html><body>",
+                    f"<h1 style='text-align:center; font-weight:bold;'>SWSAD</h1>",
+                    f"<p>親愛的 {u.display_name or u.username}，</p>",
+                    f"<p>這是一則來自SWSAD小幫手的通知：</p>",
+                    f"<p>系統發現有幾台機器的庫存已經低於您設定的警戒值囉！為了確保銷售不中斷，建議您盡快安排補貨。</p>",
+                    
+                    # 開始建立表格
+                    f"<table style='width:100%; border-collapse:collapse; text-align:left;'>",
+                    f"   <tr style='background-color:#f2f2f2;'>",
+                    f"       <th style='padding:8px; border:1px solid #ddd;'>機台名稱</th>",
+                    f"       <th style='padding:8px; border:1px solid #ddd;'>目前庫存</th>",
+                    f"   </tr>"
+                ]
+
+                for ls in low_stores:
+                    # 每一行資料
+                    body_html_lines.append(f"<tr>")
+                    body_html_lines.append(f"    <td style='padding:8px; border:1px solid #ddd;'>{ls.get('display', ls['store_key'])}</td>")
+                    body_html_lines.append(f"    <td style='padding:8px; border:1px solid #ddd;'>{ls['total']} 個</td>")
+                    body_html_lines.append(f"</tr>")
+                    
+                body_html_lines.extend([
+                    f"</table>", # 表格結束
+                    
+                    f"<p>點擊下方連結，即可前往網站查看詳細庫存狀況並安排補貨：</p>",
+                    f'<p><a href="https://swsad3.onrender.com/presentation">👉 智慧倉儲與銷售分析儀表板-Smart Warehousing and Sales Analysis Dashboard</a></p>',
+                    f"<p>此為系統自動通知，請勿回覆。</p>",
+                    f"</body></html>"
+                ])
+
+                body_html = "\n".join(body_html_lines)
+                send_result = send_email_if_configured(u.email, subject, body_html, html_content=True)
                 # If sent successfully (or attempted), record sent notifications for each newly-notified store only
                 try:
                     for ls in filtered_low_stores:
