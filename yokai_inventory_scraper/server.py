@@ -139,8 +139,15 @@ def run_inventory_scraper_background():
             # The data is already parsed with datetime objects, so we can save it directly
             items_saved_count = len(structured_data)
             save_to_database(structured_data)
-            
-            output = f"Scraper finished successfully. Processed {items_saved_count} items."
+
+            # After saving inventory to database, immediately run low-inventory notifications
+            try:
+                notify_result = _notify_low_inventory_internal()
+                logging.info(f"Low-inventory notification run after scraper: {notify_result}")
+            except Exception as e:
+                logging.error(f"Error running notifications after scraper: {e}", exc_info=True)
+
+            output = f"Scraper finished successfully. Processed {items_saved_count} items. Notifications run." 
             status = "success"
         else:
             output = "Scraper ran but returned no data."
