@@ -886,6 +886,45 @@ def api_user_profile():
         db.close()
 
 
+@app.route('/api/user-change-password', methods=['POST'])
+def api_user_change_password():
+    """Change the logged-in user's password. JSON {currentPassword, newPassword}.
+    Verifies current password and updates stored hash.
+    """
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'message': '未登入'}), 401
+
+    data = request.get_json() or {}
+    current = data.get('currentPassword') or ''
+    new = data.get('newPassword') or ''
+    if not current or not new:
+        return jsonify({'success': False, 'message': 'currentPassword and newPassword are required'}), 400
+    if len(new) < 8:
+        return jsonify({'success': False, 'message': '新密碼長度至少 8 字元'}), 400
+
+    db: Session = next(get_db())
+    try:
+        user = db.query(User).filter(User.id == int(user_id)).first()
+        if not user:
+            return jsonify({'success': False, 'message': 'user not found'}), 404
+        # verify current password
+        if not check_password_hash(user.password_hash, current):
+            return jsonify({'success': False, 'message': '目前密碼錯誤'}), 403
+
+        # update
+        user.password_hash = generate_password_hash(new)
+        db.add(user)
+        db.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        db.rollback()
+        logging.error(f"Error changing password: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        db.close()
+
+
 def send_email_if_configured(to_email, subject, body, html_content=False):
     smtp_server = os.getenv('SMTP_SERVER')
     smtp_port = int(os.getenv('SMTP_PORT', '587'))

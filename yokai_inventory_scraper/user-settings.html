@@ -39,6 +39,26 @@
                                 ${[5,10,15,20,25,30,35,40,45].map(n => `<option value="${n}" ${user.low_inventory_threshold==n? 'selected':''}>${n}</option>`).join('')}
                             </select>
                         </div>
+
+                        <!-- Change password section: show button first, inputs hidden until requested -->
+                        <div class="user-settings-row" style="margin-top:12px;">
+                            <label class="form-label">變更密碼</label>
+                            <div style="display:flex;flex-direction:column;gap:8px;max-width:420px;">
+                                <button id="showChangePwdBtn" class="btn-clear" style="max-width:180px;">變更密碼</button>
+
+                                <div id="changePwdSection" style="display:none;padding-top:8px;">
+                                    <input id="currentPassword" type="password" class="form-control" placeholder="目前密碼" />
+                                    <input id="newPassword" type="password" class="form-control" placeholder="新密碼 (至少8字元)" />
+                                    <input id="confirmNewPassword" type="password" class="form-control" placeholder="確認新密碼" />
+                                    <div style="display:flex;gap:8px;margin-top:6px;">
+                                        <button id="changePwdBtn" class="btn-primary">送出變更</button>
+                                        <button id="cancelChangePwdBtn" class="btn-clear">取消</button>
+                                        <div id="changePwdStatus" style="align-self:center;color:#d32f2f;margin-left:6px;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="form-actions" style="margin-top:12px;">
                             <button id="saveBtn" class="btn-primary">儲存</button>
                             <button id="backBtn" class="btn-clear">返回</button>
@@ -60,6 +80,54 @@
                         else { status.style.color='#d32f2f'; status.textContent = j.message || '儲存失敗'; }
                     }catch(err){ status.style.color='#d32f2f'; status.textContent='儲存時發生錯誤'; }
                 });
+                // Change password: toggle UI and submission
+                const showBtn = document.getElementById('showChangePwdBtn');
+                const changeSection = document.getElementById('changePwdSection');
+                const cancelBtn = document.getElementById('cancelChangePwdBtn');
+                const submitBtn = document.getElementById('changePwdBtn');
+                const statusEl = document.getElementById('changePwdStatus');
+
+                if(showBtn && changeSection){
+                    showBtn.addEventListener('click', ()=>{
+                        showBtn.style.display = 'none';
+                        changeSection.style.display = 'block';
+                        if(statusEl) statusEl.textContent = '';
+                    });
+                }
+                if(cancelBtn && changeSection && showBtn){
+                    cancelBtn.addEventListener('click', ()=>{
+                        // hide and reset
+                        changeSection.style.display = 'none';
+                        showBtn.style.display = 'inline-block';
+                        if(statusEl) { statusEl.textContent = ''; statusEl.style.color = '#d32f2f'; }
+                        // clear fields
+                        const fids = ['currentPassword','newPassword','confirmNewPassword'];
+                        fids.forEach(id=>{ const el = document.getElementById(id); if(el) el.value = ''; });
+                    });
+                }
+
+                if(submitBtn){
+                    submitBtn.addEventListener('click', async ()=>{
+                        if(!statusEl) return;
+                        statusEl.textContent = '';
+                        const current = document.getElementById('currentPassword').value || '';
+                        const nw = document.getElementById('newPassword').value || '';
+                        const conf = document.getElementById('confirmNewPassword').value || '';
+                        if(!current || !nw || !conf){ statusEl.style.color='#d32f2f'; statusEl.textContent='請填寫所有欄位'; return; }
+                        if(nw !== conf){ statusEl.style.color='#d32f2f'; statusEl.textContent='新密碼與確認不符'; return; }
+                        if(nw.length < 8){ statusEl.style.color='#d32f2f'; statusEl.textContent='新密碼長度至少 8 字元'; return; }
+                        try{
+                            const r = await fetch('/api/user-change-password', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({currentPassword: current, newPassword: nw})});
+                            const j = await r.json();
+                            if(r.ok && j.success){ statusEl.style.color='green'; statusEl.textContent='密碼已變更';
+                                // clear and hide
+                                ['currentPassword','newPassword','confirmNewPassword'].forEach(id=>{ const el = document.getElementById(id); if(el) el.value=''; });
+                                changeSection.style.display = 'none';
+                                if(showBtn) showBtn.style.display = 'inline-block';
+                            } else { statusEl.style.color='#d32f2f'; statusEl.textContent = j.message || '變更失敗'; }
+                        }catch(err){ statusEl.style.color='#d32f2f'; statusEl.textContent='變更時發生錯誤'; }
+                    });
+                }
             }catch(e){ console.error(e); c.innerHTML = '<p>載入失敗</p>'; }
         }
         document.addEventListener('DOMContentLoaded', loadProfile);

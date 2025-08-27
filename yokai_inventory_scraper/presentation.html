@@ -76,7 +76,7 @@
             <div id="userAvatarWrapper" style="display:none;">
                 <div id="userAvatar" title="使用者選單">U</div>
                 <div id="avatarPopover" style="display:none;">
-                    <div class="popover-title">User</div>
+                    <div class="popover-title" id="avatarPopoverTitle">User</div>
                     <button id="openProfileBtn" class="btn-view">使用者設定</button>
                     <button id="avatarLogoutBtn" class="btn-clear">登出</button>
                 </div>
@@ -391,6 +391,9 @@
                 const name = info.user && (info.user.display_name || info.user.username) || 'U';
                 const initial = name.trim().length ? name.trim().charAt(0).toUpperCase() : 'U';
                 if(avatar) avatar.textContent = initial;
+                // set popover title to display name
+                const popTitle = document.getElementById('avatarPopoverTitle');
+                if(popTitle) popTitle.textContent = name;
 
                 // setup hover handlers
                 if(avatar){
