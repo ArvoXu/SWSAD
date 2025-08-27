@@ -66,15 +66,19 @@
             </div>
         </div>
 
-        <!-- Visible auth controls (avatar + logout) placed in header area -->
-        <div class="auth-controls" style="position: absolute; top: 18px; right: 18px;">
+        <!-- Visible auth controls (login link kept in header). Avatar is rendered as a floating element so it remains visible while scrolling. -->
+        <div class="auth-controls">
             <a id="loginLink" href="/presentation-login" class="btn-view" style="text-decoration:none; display:inline-block; padding:6px 10px;">登入</a>
-            <div id="userAvatarWrapper" style="display:none; position:relative;">
-                <div id="userAvatar" title="使用者選單" style="width:36px;height:36px;border-radius:50%;background:#bbb;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;font-weight:700;">U</div>
-                <div id="avatarPopover" style="display:none; position:absolute; right:0; top:44px; background:#fff; border:1px solid #ddd; box-shadow:0 6px 12px rgba(0,0,0,0.08); padding:8px; border-radius:6px; min-width:160px; z-index:40;">
-                    <div style="margin-bottom:8px; font-weight:600;">User</div>
-                    <button id="openProfileBtn" class="btn-view" style="width:100%; text-align:left; margin-bottom:6px;">使用者設定</button>
-                    <button id="avatarLogoutBtn" class="btn-clear" style="width:100%; text-align:left;">登出</button>
+        </div>
+
+        <!-- Floating avatar (fixed to bottom-right). JS will toggle visibility and content. -->
+        <div id="floatingAvatar" aria-hidden="true">
+            <div id="userAvatarWrapper" style="display:none;">
+                <div id="userAvatar" title="使用者選單">U</div>
+                <div id="avatarPopover" style="display:none;">
+                    <div class="popover-title">User</div>
+                    <button id="openProfileBtn" class="btn-view">使用者設定</button>
+                    <button id="avatarLogoutBtn" class="btn-clear">登出</button>
                 </div>
             </div>
         </div>
