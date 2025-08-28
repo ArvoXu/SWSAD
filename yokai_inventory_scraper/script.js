@@ -1,13 +1,10 @@
 document.addEventListener('DOMContentLoaded', function () {
     // --- Element Selections ---
     const processButton = document.getElementById('processButton');
-    const clearButton = document.getElementById('clearButton');
-    const clearStorageButton = document.getElementById('clearStorageButton');
-    const rawDataTextarea = document.getElementById('rawData');
+    // Note: legacy controls (clearButton, clearStorageButton, rawData textarea,
+    // download/export buttons) have been removed from the DOM and their
+    // handlers pruned from this script to avoid runtime errors.
     const outputTableDiv = document.getElementById('outputTable');
-    const downloadExcelButton = document.getElementById('downloadExcelButton');
-    const downloadCSVButton = document.getElementById('downloadCSVButton');
-    const saveDataButton = document.getElementById('saveDataButton');
     const editDialog = document.getElementById('editDialog');
     const closeDialogButton = document.querySelector('.close');
     const saveNoteButton = document.getElementById('saveNoteButton');
@@ -103,7 +100,9 @@ document.addEventListener('DOMContentLoaded', function () {
         const processTimes = data.map(item => item.processTime ? new Date(item.processTime).getTime() : 0).filter(time => time > 0);
         if (processTimes.length > 0) {
             const latestTimestamp = Math.max(...processTimes);
-            updateTimeInput.value = new Date(latestTimestamp).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
+            if (updateTimeInput) {
+                updateTimeInput.value = new Date(latestTimestamp).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
+            }
         }
     }
 
@@ -393,17 +392,8 @@ document.addEventListener('DOMContentLoaded', function () {
     if(closeDialogButton) closeDialogButton.addEventListener('click', () => { editDialog.style.display = 'none'; });
     window.addEventListener('click', (event) => { if (event.target === editDialog) editDialog.style.display = 'none'; });
     
-    if (clearStorageButton) {
-        clearStorageButton.addEventListener('click', () => {
-            if (confirm('此操作將清除本地暫存的「銷售導入」相關數據，但不會影響伺服器上的永久資料。是否繼續?')) {
-                // We only clear the sales-related data that is truly local now
-                localStorage.removeItem('fullSalesData');
-                localStorage.removeItem('salesData');
-                localStorage.removeItem('selectedSalesMonth');
-                alert('本地銷售數據暫存已清除。');
-            }
-        });
-    }
+    // clearStorageButton and its handler were removed; clearing local sales cache
+    // is handled by the Import UI flow when appropriate.
 
     // --- Admin: load stores into assign select and create user handler ---
     async function loadStoresForAssign() {
@@ -722,7 +712,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         setTimeout(() => { statusSpan.textContent = ''; }, 4000);
     });
-    if(saveDataButton) saveDataButton.addEventListener('click', () => alert('此功能已過時。'));
+    // saveDataButton removed from DOM; no legacy handler required.
     if(openChartWindowButton) {
         openChartWindowButton.addEventListener('click', () => {
         window.open('/presentation', '_blank');

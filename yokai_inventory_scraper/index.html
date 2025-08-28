@@ -67,22 +67,7 @@
 
             <div class="divider"></div>
 
-            <!-- 原有的庫存數據輸入區域 -->
-            <h3>機台庫存數據</h3>
-            <p>請將複製的庫存資料貼上至下方文本框：</p>
-            <p style="color: #f44336; font-size: 13px; margin-bottom: 10px;">
-                <i class="fas fa-exclamation-circle"></i> 注意：新數據將完全替換相同店鋪-機台的舊數據，已售罄的產品將不會保留。
-            </p>
-            <textarea id="rawData" placeholder="在此粘貼原始庫存數據..."></textarea>
-            
-            <div class="form-group" style="margin-top: 10px; margin-bottom: 15px;">
-                <label for="updateTimeInput">數據更新時間</label>
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <input type="text" id="updateTimeInput" placeholder="例如：2025/07/03 上午11:30" style="width: auto; flex-grow: 1;">
-                    <button id="saveUpdateTimeButton" class="btn-save" style="flex-shrink: 0;">確認</button>
-                </div>
-            </div>
-
+            <!-- 已移除舊的機台貼上輸入與已棄用按鈕；保留上方倉庫上傳與其他必要操作 -->
             <input type="file" id="salesFileInput" accept=".xlsx, .xls" style="display: none;">
             <input type="file" id="inventoryFileInput" accept=".json" style="display: none;">
             <div class="actions">
@@ -92,13 +77,6 @@
                 <button id="importSalesButton" class="btn-view">手動匯入銷售訂單</button>
                 <button id="uploadInventoryFileButton" class="btn-primary" style="grid-column: 1 / -1;">上傳庫存文件</button>
                 <button id="openChartWindowButton" class="btn-view">進入展示階段</button>
-                <button id="saveDataButton" class="btn-save">保存到本地</button>
-                <button id="downloadExcelButton" class="btn-save">下載Excel</button>
-                <button id="downloadCSVButton" class="btn-save">下載CSV</button>
-                <button id="clearButton" class="btn-clear">清除輸入</button>
-                <button id="clearStorageButton" class="btn-clear">清除所有數據</button>
-                <button id="toggleDebugButton" class="btn-info">顯示除錯信息</button>
-                <button id="checkStorageButton" class="btn-info">存儲空間使用</button>
             </div>
             <div id="debugInfo" style="display:none; margin-top: 10px; padding: 10px; background-color: #f8f8f8; border: 1px solid #ddd; max-height: 200px; overflow: auto; font-family: monospace; font-size: 12px;"></div>
             
