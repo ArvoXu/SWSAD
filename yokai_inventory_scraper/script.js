@@ -35,6 +35,8 @@ document.addEventListener('DOMContentLoaded', function () {
     let currentSort = { key: 'store', order: 'asc' };
     let currentEditingStore = null;
     let savedInventoryData = []; // Single source of truth for data from the server
+    // guard to ensure we only add one global click listener for action menus
+    let _userActionMenuListenerAdded = false;
 
     // --- Warehouse File Upload Handling ---
     // Wire up new dropzones and inputs
@@ -525,30 +527,126 @@ document.addEventListener('DOMContentLoaded', function () {
     const cu_createBtn = document.getElementById('cu_createBtn');
     const cu_cancelBtn = document.getElementById('cu_cancelBtn');
 
-    // Add a simple toggle button to show user management in the UI
+    // Add a compact floating toggle for user management in the output-section (top-right)
     const userMgmtToggleBtn = document.createElement('button');
-    userMgmtToggleBtn.textContent = '用戶管理';
-    userMgmtToggleBtn.className = 'btn-info';
-    userMgmtToggleBtn.style.marginLeft = '8px';
-    const rightControls = document.querySelector('.right-side-controls');
-    if (rightControls) rightControls.appendChild(userMgmtToggleBtn);
+    userMgmtToggleBtn.textContent = '切換庫存/用戶';
+    userMgmtToggleBtn.className = 'btn-outline-white';
+    userMgmtToggleBtn.style.minWidth = '88px';
+    userMgmtToggleBtn.style.padding = '6px 10px';
+    userMgmtToggleBtn.style.margin = '0 6px';
+
+    // place a floating area inside output-section so it doesn't push headers around
+    const outputSection = document.querySelector('.output-section');
+    let umFloatingArea = null;
+    if (outputSection) {
+        // ensure the section can be an absolute container
+        try { outputSection.style.position = outputSection.style.position || 'relative'; } catch (e) {}
+        umFloatingArea = document.createElement('div');
+        umFloatingArea.style.position = 'absolute';
+        umFloatingArea.style.top = '8px';
+        umFloatingArea.style.right = '8px';
+        umFloatingArea.style.display = 'flex';
+        umFloatingArea.style.gap = '6px';
+        umFloatingArea.style.alignItems = 'center';
+        umFloatingArea.style.zIndex = '1200';
+        umFloatingArea.appendChild(userMgmtToggleBtn);
+        outputSection.appendChild(umFloatingArea);
+    } else {
+        const rightControls = document.querySelector('.right-side-controls');
+        if (rightControls) rightControls.appendChild(userMgmtToggleBtn);
+    }
+
+    // style and move refresh/create user buttons into floating area (if present)
+    const rBtn = document.getElementById('refreshUsersBtn');
+    const cBtn = document.getElementById('showCreateUserPanelBtn');
+    [rBtn, cBtn].forEach(b => {
+        if (!b) return;
+        b.classList.add('btn');
+        b.style.margin = '0';
+    });
+    // Do not append refresh/create into the global floating area to avoid layout shifts.
+    // They will be created or moved into the user-management header when the panel is shown.
 
     userMgmtToggleBtn.addEventListener('click', () => {
-        const outputSection = document.querySelector('.output-section');
         const outputTable = document.getElementById('outputTable');
         const outputList = document.getElementById('outputList');
-        // toggle: when showing user management, hide the standard output table/list
-        if (userManagementDiv.style.display === 'none' || !userManagementDiv.style.display) {
-            // hide existing views
+        const sortControlsEl = document.querySelector('.sort-controls');
+        const rightControlsEl = document.querySelector('.right-side-controls');
+        const mainH2 = document.querySelector('.output-section h2');
+        const userMgmtHeaderArea = document.getElementById('usersListContainerWrapper');
+
+        const showing = (userManagementDiv.style.display && userManagementDiv.style.display !== 'none');
+        if (!showing) {
+            // hide other UI chrome
             if (outputTable) outputTable.style.display = 'none';
             if (outputList) outputList.style.display = 'none';
+            if (sortControlsEl) sortControlsEl.style.display = 'none';
+            if (rightControlsEl) rightControlsEl.style.display = 'none';
+            if (searchInput) searchInput.style.display = 'none';
+            if (viewAsCardButton) viewAsCardButton.style.display = 'none';
+            if (viewAsListButton) viewAsListButton.style.display = 'none';
+
             userManagementDiv.style.display = 'block';
+            // Update H2 title
+            if (mainH2) mainH2.textContent = '用戶管理';
+            // create floating header controls inside userManagement (top-right)
+            // place these controls in the parent userManagement container so they don't overlay the scrollable list
+            if (userManagementDiv) {
+                // move refresh/create into local floating area for this panel
+                const localArea = document.createElement('div');
+                localArea.style.position = 'absolute';
+                localArea.style.top = '8px';
+                localArea.style.right = '8px';
+                localArea.style.display = 'flex';
+                localArea.style.gap = '6px';
+                localArea.id = 'um_local_area';
+                // create or use existing refresh/create buttons
+                let ref = document.getElementById('refreshUsersBtn');
+                let create = document.getElementById('showCreateUserPanelBtn');
+                if (!ref) {
+                    ref = document.createElement('button');
+                    ref.id = 'refreshUsersBtn';
+                    ref.textContent = '重新整理用戶';
+                    ref.className = 'btn-outline-white';
+                    ref.addEventListener('click', fetchAndDisplayUsers);
+                } else {
+                    ref.classList.add('btn-outline-white');
+                }
+                if (!create) {
+                    create = document.createElement('button');
+                    create.id = 'showCreateUserPanelBtn';
+                    create.textContent = '新增用戶';
+                    create.className = 'btn-outline-white';
+                    create.addEventListener('click', () => { createUserPanel.style.display = 'block'; });
+                } else {
+                    create.classList.add('btn-outline-white');
+                }
+                localArea.appendChild(ref);
+                localArea.appendChild(create);
+                // ensure userManagement container can contain absolute-positioned children
+                try { userManagementDiv.style.position = userManagementDiv.style.position || 'relative'; } catch (e) {}
+                userManagementDiv.appendChild(localArea);
+                // add top padding to the scroll wrapper so the controls do not overlap the first user entry
+                const wrapper = document.getElementById('usersListContainerWrapper');
+                if (wrapper) wrapper.style.paddingTop = '44px';
+            }
             fetchAndDisplayUsers();
         } else {
-            userManagementDiv.style.display = 'none';
-            // restore previous view
+            // restore
             if (outputTable) outputTable.style.display = currentView === 'card' ? 'block' : 'none';
             if (outputList) outputList.style.display = currentView === 'list' ? 'block' : 'none';
+            if (sortControlsEl) sortControlsEl.style.display = '';
+            if (rightControlsEl) rightControlsEl.style.display = '';
+            if (searchInput) searchInput.style.display = '';
+            if (viewAsCardButton) viewAsCardButton.style.display = '';
+            if (viewAsListButton) viewAsListButton.style.display = '';
+            userManagementDiv.style.display = 'none';
+            if (mainH2) mainH2.textContent = '機台管理';
+            // remove local area if exists and restore wrapper padding
+            const localArea = document.getElementById('um_local_area');
+            if (localArea && localArea.parentNode) localArea.parentNode.removeChild(localArea);
+            const wrapper = document.getElementById('usersListContainerWrapper');
+            if (wrapper) wrapper.style.paddingTop = '';
         }
     });
 
@@ -593,69 +691,138 @@ document.addEventListener('DOMContentLoaded', function () {
                     : '';
 
             div.innerHTML = `
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-                    <div style="flex:1">
+                <div style="position:relative; padding:8px 44px 8px 0;">
+                    <div style="">
                         <strong>${u.username}</strong> <span style="color:#999">(${u.display_name || ''})</span><br>
                         <small style="color:#777">id: ${u.id} • email: ${u.email || ''}</small><br>
                         <small style="color:#999">Stores: ${displayStores}</small><br>
                         <small style="color:#999">低庫存警戒值: ${lowThreshold !== '' ? lowThreshold : '未設定'}</small>
                     </div>
-                    <div style="display:flex; gap:6px;">
-                        <button class="btn-primary btn-edit-user" data-id="${u.id}">編輯</button>
-                        <button class="btn-clear btn-reset-password" data-id="${u.id}">重設密碼</button>
-                        <button class="btn-info btn-manage-stores" data-id="${u.id}">管理機台</button>
-                        <button class="btn-danger btn-delete-user" data-id="${u.id}">刪除</button>
+                    <button class="user-action-toggle" data-id="${u.id}" aria-expanded="false" title="操作" style="position:absolute; top:6px; right:6px; background:transparent; border:none; color:#fff; font-size:18px; cursor:pointer;">⋯</button>
+                    <div class="user-action-menu" data-id="${u.id}" style="position:absolute; right:6px; top:34px; display:none; background:#222; border:1px solid #444; padding:6px; z-index:50; min-width:120px;">
+                        <button class="menu-edit" data-id="${u.id}" style="display:block; width:100%; text-align:left; margin-bottom:4px;">編輯</button>
+                        <button class="menu-reset" data-id="${u.id}" style="display:block; width:100%; text-align:left; margin-bottom:4px;">重設密碼</button>
+                        <button class="menu-manage" data-id="${u.id}" style="display:block; width:100%; text-align:left; margin-bottom:4px;">管理機台</button>
+                        <button class="menu-delete" data-id="${u.id}" style="display:block; width:100%; text-align:left; color:#fff; background:#b32;">刪除</button>
                     </div>
                 </div>
             `;
             usersListContainer.appendChild(div);
         });
 
-        // attach handlers
-        document.querySelectorAll('.btn-delete-user').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
+        // attach handlers for compact menus
+        // toggle menu open/close
+        document.querySelectorAll('.user-action-toggle').forEach(toggle => {
+            toggle.addEventListener('click', (e) => {
                 const id = e.currentTarget.dataset.id;
-                if (!confirm('確定要刪除此使用者與其相關紀錄？此操作無法還原。')) return;
-                try {
-                    const r = await fetch(`/api/users/${id}`, { method: 'DELETE' });
-                    const j = await r.json();
-                    if (!j.success) throw new Error(j.message || '刪除失敗');
-                    alert('刪除成功');
-                    fetchAndDisplayUsers();
-                } catch (err) {
-                    alert('刪除失敗: ' + err.message);
+                const expanded = e.currentTarget.getAttribute('aria-expanded') === 'true';
+                // close any floating menus
+                document.querySelectorAll('.floating-user-action-menu').forEach(m => { m.remove(); });
+                document.querySelectorAll('.user-action-toggle').forEach(t => { if (t !== e.currentTarget) t.setAttribute('aria-expanded', 'false'); });
+
+                if (expanded) {
+                    e.currentTarget.setAttribute('aria-expanded', 'false');
+                    return;
                 }
-            });
-        });
 
-        document.querySelectorAll('.btn-edit-user').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const id = e.currentTarget.dataset.id;
-                openEditUserDialog(id);
-            });
-        });
+                // create floating menu in body so it can overflow container
+                const rect = e.currentTarget.getBoundingClientRect();
+                const menu = document.createElement('div');
+                menu.className = 'floating-user-action-menu';
+                menu.style.position = 'fixed';
+                menu.style.left = (rect.right - 140) + 'px';
+                menu.style.top = (rect.bottom + 6) + 'px';
+                menu.style.background = '#000000ff';
+                menu.style.border = '1px solid #444';
+                menu.style.padding = '6px';
+                menu.style.zIndex = 99999;
+                menu.style.minWidth = '140px';
+                menu.innerHTML = `
+                    <button class="fmenu-edit" data-id="${id}" style="display:block; width:100%; text-align:left; margin-bottom:4px;">編輯</button>
+                    <button class="fmenu-reset" data-id="${id}" style="display:block; width:100%; text-align:left; margin-bottom:4px;">重設密碼</button>
+                    <button class="fmenu-manage" data-id="${id}" style="display:block; width:100%; text-align:left; margin-bottom:4px;">管理機台</button>
+                    <button class="fmenu-delete" data-id="${id}" style="display:block; width:100%; text-align:left; color:#fff; background:#b32;">刪除</button>
+                `;
+                document.body.appendChild(menu);
+                e.currentTarget.setAttribute('aria-expanded', 'true');
 
-        document.querySelectorAll('.btn-manage-stores').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const id = e.currentTarget.dataset.id;
-                    openManageStoresDialog(id);
+                // attach handlers for floating menu
+                menu.querySelector('.fmenu-edit').addEventListener('click', (ev) => { openEditUserDialog(id); menu.remove(); e.currentTarget.setAttribute('aria-expanded', 'false'); });
+                menu.querySelector('.fmenu-manage').addEventListener('click', (ev) => { openManageStoresDialog(id); menu.remove(); e.currentTarget.setAttribute('aria-expanded', 'false'); });
+                menu.querySelector('.fmenu-reset').addEventListener('click', async (ev) => {
+                    const np = prompt('輸入新密碼 (最少 8 個字元)，留空取消：');
+                    if (!np) return;
+                    if (np.length < 8) { alert('密碼長度至少 8 字元'); return; }
+                    try {
+                        const r = await fetch(`/api/users/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ password: np }) });
+                        const j = await r.json();
+                        if (!j.success) throw new Error(j.message || '重設失敗');
+                        alert('密碼已更新');
+                        fetchAndDisplayUsers();
+                    } catch (err) { alert('重設失敗: ' + err.message); }
+                    menu.remove(); e.currentTarget.setAttribute('aria-expanded', 'false');
                 });
-            });
+                menu.querySelector('.fmenu-delete').addEventListener('click', async (ev) => {
+                    if (!confirm('確定要刪除此使用者與其相關紀錄？此操作無法還原。')) return;
+                    try {
+                        const r = await fetch(`/api/users/${id}`, { method: 'DELETE' });
+                        const j = await r.json();
+                        if (!j.success) throw new Error(j.message || '刪除失敗');
+                        alert('刪除成功');
+                        fetchAndDisplayUsers();
+                    } catch (err) { alert('刪除失敗: ' + err.message); }
+                    menu.remove(); e.currentTarget.setAttribute('aria-expanded', 'false');
+                });
 
-        document.querySelectorAll('.btn-reset-password').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                const id = e.currentTarget.dataset.id;
-                const np = prompt('輸入新密碼 (最少 8 個字元)，留空取消：');
-                if (!np) return;
-                if (np.length < 8) { alert('密碼長度至少 8 字元'); return; }
-                try {
-                    const r = await fetch(`/api/users/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ password: np }) });
-                    const j = await r.json();
-                    if (!j.success) throw new Error(j.message || '重設失敗');
-                    alert('密碼已更新');
-                } catch (err) { alert('重設失敗: ' + err.message); }
+                // close floating menu when clicking elsewhere
+                const closeFn = (ev) => {
+                    if (ev.target.closest && ev.target.closest('.floating-user-action-menu')) return;
+                    if (ev.target.closest && ev.target.closest('.user-action-toggle')) return;
+                    menu.remove();
+                    e.currentTarget.setAttribute('aria-expanded', 'false');
+                    document.removeEventListener('click', closeFn);
+                };
+                setTimeout(() => document.addEventListener('click', closeFn), 0);
             });
         });
+
+        // menu action handlers
+        document.querySelectorAll('.menu-edit').forEach(btn => btn.addEventListener('click', (e) => { openEditUserDialog(e.currentTarget.dataset.id); }));
+        document.querySelectorAll('.menu-manage').forEach(btn => btn.addEventListener('click', (e) => { openManageStoresDialog(e.currentTarget.dataset.id); }));
+        document.querySelectorAll('.menu-reset').forEach(btn => btn.addEventListener('click', async (e) => {
+            const id = e.currentTarget.dataset.id;
+            const np = prompt('輸入新密碼 (最少 8 個字元)，留空取消：');
+            if (!np) return;
+            if (np.length < 8) { alert('密碼長度至少 8 字元'); return; }
+            try {
+                const r = await fetch(`/api/users/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ password: np }) });
+                const j = await r.json();
+                if (!j.success) throw new Error(j.message || '重設失敗');
+                alert('密碼已更新');
+                fetchAndDisplayUsers();
+            } catch (err) { alert('重設失敗: ' + err.message); }
+        }));
+        document.querySelectorAll('.menu-delete').forEach(btn => btn.addEventListener('click', async (e) => {
+            const id = e.currentTarget.dataset.id;
+            if (!confirm('確定要刪除此使用者與其相關紀錄？此操作無法還原。')) return;
+            try {
+                const r = await fetch(`/api/users/${id}`, { method: 'DELETE' });
+                const j = await r.json();
+                if (!j.success) throw new Error(j.message || '刪除失敗');
+                alert('刪除成功');
+                fetchAndDisplayUsers();
+            } catch (err) { alert('刪除失敗: ' + err.message); }
+        }));
+
+        // close menus when clicking elsewhere (add listener only once)
+        if (!_userActionMenuListenerAdded) {
+            _userActionMenuListenerAdded = true;
+            document.addEventListener('click', (ev) => {
+                if (!ev.target.closest || !!ev.target.closest('.user-action-menu') || !!ev.target.closest('.user-action-toggle')) return;
+                document.querySelectorAll('.user-action-menu').forEach(m => m.style.display = 'none');
+                document.querySelectorAll('.user-action-toggle').forEach(t => t.setAttribute('aria-expanded', 'false'));
+            });
+        }
     }
 
     // --- Edit / Manage stores dialogs (simple prompt-based for now) ---

@@ -128,13 +128,11 @@
             <div id="outputTable"></div>
             <div id="outputList" style="display: none;"></div>
             <!-- User management tab -->
-            <div id="userManagement" style="margin-top:20px; display:none;">
-                <h3>用戶管理</h3>
-                <div style="display:flex; gap:8px; margin-bottom:8px; align-items:center;">
-                    <button id="refreshUsersBtn" class="btn-info">重新整理用戶</button>
-                    <button id="showCreateUserPanelBtn" class="btn-primary">新增用戶</button>
+            <div id="userManagement" style="margin-top:20px; display:none; position:relative;">
+                <!-- h2 will display the active page title; per-user heading removed to avoid duplicate titles -->
+                <div id="usersListContainerWrapper" style="position:relative;">
+                    <div id="usersListContainer" style="max-height:400px; overflow:auto; border:1px solid #ddd; padding:8px; background:#111;"></div>
                 </div>
-                <div id="usersListContainer" style="max-height:400px; overflow:auto; border:1px solid #ddd; padding:8px; background:#111;"></div>
                 <div id="createUserPanel" style="display:none; margin-top:8px; padding:8px; border:1px solid #444; background:#111; color:#eee;">
                     <h4>新增用戶</h4>
                     <div style="display:flex; gap:8px; flex-wrap:wrap;">

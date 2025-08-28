@@ -116,7 +116,6 @@ h2 {
 .input-section, .output-section {
     background-color: var(--card-background);
     padding: 20px;
-    border-radius: var(--border-radius);
     border: 1px solid var(--border-color);
     overflow: auto;
 }
