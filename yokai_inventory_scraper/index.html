@@ -109,33 +109,7 @@
                 </div>
             </div>
         
-            <!-- Admin: User management (MVP) -->
-            <div class="admin-section" style="margin-top:20px; padding-top:10px; border-top:1px solid #eee;">
-                <h3>使用者管理（Admin）</h3>
-                <p>此處僅限管理員使用：建立帳號並指派機台給加盟主。</p>
-                <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-start;">
-                    <div style="flex:1; min-width:260px;">
-                        <label>帳號 (username)</label>
-                        <input type="text" id="newUserUsername" placeholder="username" style="width:100%" />
-                    </div>
-                    <div style="flex:1; min-width:260px;">
-                        <label>密碼 (password)</label>
-                        <input type="password" id="newUserPassword" placeholder="password" style="width:100%" />
-                    </div>
-                    <div style="flex:1; min-width:260px;">
-                        <label>顯示名稱 (display name)</label>
-                        <input type="text" id="newUserDisplayName" placeholder="顯示名稱" style="width:100%" />
-                    </div>
-                </div>
-                <div style="margin-top:8px;">
-                    <label>指派機台（從下拉選擇，多選請用 Ctrl / Cmd）</label>
-                    <select id="assignStoresSelect" multiple style="width:100%; min-height:120px;"></select>
-                </div>
-                <div style="margin-top:8px; display:flex; gap:8px;">
-                    <button id="createUserBtn" class="btn-primary">建立使用者</button>
-                    <span id="createUserStatus" style="line-height:32px;color:#666"></span>
-                </div>
-            </div>
+            <!-- 側邊舊有使用者管理已移除，改以右側用戶管理 (userManagement) 為主 -->
         </div>
         
         <div class="output-section">
@@ -163,15 +137,15 @@
                     <button id="showCreateUserPanelBtn" class="btn-primary">新增用戶</button>
                 </div>
                 <div id="usersListContainer" style="max-height:400px; overflow:auto; border:1px solid #ddd; padding:8px; background:#111;"></div>
-                <div id="createUserPanel" style="display:none; margin-top:8px; padding:8px; border:1px solid #444;">
+                <div id="createUserPanel" style="display:none; margin-top:8px; padding:8px; border:1px solid #444; background:#111; color:#eee;">
                     <h4>新增用戶</h4>
                     <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                        <input id="cu_username" placeholder="username" />
-                        <input id="cu_password" placeholder="password" type="password" />
-                        <input id="cu_displayName" placeholder="顯示名稱" />
-                        <input id="cu_email" placeholder="email" />
+                        <input id="cu_username" placeholder="username" style="background:#000; color:#fff; border:1px solid #333; padding:6px;" />
+                        <input id="cu_password" placeholder="password" type="password" style="background:#000; color:#fff; border:1px solid #333; padding:6px;" />
+                        <input id="cu_displayName" placeholder="顯示名稱" style="background:#000; color:#fff; border:1px solid #333; padding:6px;" />
+                        <input id="cu_email" placeholder="email" style="background:#000; color:#fff; border:1px solid #333; padding:6px;" />
                     </div>
-                    <div style="margin-top:8px;"><label>指派機台 (多選 Ctrl/Cmd)</label><select id="cu_assignStores" multiple style="width:100%; min-height:120px;"></select></div>
+                    <div style="margin-top:8px;"><label style="color:#ddd;">指派機台 (多選 Ctrl/Cmd)</label><select id="cu_assignStores" multiple style="width:100%; min-height:120px; background:#000; color:#fff; border:1px solid #333;"></select></div>
                     <div style="margin-top:8px;"><button id="cu_createBtn" class="btn-primary">建立</button> <button id="cu_cancelBtn" class="btn-clear">取消</button> <span id="cu_status" style="color:#ccc;"></span></div>
                 </div>
             </div>
@@ -214,13 +188,13 @@
     </div>
     
     <!-- 管理使用者可見機台的對話框 -->
-    <div id="manageStoresModal" class="modal">
+            <div id="manageStoresModal" class="modal">
         <div class="modal-content">
             <span class="close">&times;</span>
             <h2>管理使用者可見機台</h2>
             <p>請從下方選擇機台（可多選，按住 Ctrl / Cmd 進行多選）</p>
             <div class="form-group">
-                <select id="manageStoresSelect" multiple style="width:100%; min-height:200px;"></select>
+                <select id="manageStoresSelect" multiple style="width:100%; min-height:200px; background:#000; color:#fff; border:1px solid #333;"></select>
             </div>
             <div style="margin-top:8px; display:flex; gap:8px;">
                 <button id="manageStoresSaveBtn" class="btn-primary">儲存</button>
