@@ -579,12 +579,26 @@ document.addEventListener('DOMContentLoaded', function () {
             const div = document.createElement('div');
             div.style.borderBottom = '1px solid #333';
             div.style.padding = '8px';
+
+            // Prepare display values: remove '-provisional_sales' suffix from shown stores
+            const displayStores = (u.stores && Array.isArray(u.stores))
+                ? u.stores.map(s => String(s).replace(/-provisional_sales/g, '')).join(', ')
+                : '';
+
+            // Normalize low inventory threshold field from different possible DB keys
+            const lowThreshold = (u.low_inventory_threshold !== undefined && u.low_inventory_threshold !== null)
+                ? u.low_inventory_threshold
+                : (u.lowInventoryThreshold !== undefined && u.lowInventoryThreshold !== null)
+                    ? u.lowInventoryThreshold
+                    : '';
+
             div.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
                     <div style="flex:1">
                         <strong>${u.username}</strong> <span style="color:#999">(${u.display_name || ''})</span><br>
                         <small style="color:#777">id: ${u.id} • email: ${u.email || ''}</small><br>
-                        <small style="color:#999">Stores: ${u.stores ? u.stores.join(', ') : ''}</small>
+                        <small style="color:#999">Stores: ${displayStores}</small><br>
+                        <small style="color:#999">低庫存警戒值: ${lowThreshold !== '' ? lowThreshold : '未設定'}</small>
                     </div>
                     <div style="display:flex; gap:6px;">
                         <button class="btn-primary btn-edit-user" data-id="${u.id}">編輯</button>
