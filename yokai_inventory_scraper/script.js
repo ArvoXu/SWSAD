@@ -67,21 +67,28 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Handlers reusing existing upload functions
     setupDropzone(warehouseDropzone, warehouseFileInputEl, async (file) => {
-        // same logic as previous warehouse upload
-    const wf = document.getElementById('warehouseFileName'); if (wf) wf.textContent = file.name;
-    const statusEl = document.getElementById('warehouseUploadStatus'); if (statusEl) { statusEl.textContent = '正在上傳...'; statusEl.style.color = '#666'; }
+        const wf = document.getElementById('warehouseFileName'); if (wf) wf.textContent = file.name;
+        const statusEl = document.getElementById('warehouseUploadStatus'); if (statusEl) { try { statusEl.textContent = '正在上傳...'; statusEl.style.color = '#666'; } catch (e) {} }
         const fd = new FormData(); fd.append('file', file);
         try {
             const resp = await fetch('/upload-warehouse-file', { method: 'POST', body: fd });
-            const json = await resp.json();
-            if (resp.ok && json.success) {
-                if (statusEl) { statusEl.textContent = '上傳成功！'; statusEl.style.color = '#4CAF50'; }
-                await fetchAndDisplayData();
-            } else {
-                throw new Error(json.message || '上傳失敗');
+            // try to parse body safely
+            let json = null;
+            try { json = await resp.json(); } catch(e) { json = null; }
+            if (!resp.ok) {
+                const text = json && json.message ? json.message : `${resp.status} ${resp.statusText}`;
+                throw new Error(text || '上傳失敗');
+            }
+            if (json && json.success === false) throw new Error(json.message || '上傳失敗');
+            if (statusEl) { try { statusEl.textContent = '上傳成功！'; statusEl.style.color = '#4CAF50'; } catch(e) {} }
+            if (typeof fetchAndDisplayData === 'function') {
+                try { await fetchAndDisplayData(); } catch(e) { console.warn('fetchAndDisplayData failed:', e); }
             }
         } catch (err) {
-            statusEl.textContent = `上傳失敗: ${err.message}`; statusEl.style.color = '#f44336';
+            console.error('warehouse upload error', err);
+            if (statusEl) {
+                try { statusEl.textContent = `上傳失敗: ${err.message}`; statusEl.style.color = '#f44336'; } catch(e) {}
+            }
         }
     });
 
@@ -99,9 +106,22 @@ document.addEventListener('DOMContentLoaded', function () {
     finally { const upBtn2 = document.getElementById('uploadInventoryFileButton'); if (upBtn2) upBtn2.disabled = false; }
     });
 
-    setupDropzone(salesDropzone, salesFileInputEl, (file) => {
-        // reuse existing processSalesFile
-        processSalesFile(file);
+    // Sales upload handler with simple debounce to avoid duplicate uploads
+    let _salesUploadInProgress = false;
+    setupDropzone(salesDropzone, salesFileInputEl, async (file) => {
+        if (_salesUploadInProgress) {
+            console.log('sales upload already in progress, ignoring duplicate trigger');
+            return;
+        }
+        _salesUploadInProgress = true;
+        try {
+            await processSalesFile(file);
+        } catch (err) {
+            console.error('sales upload error', err);
+        } finally {
+            // small delay to avoid immediate retrigger if browser fires events twice
+            setTimeout(() => { _salesUploadInProgress = false; }, 500);
+        }
     });
 
     // --- Core Functions: Data Handling and Rendering ---
@@ -810,13 +830,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // --- Sales Import Logic ---
-    if (importSalesButton) {
-        importSalesButton.addEventListener('click', () => salesFileInput.click());
-    }
-
-    if (salesFileInput) {
-        salesFileInput.addEventListener('change', handleSalesFile);
-    }
+    // salesFileInput is handled via dropzone and has a single change listener
+    // salesFileInput is handled by setupDropzone which wires its change event.
 
     // --- 庫存文件上傳事件監聽器 ---
     if (uploadInventoryFileButton) {
@@ -828,11 +843,15 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function handleSalesFile(event) {
-        const file = event.target.files[0];
-        if (!file) return;
-        // 直接處理文件，不再需要月份選擇
-        processSalesFile(file);
+        // legacy handler left as noop to avoid duplicate processing.
+        // New single processing path is wired via setupDropzone and includes debounce.
+        const file = event && event.target && event.target.files ? event.target.files[0] : null;
+        if (file) {
+            // just clear the input to avoid accidental reuse
+            try { event.target.value = ''; } catch (e) {}
         }
+        return;
+    }
 
     monthDialogCloseButton.onclick = () => monthSelectionDialog.style.display = 'none';
     cancelMonthButton.onclick = () => monthSelectionDialog.style.display = 'none';

@@ -50,19 +50,22 @@
             
             <!-- 功能區塊：分為「手動觸發腳本」與「手動匯入文件」兩個簡約區塊 -->
             <style>
-                .feature-block { border: 1px solid #ddd; padding: 10px; margin-bottom: 12px; border-radius: 6px; }
+                .feature-block { border: 1px solid #ddd; padding: 10px; margin-bottom: 12px; border-radius: 0 !important; }
                 .feature-block h4 { margin: 0 0 8px 0; font-size: 14px; color: var(--text-secondary); }
                 .tile-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
-                .tile { background:#111; color:#fff; border:1px solid #333; display:flex; align-items:center; justify-content:center; flex-direction:column; cursor:pointer; border-radius:6px; aspect-ratio: 1 / 1; min-height:84px; }
+                .tile { background:#111; color:#fff; border:1px solid #333; display:flex; align-items:center; justify-content:center; flex-direction:column; cursor:pointer; border-radius:0 !important; aspect-ratio: 1 / 1; min-height:84px; box-sizing:border-box; padding:8px; }
                 .tile small { color:#ccc; font-size:12px; }
-                .tile.dragover { border-color: #4CAF50; box-shadow: 0 4px 12px rgba(76,175,80,0.12); }
+                .tile.dragover { border-color: #4CAF50; box-shadow: none; }
+                button.tile { appearance: none; -webkit-appearance: none; border-radius: 0 !important; padding: 0; margin: 0; }
+                /* force no rounded corners inside tiles */
+                .tile, .tile * { border-radius: 0 !important; }
             </style>
 
             <div class="feature-block" id="block-scripts">
                 <h4>手動觸發腳本</h4>
                 <div class="tile-grid">
-                    <button id="autoUpdateButton" class="tile" style="height:84px;">庫存<br><small>腳本</small></button>
-                    <button id="autoUpdateSalesButton" class="tile" style="height:84px;">銷售額<br><small>腳本</small></button>
+                    <button id="autoUpdateButton" class="tile">庫存<br><small>scraper.py</small></button>
+                    <button id="autoUpdateSalesButton" class="tile">銷售額<br><small>salesscraper.py</small></button>
                 </div>
             </div>
 
@@ -73,25 +76,25 @@
                     <div id="warehouseDropzone" class="tile" title="點擊或拖放倉庫檔案 (.xlsx/.xls)">
                         <input type="file" id="warehouseFile" accept=".xlsx,.xls" style="display:none">
                         <div>倉庫</div>
-                        <small>點擊或拖放上傳</small>
+                        <small id="warehouseFileName" style="display:block; color:#ccc; font-size:12px;">Remain Stock</small>
                     </div>
 
                     <!-- 庫存：上傳 JSON 庫存文件 -->
                     <div id="inventoryDropzone" class="tile" title="點擊或拖放庫存 JSON 檔案">
                         <input type="file" id="inventoryFileInput" accept=".json" style="display:none">
                         <div>庫存</div>
-                        <small>上傳 JSON 檔案</small>
+                        <small>JSON</small>
                     </div>
 
                     <!-- 銷售訂單：匯入 Excel 銷售檔案 -->
                     <div id="salesDropzone" class="tile" title="點擊或拖放銷售 Excel 檔案 (.xlsx/.xls)">
                         <input type="file" id="salesFileInput" accept=".xlsx, .xls" style="display:none">
                         <div>銷售訂單</div>
-                        <small>匯入銷售資料</small>
+                        <small>Device Sale Detail</small>
                     </div>
 
                     <!-- 留一格給後續功能，例如展示階段啟動 -->
-                    <button id="openChartWindowButton" class="tile">展示階段<br><small>打開展示畫面</small></button>
+                    <button id="openChartWindowButton" class="tile">展示階段<br><small>/presentation</small></button>
                 </div>
             </div>
 

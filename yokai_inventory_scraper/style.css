@@ -120,6 +120,9 @@ h2 {
     border: 1px solid var(--border-color);
     overflow: auto;
 }
+.input-section {
+    overflow: hidden;
+}
 
 textarea {
     width: 100%;
