@@ -770,6 +770,115 @@ def api_create_user():
         db.close()
 
 
+@app.route('/api/users', methods=['GET'])
+def api_list_users():
+    """Admin-only: return all users (id, username, email, displayName, stores, lowInventoryThreshold)."""
+    if not is_admin():
+        return jsonify({'success': False, 'message': '未授權'}), 403
+    db: Session = next(get_db())
+    try:
+        users = db.query(User).order_by(User.id).all()
+        return jsonify({'success': True, 'users': [u.to_dict() for u in users]})
+    except Exception as e:
+        logging.error(f"Error listing users: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/users/<int:user_id>', methods=['PUT'])
+def api_update_user(user_id):
+    """Admin-only: update a user's profile and assigned stores. JSON may include: displayName, email, lowInventoryThreshold, stores (array), password"""
+    if not is_admin():
+        return jsonify({'success': False, 'message': '未授權'}), 403
+    data = request.get_json() or {}
+    db: Session = next(get_db())
+    try:
+        user = db.query(User).filter(User.id == int(user_id)).first()
+        if not user:
+            return jsonify({'success': False, 'message': 'user not found'}), 404
+
+        # Update basic fields
+        if 'displayName' in data:
+            user.display_name = data.get('displayName') or ''
+        if 'email' in data:
+            user.email = data.get('email')
+        if 'lowInventoryThreshold' in data:
+            try:
+                user.low_inventory_threshold = int(data.get('lowInventoryThreshold') or 0)
+            except Exception:
+                pass
+        if 'password' in data and data.get('password'):
+            user.password_hash = generate_password_hash(data.get('password'))
+
+        # Update stores assignment if provided
+        if 'stores' in data:
+            requested = data.get('stores') or []
+            # Clear current assignments
+            user.stores = []
+            for sk in requested:
+                store = db.query(Store).filter(Store.store_key == sk).first()
+                if not store:
+                    store = db.query(Store).filter(Store.store_key.like(f"{sk}%")).first()
+                if not store:
+                    new_key = f"{sk}-provisional_sales"
+                    store = db.query(Store).filter(Store.store_key == new_key).first()
+                    if not store:
+                        store = Store(store_key=new_key)
+                        db.add(store)
+                        db.flush()
+                if store:
+                    user.stores.append(store)
+
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return jsonify({'success': True, 'user': user.to_dict()})
+    except Exception as e:
+        db.rollback()
+        logging.error(f"Error updating user {user_id}: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/users/<int:user_id>', methods=['DELETE'])
+def api_delete_user(user_id):
+    """Admin-only: delete a user and their related NotificationSent records and store associations."""
+    if not is_admin():
+        return jsonify({'success': False, 'message': '未授權'}), 403
+    db: Session = next(get_db())
+    try:
+        user = db.query(User).filter(User.id == int(user_id)).first()
+        if not user:
+            return jsonify({'success': False, 'message': 'user not found'}), 404
+
+        # Delete notifications
+        try:
+            db.query(NotificationSent).filter(NotificationSent.user_id == user.id).delete()
+        except Exception:
+            db.rollback()
+
+        # Clear associations (user_stores association table handled by relationship assignment)
+        try:
+            user.stores = []
+            db.add(user)
+            db.flush()
+        except Exception:
+            db.rollback()
+
+        # Delete user
+        db.delete(user)
+        db.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        db.rollback()
+        logging.error(f"Error deleting user {user_id}: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        db.close()
+
+
 @app.route('/api/user-login', methods=['POST'])
 def api_user_login():
     """User login for presentation page. JSON: {username, password} sets session['user_id'] on success."""

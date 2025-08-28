@@ -458,6 +458,270 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // load stores for admin assign on start
     loadStoresForAssign();
+    // load stores into create-user panel as well
+    async function loadStoresForCreatePanel() {
+        const sel = document.getElementById('cu_assignStores');
+        if (!sel) return;
+        try {
+            const res = await fetch('/api/stores-list');
+            const data = await res.json();
+            if (!data.success) return;
+            sel.innerHTML = '';
+            data.stores.forEach(sk => {
+                const opt = document.createElement('option');
+                opt.value = sk;
+                opt.textContent = sk;
+                sel.appendChild(opt);
+            });
+        } catch (err) {
+            console.error('載入 stores (create panel) 失敗', err);
+        }
+    }
+    loadStoresForCreatePanel();
+
+    // --- User management UI Handlers ---
+    const userManagementDiv = document.getElementById('userManagement');
+    const usersListContainer = document.getElementById('usersListContainer');
+    const refreshUsersBtn = document.getElementById('refreshUsersBtn');
+    const showCreateUserPanelBtn = document.getElementById('showCreateUserPanelBtn');
+    const createUserPanel = document.getElementById('createUserPanel');
+    const cu_createBtn = document.getElementById('cu_createBtn');
+    const cu_cancelBtn = document.getElementById('cu_cancelBtn');
+
+    // Add a simple toggle button to show user management in the UI
+    const userMgmtToggleBtn = document.createElement('button');
+    userMgmtToggleBtn.textContent = '用戶管理';
+    userMgmtToggleBtn.className = 'btn-info';
+    userMgmtToggleBtn.style.marginLeft = '8px';
+    const rightControls = document.querySelector('.right-side-controls');
+    if (rightControls) rightControls.appendChild(userMgmtToggleBtn);
+
+    userMgmtToggleBtn.addEventListener('click', () => {
+        const outputSection = document.querySelector('.output-section');
+        const outputTable = document.getElementById('outputTable');
+        const outputList = document.getElementById('outputList');
+        // toggle: when showing user management, hide the standard output table/list
+        if (userManagementDiv.style.display === 'none' || !userManagementDiv.style.display) {
+            // hide existing views
+            if (outputTable) outputTable.style.display = 'none';
+            if (outputList) outputList.style.display = 'none';
+            userManagementDiv.style.display = 'block';
+            fetchAndDisplayUsers();
+        } else {
+            userManagementDiv.style.display = 'none';
+            // restore previous view
+            if (outputTable) outputTable.style.display = currentView === 'card' ? 'block' : 'none';
+            if (outputList) outputList.style.display = currentView === 'list' ? 'block' : 'none';
+        }
+    });
+
+    refreshUsersBtn && refreshUsersBtn.addEventListener('click', fetchAndDisplayUsers);
+    showCreateUserPanelBtn && showCreateUserPanelBtn.addEventListener('click', () => { createUserPanel.style.display = 'block'; });
+    cu_cancelBtn && cu_cancelBtn.addEventListener('click', () => { createUserPanel.style.display = 'none'; });
+
+    async function fetchAndDisplayUsers() {
+        usersListContainer.innerHTML = '<p>載入中...</p>';
+        try {
+            const res = await fetch('/api/users');
+            const data = await res.json();
+            if (!data.success) throw new Error(data.message || '無法取得用戶');
+            renderUsersList(data.users || []);
+        } catch (err) {
+            usersListContainer.innerHTML = `<p style="color:var(--danger-color);">載入用戶失敗: ${err.message}</p>`;
+            console.error('fetch users error', err);
+        }
+    }
+
+    function renderUsersList(users) {
+        if (!users || users.length === 0) {
+            usersListContainer.innerHTML = '<p>尚無用戶</p>';
+            return;
+        }
+        usersListContainer.innerHTML = '';
+        users.forEach(u => {
+            const div = document.createElement('div');
+            div.style.borderBottom = '1px solid #333';
+            div.style.padding = '8px';
+            div.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                    <div style="flex:1">
+                        <strong>${u.username}</strong> <span style="color:#999">(${u.display_name || ''})</span><br>
+                        <small style="color:#777">id: ${u.id} • email: ${u.email || ''}</small><br>
+                        <small style="color:#999">Stores: ${u.stores ? u.stores.join(', ') : ''}</small>
+                    </div>
+                    <div style="display:flex; gap:6px;">
+                        <button class="btn-primary btn-edit-user" data-id="${u.id}">編輯</button>
+                        <button class="btn-clear btn-reset-password" data-id="${u.id}">重設密碼</button>
+                        <button class="btn-info btn-manage-stores" data-id="${u.id}">管理機台</button>
+                        <button class="btn-danger btn-delete-user" data-id="${u.id}">刪除</button>
+                    </div>
+                </div>
+            `;
+            usersListContainer.appendChild(div);
+        });
+
+        // attach handlers
+        document.querySelectorAll('.btn-delete-user').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const id = e.currentTarget.dataset.id;
+                if (!confirm('確定要刪除此使用者與其相關紀錄？此操作無法還原。')) return;
+                try {
+                    const r = await fetch(`/api/users/${id}`, { method: 'DELETE' });
+                    const j = await r.json();
+                    if (!j.success) throw new Error(j.message || '刪除失敗');
+                    alert('刪除成功');
+                    fetchAndDisplayUsers();
+                } catch (err) {
+                    alert('刪除失敗: ' + err.message);
+                }
+            });
+        });
+
+        document.querySelectorAll('.btn-edit-user').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = e.currentTarget.dataset.id;
+                openEditUserDialog(id);
+            });
+        });
+
+        document.querySelectorAll('.btn-manage-stores').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = e.currentTarget.dataset.id;
+                    openManageStoresDialog(id);
+                });
+            });
+
+        document.querySelectorAll('.btn-reset-password').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const id = e.currentTarget.dataset.id;
+                const np = prompt('輸入新密碼 (最少 8 個字元)，留空取消：');
+                if (!np) return;
+                if (np.length < 8) { alert('密碼長度至少 8 字元'); return; }
+                try {
+                    const r = await fetch(`/api/users/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ password: np }) });
+                    const j = await r.json();
+                    if (!j.success) throw new Error(j.message || '重設失敗');
+                    alert('密碼已更新');
+                } catch (err) { alert('重設失敗: ' + err.message); }
+            });
+        });
+    }
+
+    // --- Edit / Manage stores dialogs (simple prompt-based for now) ---
+    async function openEditUserDialog(userId) {
+        try {
+            const res = await fetch('/api/users');
+            const data = await res.json();
+            if (!data.success) throw new Error(data.message || '無法取得用戶資料');
+            const user = (data.users || []).find(u => String(u.id) === String(userId));
+            if (!user) throw new Error('找不到用戶');
+
+            const newDisplay = prompt('顯示名稱', user.display_name || user.displayName || '');
+            if (newDisplay === null) return;
+            const newEmail = prompt('Email', user.email || '');
+            if (newEmail === null) return;
+            const newThreshold = prompt('低庫存警戒值 (空白代表 0)', user.low_inventory_threshold || user.lowInventoryThreshold || '');
+            if (newThreshold === null) return;
+
+            const payload = { displayName: newDisplay, email: newEmail, lowInventoryThreshold: newThreshold === '' ? 0 : parseInt(newThreshold, 10) || 0 };
+            const r = await fetch(`/api/users/${userId}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+            const j = await r.json();
+            if (!j.success) throw new Error(j.message || '更新失敗');
+            alert('更新成功');
+            fetchAndDisplayUsers();
+        } catch (err) { alert('編輯失敗: ' + err.message); }
+    }
+
+    // Manage stores via modal multi-select
+    let manageStoresTargetUserId = null;
+    const manageStoresModal = document.getElementById('manageStoresModal');
+    const manageStoresSelect = document.getElementById('manageStoresSelect');
+    const manageStoresSaveBtn = document.getElementById('manageStoresSaveBtn');
+    const manageStoresCancelBtn = document.getElementById('manageStoresCancelBtn');
+    const manageStoresClose = manageStoresModal ? manageStoresModal.querySelector('.close') : null;
+
+    async function openManageStoresDialog(userId) {
+        manageStoresTargetUserId = userId;
+        try {
+            // load available stores
+            const res = await fetch('/api/stores-list');
+            const ds = await res.json();
+            if (!ds.success) throw new Error(ds.message || '無法取得機台清單');
+
+            // fetch user to get current assignments
+            const ru = await fetch('/api/users');
+            const udata = await ru.json();
+            if (!udata.success) throw new Error(udata.message || '無法取得用戶');
+            const user = (udata.users || []).find(u => String(u.id) === String(userId));
+            if (!user) throw new Error('找不到用戶');
+
+            // populate select
+            manageStoresSelect.innerHTML = '';
+            ds.stores.forEach(sk => {
+                const opt = document.createElement('option');
+                opt.value = sk;
+                opt.textContent = sk;
+                // preselect if in user's stores
+                if (user.stores && user.stores.indexOf(sk) !== -1) opt.selected = true;
+                manageStoresSelect.appendChild(opt);
+            });
+
+            // show modal
+            manageStoresModal.style.display = 'block';
+        } catch (err) {
+            alert('取得機台清單或用戶資料失敗: ' + err.message);
+        }
+    }
+
+    // modal handlers
+    if (manageStoresClose) manageStoresClose.addEventListener('click', () => { manageStoresModal.style.display = 'none'; });
+    if (manageStoresCancelBtn) manageStoresCancelBtn.addEventListener('click', () => { manageStoresModal.style.display = 'none'; });
+    window.addEventListener('click', (e) => { if (e.target === manageStoresModal) manageStoresModal.style.display = 'none'; });
+
+    if (manageStoresSaveBtn) manageStoresSaveBtn.addEventListener('click', async () => {
+        if (!manageStoresTargetUserId) return;
+        const selected = Array.from(manageStoresSelect.selectedOptions).map(o => o.value);
+        try {
+            const r = await fetch(`/api/users/${manageStoresTargetUserId}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ stores: selected }) });
+            const j = await r.json();
+            if (!j.success) throw new Error(j.message || '更新失敗');
+            alert('用戶機台已更新');
+            manageStoresModal.style.display = 'none';
+            fetchAndDisplayUsers();
+        } catch (err) {
+            alert('更新失敗: ' + err.message);
+        }
+    });
+
+    // Create user panel handler (admin-only)
+    cu_createBtn && cu_createBtn.addEventListener('click', async () => {
+        const username = document.getElementById('cu_username').value.trim();
+        const password = document.getElementById('cu_password').value.trim();
+        const displayName = document.getElementById('cu_displayName').value.trim();
+        const email = document.getElementById('cu_email').value.trim();
+        const sel = document.getElementById('cu_assignStores');
+        const selected = sel ? Array.from(sel.selectedOptions).map(o => o.value) : [];
+        const statusSpan = document.getElementById('cu_status');
+        if (!username || !password) { statusSpan.textContent = 'username & password 為必填'; return; }
+        statusSpan.textContent = '建立中...';
+        try {
+            const res = await fetch('/api/users', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ username, password, displayName, stores: selected, email }) });
+            const j = await res.json();
+            if (!j.success) throw new Error(j.message || '建立失敗');
+            statusSpan.textContent = '建立成功';
+            document.getElementById('cu_username').value = '';
+            document.getElementById('cu_password').value = '';
+            document.getElementById('cu_displayName').value = '';
+            document.getElementById('cu_email').value = '';
+            sel.selectedIndex = -1;
+            createUserPanel.style.display = 'none';
+            fetchAndDisplayUsers();
+        } catch (err) {
+            statusSpan.textContent = '錯誤: ' + err.message;
+            console.error('create user error', err);
+        }
+        setTimeout(() => { statusSpan.textContent = ''; }, 4000);
+    });
     if(saveDataButton) saveDataButton.addEventListener('click', () => alert('此功能已過時。'));
     if(openChartWindowButton) {
         openChartWindowButton.addEventListener('click', () => {
