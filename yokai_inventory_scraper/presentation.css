@@ -267,7 +267,9 @@ button:active {
     border: 1.5px solid rgba(255, 255, 255, 0.25);
     backdrop-filter: blur(16px) saturate(160%);
     -webkit-backdrop-filter: blur(16px) saturate(160%);
-    overflow: hidden;
+     /* Allow tooltips and other floating elements to escape the card bounds
+         so they won't be clipped by the rounded card container. */
+     overflow: visible;
 }
 
 .chart-card:hover {
@@ -289,6 +291,8 @@ button:active {
     height: 200px;
     position: relative;
     margin: calc(var(--spacing-unit) * 2) 0;
+    /* Allow any HTML tooltip elements anchored to this area to overflow */
+    overflow: visible;
 }
 
 .chart-card-info {
@@ -417,7 +421,8 @@ button:active {
     border: 1.2px solid rgba(255, 255, 255, 0.16);
     backdrop-filter: blur(8px) saturate(120%);
     -webkit-backdrop-filter: blur(8px) saturate(120%);
-    overflow: hidden;
+    /* Allow tooltips to overflow so .detail-tooltip isn't clipped */
+    overflow: visible;
 }
 
 .chart-card.detail-view .detail-content {
@@ -839,7 +844,8 @@ footer {
     visibility: hidden;
     pointer-events: none;
     transition: opacity 0.1s ease, visibility 0.1s ease, transform 0.1s ease;
-    z-index: 10;
+    /* high z-index so it appears above cards and other UI chrome */
+    z-index: 1100;
 }
 
 .detail-tooltip::after {
