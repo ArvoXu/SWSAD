@@ -48,36 +48,53 @@
         <div class="input-section">
             <h2>輸入區域</h2>
             
-            <!-- 倉庫數據上傳區域 -->
-            <div class="upload-section">
-                <h3>倉庫庫存數據</h3>
-                <p>上傳倉庫庫存 Excel 文件：</p>
-                <p style="color: #f44336; font-size: 13px; margin-bottom: 10px;">
-                    <i class="fas fa-exclamation-circle"></i> 注意：新數據將完全替換現有倉庫數據。請確保 Excel 文件包含必要欄位：Warehouse name, Product name, Remain quantity。
-                </p>
-                <div class="file-upload">
-                    <input type="file" id="warehouseFile" accept=".xlsx,.xls" style="display: none;">
-                    <button id="warehouseUploadBtn" class="upload-button">
-                        <i class="fas fa-file-upload"></i> 選擇倉庫文件
-                    </button>
-                    <span id="warehouseFileName" class="file-name"></span>
+            <!-- 功能區塊：分為「手動觸發腳本」與「手動匯入文件」兩個簡約區塊 -->
+            <style>
+                .feature-block { border: 1px solid #ddd; padding: 10px; margin-bottom: 12px; border-radius: 6px; }
+                .feature-block h4 { margin: 0 0 8px 0; font-size: 14px; color: var(--text-secondary); }
+                .tile-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+                .tile { background:#111; color:#fff; border:1px solid #333; display:flex; align-items:center; justify-content:center; flex-direction:column; cursor:pointer; border-radius:6px; aspect-ratio: 1 / 1; min-height:84px; }
+                .tile small { color:#ccc; font-size:12px; }
+                .tile.dragover { border-color: #4CAF50; box-shadow: 0 4px 12px rgba(76,175,80,0.12); }
+            </style>
+
+            <div class="feature-block" id="block-scripts">
+                <h4>手動觸發腳本</h4>
+                <div class="tile-grid">
+                    <button id="autoUpdateButton" class="tile" style="height:84px;">庫存<br><small>腳本</small></button>
+                    <button id="autoUpdateSalesButton" class="tile" style="height:84px;">銷售額<br><small>腳本</small></button>
                 </div>
-                <div id="warehouseUploadStatus" class="upload-status"></div>
             </div>
 
-            <div class="divider"></div>
+            <div class="feature-block" id="block-imports">
+                <h4>手動匯入文件</h4>
+                <div class="tile-grid">
+                    <!-- 倉庫：點擊或拖放 Excel 檔案 -->
+                    <div id="warehouseDropzone" class="tile" title="點擊或拖放倉庫檔案 (.xlsx/.xls)">
+                        <input type="file" id="warehouseFile" accept=".xlsx,.xls" style="display:none">
+                        <div>倉庫</div>
+                        <small>點擊或拖放上傳</small>
+                    </div>
 
-            <!-- 已移除舊的機台貼上輸入與已棄用按鈕；保留上方倉庫上傳與其他必要操作 -->
-            <input type="file" id="salesFileInput" accept=".xlsx, .xls" style="display: none;">
-            <input type="file" id="inventoryFileInput" accept=".json" style="display: none;">
-            <div class="actions">
-                <button id="processButton">處理資料</button>
-                <button id="autoUpdateButton" class="btn-primary" style="grid-column: 1 / -1;">一鍵更新庫存</button>
-                <button id="autoUpdateSalesButton" class="btn-primary" style="grid-column: 1 / -1;">一鍵更新銷售額</button>
-                <button id="importSalesButton" class="btn-view">手動匯入銷售訂單</button>
-                <button id="uploadInventoryFileButton" class="btn-primary" style="grid-column: 1 / -1;">上傳庫存文件</button>
-                <button id="openChartWindowButton" class="btn-view">進入展示階段</button>
+                    <!-- 庫存：上傳 JSON 庫存文件 -->
+                    <div id="inventoryDropzone" class="tile" title="點擊或拖放庫存 JSON 檔案">
+                        <input type="file" id="inventoryFileInput" accept=".json" style="display:none">
+                        <div>庫存</div>
+                        <small>上傳 JSON 檔案</small>
+                    </div>
+
+                    <!-- 銷售訂單：匯入 Excel 銷售檔案 -->
+                    <div id="salesDropzone" class="tile" title="點擊或拖放銷售 Excel 檔案 (.xlsx/.xls)">
+                        <input type="file" id="salesFileInput" accept=".xlsx, .xls" style="display:none">
+                        <div>銷售訂單</div>
+                        <small>匯入銷售資料</small>
+                    </div>
+
+                    <!-- 留一格給後續功能，例如展示階段啟動 -->
+                    <button id="openChartWindowButton" class="tile">展示階段<br><small>打開展示畫面</small></button>
+                </div>
             </div>
+
             <div id="debugInfo" style="display:none; margin-top: 10px; padding: 10px; background-color: #f8f8f8; border: 1px solid #ddd; max-height: 200px; overflow: auto; font-family: monospace; font-size: 12px;"></div>
             
             <div class="update-log-container" style="margin-top: 20px;">

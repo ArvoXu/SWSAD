@@ -415,18 +415,6 @@ th {
 .store-container { break-inside: avoid; page-break-inside: avoid; }
 
 /* 按鈕樣式系統 */
-#processButton {
-    grid-column: 1 / -1;
-    background-color: var(--primary-color);
-    border-color: var(--primary-color);
-    padding: 12px 20px;
-    font-weight: bold;
-    font-size: 16px;
-    margin-bottom: 0;
-}
-#processButton:hover {
-    box-shadow: 0 0 12px rgba(13, 110, 253, 0.7);
-}
 
 .btn-view { border-color: var(--secondary-color); color: var(--secondary-color); }
 .btn-view:hover { background-color: var(--secondary-color); color: var(--text-primary); }

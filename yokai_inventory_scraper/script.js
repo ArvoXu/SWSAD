@@ -1,6 +1,5 @@
 document.addEventListener('DOMContentLoaded', function () {
     // --- Element Selections ---
-    const processButton = document.getElementById('processButton');
     // Note: legacy controls (clearButton, clearStorageButton, rawData textarea,
     // download/export buttons) have been removed from the DOM and their
     // handlers pruned from this script to avoid runtime errors.
@@ -23,7 +22,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const monthDialogCloseButton = monthSelectionDialog.querySelector('.close');
     const openChartWindowButton = document.getElementById('openChartWindowButton');
     const autoUpdateSalesButton = document.getElementById('autoUpdateSalesButton');
-    const uploadInventoryFileButton = document.getElementById('uploadInventoryFileButton');
+    // uploadInventoryFileButton removed from DOM; use inventoryFileInput element and dropzone instead
     const inventoryFileInput = document.getElementById('inventoryFileInput');
     const warehouseFileInput = document.getElementById('warehouseFile');
     const warehouseUploadBtn = document.getElementById('warehouseUploadBtn');
@@ -38,43 +37,71 @@ document.addEventListener('DOMContentLoaded', function () {
     let savedInventoryData = []; // Single source of truth for data from the server
 
     // --- Warehouse File Upload Handling ---
-    warehouseUploadBtn.addEventListener('click', () => {
-        warehouseFileInput.click();
-    });
+    // Wire up new dropzones and inputs
+    const warehouseDropzone = document.getElementById('warehouseDropzone');
+    const inventoryDropzone = document.getElementById('inventoryDropzone');
+    const salesDropzone = document.getElementById('salesDropzone');
+    const warehouseFileInputEl = document.getElementById('warehouseFile');
+    const inventoryFileInputEl = document.getElementById('inventoryFileInput');
+    const salesFileInputEl = document.getElementById('salesFileInput');
 
-    warehouseFileInput.addEventListener('change', async (event) => {
-        const file = event.target.files[0];
-        if (!file) return;
+    function preventDefault(e) { e.preventDefault(); e.stopPropagation(); }
 
-        // 更新檔案名稱顯示
-        warehouseFileName.textContent = file.name;
-        warehouseUploadStatus.textContent = '正在上傳...';
-        warehouseUploadStatus.style.color = '#666';
+    // Common drop handling helper
+    function setupDropzone(dropEl, inputEl, handler) {
+        if (!dropEl || !inputEl) return;
+        dropEl.addEventListener('click', () => inputEl.click());
+    ['dragenter','dragover'].forEach(evt => dropEl.addEventListener(evt, (ev)=>{ preventDefault(ev); dropEl.classList.add('dragover'); }));
+    ['dragleave','drop'].forEach(evt => dropEl.addEventListener(evt, (ev)=>{ preventDefault(ev); dropEl.classList.remove('dragover'); }));
+    dropEl.addEventListener('drop', (ev) => {
+            const dt = ev.dataTransfer;
+            if (dt && dt.files && dt.files.length > 0) {
+                handler(dt.files[0]);
+            }
+        });
+        inputEl.addEventListener('change', (ev) => {
+            const f = ev.target.files && ev.target.files[0];
+            if (f) handler(f);
+        });
+    }
 
-        // 創建 FormData 對象
-        const formData = new FormData();
-        formData.append('file', file);
-
+    // Handlers reusing existing upload functions
+    setupDropzone(warehouseDropzone, warehouseFileInputEl, async (file) => {
+        // same logic as previous warehouse upload
+    const wf = document.getElementById('warehouseFileName'); if (wf) wf.textContent = file.name;
+    const statusEl = document.getElementById('warehouseUploadStatus'); if (statusEl) { statusEl.textContent = '正在上傳...'; statusEl.style.color = '#666'; }
+        const fd = new FormData(); fd.append('file', file);
         try {
-            const response = await fetch('/upload-warehouse-file', {
-                method: 'POST',
-                body: formData
-            });
-
-            const result = await response.json();
-            
-            if (response.ok && result.success) {
-                warehouseUploadStatus.textContent = '上傳成功！';
-                warehouseUploadStatus.style.color = '#4CAF50';
-                // 重新載入數據以顯示更新
+            const resp = await fetch('/upload-warehouse-file', { method: 'POST', body: fd });
+            const json = await resp.json();
+            if (resp.ok && json.success) {
+                if (statusEl) { statusEl.textContent = '上傳成功！'; statusEl.style.color = '#4CAF50'; }
                 await fetchAndDisplayData();
             } else {
-                throw new Error(result.message || '上傳失敗');
+                throw new Error(json.message || '上傳失敗');
             }
-        } catch (error) {
-            warehouseUploadStatus.textContent = `上傳失敗: ${error.message}`;
-            warehouseUploadStatus.style.color = '#f44336';
+        } catch (err) {
+            statusEl.textContent = `上傳失敗: ${err.message}`; statusEl.style.color = '#f44336';
         }
+    });
+
+    setupDropzone(inventoryDropzone, inventoryFileInputEl, async (file) => {
+        // validate .json
+        if (!file.name.endsWith('.json')) { alert('請上傳 JSON 文件'); return; }
+        const fd = new FormData(); fd.append('file', file);
+        try {
+            const upBtn = document.getElementById('uploadInventoryFileButton'); if (upBtn) upBtn.disabled = true;
+            const resp = await fetch('/upload-inventory-file', { method: 'POST', body: fd });
+            const json = await resp.json();
+            if (json.success) { alert('庫存文件上傳成功'); await fetchAndDisplayData(); await loadUpdateLogs(); }
+            else throw new Error(json.message || '上傳失敗');
+    } catch (err) { alert('上傳失敗: ' + err.message); }
+    finally { const upBtn2 = document.getElementById('uploadInventoryFileButton'); if (upBtn2) upBtn2.disabled = false; }
+    });
+
+    setupDropzone(salesDropzone, salesFileInputEl, (file) => {
+        // reuse existing processSalesFile
+        processSalesFile(file);
     });
 
     // --- Core Functions: Data Handling and Rendering ---
