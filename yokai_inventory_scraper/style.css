@@ -8,11 +8,11 @@
     --info-color: #0dcaf0;
     
     --background-color: #1a1a1a;
-    --card-background: #242424;
+    --card-background: #000000;
     --border-color: #444;
     --header-background: #333;
     
-    --text-primary: #e9ecef;
+    --text-primary: #ffffff;
     --text-secondary: #adb5bd;
     
     --border-radius: 0; /* 全局無圓角 */
@@ -399,6 +399,40 @@ th {
     font-weight: bold;
 }
 
+/* --- Customizations for minimal black card UI --- */
+.store-title { color: var(--text-primary); font-weight: 600; }
+
+.store-container { background-color: var(--card-background); border-radius: 0; border: 1px solid rgba(255,255,255,0.03); }
+.info-box { background-color: #111; border-left: 2px solid rgba(255,255,255,0.03); border-radius: 0; }
+
+/* Three-dot action toggle for store cards */
+.store-action-toggle {
+    background: #000;
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.06);
+    padding: 6px 8px;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+}
+.store-action-toggle:hover { filter: brightness(110%); }
+
+/* Floating action menu (used by JS when clicking the three-dot) */
+.floating-store-action-menu {
+    position: fixed;
+    background: #000;
+    border: 1px solid rgba(255,255,255,0.06);
+    padding: 6px;
+    z-index: 99999;
+    min-width: 140px;
+}
+.floating-store-action-menu button { display:block; width:100%; text-align:left; margin-bottom:6px; background:transparent; color:#fff; border:none; padding:6px 8px; }
+.floating-store-action-menu button.delete { color:#fff; background:#b32; border:none; padding:6px 8px; }
+.floating-store-action-menu button.delete:hover { background:#c33; }
+
+/* enforce no rounded corners globally */
+* { border-radius: 0 !important; }
+
 /* 表格列寬控制 */
 .col-num { width: 40px; }
 .col-qty { width: 50px; text-align: center; }
@@ -580,8 +614,6 @@ th {
 }
 
 .view-icon-btn.active {
-    background-color: var(--primary-color);
-    border-color: var(--primary-color);
     color: #fff;
 }
 

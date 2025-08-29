@@ -230,11 +230,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 <div class="store-container compact-container ${isHidden ? 'is-hidden' : ''}">
                     <table class="compact-table">
                         <tr class="store-header">
-                            <td colspan="3">
-                                ${group.store} ${group.machineId}
-                                <button class="hide-button" onclick="toggleHideStore('${storeKey}')">${isHidden ? '取消隱藏' : '隱藏'}</button>
-                                <button class="edit-button" onclick="editStoreNotes('${storeKey}')">編輯</button>
-                                <button class="delete-button" onclick="deleteStoreData('${storeKey}')">刪除</button>
+                            <td colspan="3" style="position:relative;">
+                                <span class="store-title">${group.store} ${group.machineId}</span>
+                                <div style="position:absolute; right:6px; top:6px;">
+                                    <button class="store-action-toggle" data-store="${storeKey}" title="操作">⋯</button>
+                                </div>
                             </td>
                         </tr>
                         <tr><td colspan="3" class="compact-info">${replenishmentCleanInfo}${updateTimeHTML}</td></tr>
@@ -257,6 +257,37 @@ document.addEventListener('DOMContentLoaded', function () {
 
         outputTableDiv.innerHTML = cardHtml + '</div>';
         outputListDiv.innerHTML = listHtml + '</div>';
+
+        // attach handlers for store action toggles (three-dot)
+        setTimeout(() => {
+            document.querySelectorAll('.store-action-toggle').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    // remove existing floating menus
+                    document.querySelectorAll('.floating-store-action-menu').forEach(m => m.remove());
+                    const storeKey = btn.dataset.store;
+                    const rect = btn.getBoundingClientRect();
+                    const menu = document.createElement('div');
+                    menu.className = 'floating-store-action-menu';
+                    // position menu under the button
+                    menu.style.left = (rect.right - 140) + 'px';
+                    menu.style.top = (rect.bottom + 6) + 'px';
+                    menu.innerHTML = `
+                        <button class="f-edit">編輯</button>
+                        <button class="f-hide">${document.querySelector('[data-store="'+storeKey+'"]').closest('.store-container')?.classList.contains('is-hidden') ? '取消隱藏' : '隱藏'}</button>
+                        <button class="f-delete delete">刪除</button>
+                    `;
+                    document.body.appendChild(menu);
+
+                    menu.querySelector('.f-edit').addEventListener('click', () => { editStoreNotes(storeKey); menu.remove(); });
+                    menu.querySelector('.f-hide').addEventListener('click', () => { toggleHideStore(storeKey); menu.remove(); });
+                    menu.querySelector('.f-delete').addEventListener('click', async () => { if (confirm('確定要刪除此機台的資料？此操作無法還原。')) { await deleteStoreData(storeKey); menu.remove(); } });
+
+                    // close when clicking elsewhere
+                    const closeFn = (ev) => { if (ev.target.closest && ev.target.closest('.floating-store-action-menu')) return; if (ev.target === btn) return; menu.remove(); document.removeEventListener('click', closeFn); };
+                    setTimeout(() => document.addEventListener('click', closeFn), 0);
+                });
+            });
+        }, 0);
     }
 
     // --- User Interaction Handlers (API-driven) ---
