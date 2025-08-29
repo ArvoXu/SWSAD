@@ -30,13 +30,15 @@ document.addEventListener('DOMContentLoaded', function () {
     const warehouseUploadStatus = document.getElementById('warehouseUploadStatus');
     
     // --- Global State ---
-    let currentView = 'card';
+    let currentView = 'list';
     let storeGroupsArray = [];
     let currentSort = { key: 'store', order: 'asc' };
     let currentEditingStore = null;
     let savedInventoryData = []; // Single source of truth for data from the server
     // guard to ensure we only add one global click listener for action menus
     let _userActionMenuListenerAdded = false;
+    // guard to ensure expand/collapse delegation added only once
+    let _listRowDelegateAdded = false;
 
     // --- Warehouse File Upload Handling ---
     // Wire up new dropzones and inputs
@@ -212,32 +214,67 @@ document.addEventListener('DOMContentLoaded', function () {
 
         let maxProducts = Math.max(0, ...dataArray.map(g => g.products.length));
         let cardHtml = '<div class="multi-column-container">';
-        let listHtml = '<div class="list-view-container">';
-        
+        // build a proper list table with expandable rows
+        let listHtml = `<div class="list-view-container"><table class="list-table"><thead><tr>
+            <th>分店(機台)名稱</th>
+            <th>機台編號</th>
+            <th>更新狀態</th>
+            <th>庫存總量</th>
+            <th style="width:48px; text-align:center;">操作</th>
+        </tr></thead><tbody>`;
+
         dataArray.forEach(group => {
             const storeKey = getStoreKey(group);
             const isHidden = group.isHidden;
             const replenishmentCleanInfo = `補貨: ${group.lastUpdated ? group.lastUpdated.split(' ')[0] : 'N/A'} | 清潔: ${group.lastCleaned ? group.lastCleaned.split(' ')[0] : 'N/A'}`;
-            
-            let updateTimeHTML = '';
+
+            // determine status color based on processTime ageing (same logic as card view)
+            let statusClass = 'status-green';
+            let updateTimeText = '未更新';
             if (group.processTime) {
                 const diffDays = Math.ceil((new Date() - group.processTime) / (1000 * 60 * 60 * 24)) - 1;
-                const color = diffDays >= 2 ? 'var(--danger-color)' : (diffDays === 1 ? 'var(--warning-color)' : 'var(--success-color)');
-                updateTimeHTML = `<br><span style="color: ${color};">更新時間: ${group.processTime.toLocaleString('zh-TW')}</span>`;
+                if (diffDays >= 2) statusClass = 'status-red';
+                else if (diffDays === 1) statusClass = 'status-orange';
+                else statusClass = 'status-green';
+                updateTimeText = group.processTime.toLocaleString('zh-TW');
             }
 
+            listHtml += `
+                <tr class="list-row ${isHidden ? 'is-hidden' : ''}" data-storekey="${storeKey}" role="button" tabindex="0">
+                    <td class="col-store">${group.store}</td>
+                    <td class="col-machine">${group.machineId}</td>
+                    <td class="col-status"><span class="status-dot ${statusClass}" title="更新時間: ${updateTimeText}"></span></td>
+                    <td class="col-total">${group.totalQuantity}</td>
+                    <td class="col-action"><button class="store-action-toggle" data-store="${storeKey}" title="操作">⋯</button></td>
+                </tr>
+                <tr class="expand-row" data-parent="${storeKey}" style="display:none;">
+                    <td colspan="5" class="expand-content">
+                        <div class="expand-inner">
+                            <div class="replenish-clean">${replenishmentCleanInfo} <span class="update-time">${updateTimeText !== '未更新' ? ' • ' + updateTimeText : ''}</span></div>
+                            <table class="expand-products">
+                                <thead><tr><th>#</th><th>產品名稱</th><th>數量</th></tr></thead>
+                                <tbody>
+                                    ${group.products.map((p, i) => `<tr><td>${i+1}</td><td>${p.name}</td><td>${p.quantity}</td></tr>`).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </td>
+                </tr>
+            `;
+
+            // keep cardHtml unchanged for the card view
             cardHtml += `
                 <div class="store-container compact-container ${isHidden ? 'is-hidden' : ''}">
                     <table class="compact-table">
                         <tr class="store-header">
                             <td colspan="3" style="position:relative;">
                                 <span class="store-title">${group.store} ${group.machineId}</span>
-                                <div style="position:absolute; right:6px; top:6px;">
+                                <div class="card-action-wrap" style="position:absolute; right:6px; top:6px; display:flex; align-items:center; height:36px;">
                                     <button class="store-action-toggle" data-store="${storeKey}" title="操作">⋯</button>
                                 </div>
                             </td>
                         </tr>
-                        <tr><td colspan="3" class="compact-info">${replenishmentCleanInfo}${updateTimeHTML}</td></tr>
+                        <tr><td colspan="3" class="compact-info">${replenishmentCleanInfo}${group.processTime ? `<br><span style="color: ${((Math.ceil((new Date() - group.processTime)/(1000*60*60*24)) - 1) >= 2) ? 'var(--danger-color)' : (((Math.ceil((new Date() - group.processTime)/(1000*60*60*24)) - 1) === 1) ? 'var(--warning-color)' : 'var(--success-color)')}">更新時間: ${group.processTime.toLocaleString('zh-TW')}</span>` : ''}</td></tr>
                         <tr>
                             <td colspan="3"><div class="info-box">
                                 <div class="info-line">${group.address ? `地址: ${group.address}` : '&nbsp;'}</div>
@@ -250,30 +287,34 @@ document.addEventListener('DOMContentLoaded', function () {
                         <tr class="total-row"><td colspan="2">總計</td><td class="col-qty">${group.totalQuantity}</td></tr>
                     </table>
                 </div>`;
-            
-            // A simplified list view render
-            listHtml += `<div class="list-item ${isHidden ? 'is-hidden' : ''}">${group.store} - ${group.machineId}</div>`;
         });
 
-        outputTableDiv.innerHTML = cardHtml + '</div>';
-        outputListDiv.innerHTML = listHtml + '</div>';
+        listHtml += '</tbody></table></div>';
 
-        // attach handlers for store action toggles (three-dot)
+        outputTableDiv.innerHTML = cardHtml + '</div>';
+        outputListDiv.innerHTML = listHtml;
+
+        // attach handlers for three-dot action buttons (both list and card views)
         setTimeout(() => {
             document.querySelectorAll('.store-action-toggle').forEach(btn => {
+                // ensure we don't add duplicate listeners
+                if (btn._actionAttached) return; btn._actionAttached = true;
                 btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
                     // remove existing floating menus
                     document.querySelectorAll('.floating-store-action-menu').forEach(m => m.remove());
                     const storeKey = btn.dataset.store;
                     const rect = btn.getBoundingClientRect();
                     const menu = document.createElement('div');
                     menu.className = 'floating-store-action-menu';
-                    // position menu under the button
-                    menu.style.left = (rect.right - 140) + 'px';
-                    menu.style.top = (rect.bottom + 6) + 'px';
+                    // position menu under the button with some boundary checks
+                    const left = Math.max(8, rect.right - 160);
+                    const top = rect.bottom + 6;
+                    menu.style.left = left + 'px';
+                    menu.style.top = top + 'px';
                     menu.innerHTML = `
                         <button class="f-edit">編輯</button>
-                        <button class="f-hide">${document.querySelector('[data-store="'+storeKey+'"]').closest('.store-container')?.classList.contains('is-hidden') ? '取消隱藏' : '隱藏'}</button>
+                        <button class="f-hide">${document.querySelector('[data-store="'+storeKey+'"]')?.closest('.store-container')?.classList.contains('is-hidden') ? '取消隱藏' : '隱藏'}</button>
                         <button class="f-delete delete">刪除</button>
                     `;
                     document.body.appendChild(menu);
@@ -288,6 +329,47 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
             });
         }, 0);
+
+        // delegated expand/collapse handler on outputListDiv so it works after search/filtering
+        if (! _listRowDelegateAdded && outputListDiv) {
+            _listRowDelegateAdded = true;
+            outputListDiv.addEventListener('click', (ev) => {
+                const row = ev.target.closest && ev.target.closest('.list-row');
+                if (!row) return;
+                // ignore clicks on action button
+                if (ev.target.closest && ev.target.closest('.store-action-toggle')) return;
+                const sk = row.dataset.storekey;
+                const expand = outputListDiv.querySelector(`.expand-row[data-parent="${sk}"]`);
+                if (!expand) return;
+                // use a data attribute on the row to keep track of expanded state (more reliable than computed style across renders)
+                const expanded = row.getAttribute('data-expanded') === 'true';
+                if (expanded) {
+                    expand.style.display = 'none';
+                    row.setAttribute('data-expanded', 'false');
+                } else {
+                    expand.style.display = '';
+                    row.setAttribute('data-expanded', 'true');
+                }
+            });
+            // keyboard handling
+            outputListDiv.addEventListener('keydown', (ev) => {
+                if (ev.key !== 'Enter' && ev.key !== ' ') return;
+                const row = ev.target.closest && ev.target.closest('.list-row');
+                if (!row) return;
+                ev.preventDefault();
+                const sk = row.dataset.storekey;
+                const expand = outputListDiv.querySelector(`.expand-row[data-parent="${sk}"]`);
+                if (!expand) return;
+                const expanded = row.getAttribute('data-expanded') === 'true';
+                if (expanded) {
+                    expand.style.display = 'none';
+                    row.setAttribute('data-expanded', 'false');
+                } else {
+                    expand.style.display = '';
+                    row.setAttribute('data-expanded', 'true');
+                }
+            });
+        }
     }
 
     // --- User Interaction Handlers (API-driven) ---
