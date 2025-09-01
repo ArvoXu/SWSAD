@@ -1598,6 +1598,13 @@ def logout():
 
 
 # --- Static File Serving ---
+@app.route('/restockSOP')
+def serve_restock_sop():
+    """Serve the mobile-first interactive restock SOP UI."""
+    # Serve the index.html located in the restockSOP subfolder
+    restock_dir = os.path.join(script_dir, 'restockSOP')
+    return send_from_directory(restock_dir, 'index.html')
+
 @app.route('/')
 def serve_index():
     if not session.get('logged_in'):

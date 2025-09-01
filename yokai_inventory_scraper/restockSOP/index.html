@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+  <title>補貨 SOP — 準備開始補貨囉！</title>
+  <link rel="stylesheet" href="/restockSOP/restockSOP.css">
+</head>
+<body>
+  <div id="app" class="app">
+    <!-- Pages container -->
+    <div id="pages" class="pages">
+      <!-- Pages will be injected by JS -->
+    </div>
+
+    <!-- Bottom controls (persistent) -->
+    <div id="controls" class="controls">
+      <button id="backBtn" class="btn ghost">上一步</button>
+      <div id="progress" class="progress">0 / 0</div>
+      <button id="nextBtn" class="btn primary">開始</button>
+    </div>
+
+    <!-- Celebration overlay -->
+    <div id="celebration" class="celebration hidden">
+      <div class="badge">★</div>
+      <div class="celebration-text">做得好！</div>
+    </div>
+  </div>
+
+  <script src="/restockSOP/app.js"></script>
+</body>
+</html>
