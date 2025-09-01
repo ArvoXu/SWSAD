@@ -4,29 +4,34 @@
     {
       title: '1. 上架產品',
       lead: '確認標籤與 QR code方向、清潔掃描器',
-      items: ['標籤對齊', 'QR code 方向正確', '擦拭掃描器']
+      items: ['標籤對齊', 'QR code 方向正確', '擦拭掃描器'],
+      gif: 'https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExZjVvdmJtMG1xdjI1YXJrYmh4NW56am0wOWE0ZWl6bWJxbHRka3B3eiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/GDuvRO8tbqSlvfOE0D/giphy.gif' // 在此放置正方形 GIF 的網址，例如: 'https://.../step1.gif'
     },
     {
       title: '2. 掃描庫存',
       lead: '螢幕四個角的左上、右上、左下、右下分別對應1234',
-      items: ['清除 按4', '掃描上架 按1 2 3 2 1']
+      items: ['清除 按4', '掃描上架 按1 2 3 2 1'],
+      gif: 'https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExa2IwY25sb2JranRtM253OXhnNXp3N2Fqa2R6MTB1NTlkNDMzaGthNCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/MMFYLJ3uZuAy3RTjEG/giphy.gif' // 在此放置正方形 GIF 的網址
     },
     {
       title: '3. 關門',
       lead: '確認門已經關好，.dor 不再跳動',
-      items: ['門已關上']
+      items: ['門已關上'],
+      gif: 'https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExbWM2N25iYjZ6dm5tdjB4dW82aHA2ZDhqcDNkN2g0Mmp6azJ5NDVvbCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/VkQF1ufVgtwjaUyQIg/giphy.gif'
     },
     {
       title: '4. 清潔',
       lead: '清理面板、出水槽並收好管線',
-      items: ['面板與出水槽清理', '放好面板（不能有翹起）', '把連接廢水槽的兩個管子拉起來', '將廢水槽內水倒掉並清潔', '放回並確認管子有接好']
+      items: ['面板與出水槽清理', '放好面板（不能有翹起）', '把連接廢水槽的兩個管子拉起來', '將廢水槽內水倒掉並清潔', '放回並確認管子有接好', '清潔出餐口和餐具盒'],
+      gif: 'https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExeTlobWY3cmJ1dDZjZmpjMmFrZzJ1bWE0Ymllc3oxbTdiZW8wbGJvdyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/NSqJZxBhLsZf62CUXY/giphy.gif'
     },
     {
       title: '5. 查看掃描結果',
       lead: '確認補貨狀況與機台外觀，最後清潔。<br>⚪ = 有貨  🟠 = 空<br>螢幕四個角的左上、右上、左下、右下分別對應1, 2, 3, 4',
       items: ['螢幕顯示補貨結果與實際擺放結果一致', '清潔：左下(3) 點擊 4 次，右上(2) 點擊 2 次', '確認機台外觀，擦拭髒汙'],
       note: '教學影片',
-      video: 'https://youtu.be/oBLusJO8aOk'
+      video: 'https://youtu.be/oBLusJO8aOk',
+      gif: 'https://media3.giphy.com/media/v1.Y2lkPTc5MGI3NjExYTMycDkxeXlpajM1cG52NmszdDJiOGwzamQ4YmxpZWhqbTBjcGl5NSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/2xp9475W10Dlum5tc7/giphy.gif'
     }
   ];
 
@@ -64,6 +69,13 @@
     el.className = 'page hidden';
     el.dataset.index = idx;
 
+    // GIF area: show img if provided, otherwise show a small placeholder with instructions
+    const gifHtml = `
+      <div class="gif-frame">
+        ${step.gif ? `<img src="${step.gif}" alt="step gif"/>` : `<div class="gif-placeholder">將正方形 GIF 的網址填入 <code>restockSOP/app.js</code> 的 steps[${idx}].gif</div>`}
+      </div>
+    `;
+
     // render items without native checkbox inputs; we'll manage state via data attributes
     const itemsHtml = step.items.map((it, i)=>{
       return `<div class="check-item" data-idx="${i}" data-checked="false"><div class="label-content"><div class="item-title">${String.fromCharCode(97+i)}. ${it}</div></div></div>`;
@@ -75,6 +87,7 @@
         <div class="lead">${step.lead}</div>
       </div>
       <div class="card">
+        ${gifHtml}
   <div class="checklist">${itemsHtml}</div>
       </div>
     `;

@@ -77,3 +77,9 @@ body{
 .star-btn:active{transform:scale(0.98)}
 .card textarea{resize:vertical}
 .card .small{color:var(--muted)}
+
+/* framed square GIF */
+.gif-frame{width:100%;display:flex;justify-content:center;margin-bottom:10px}
+.gif-frame img{width:220px;height:220px;border-radius:10px;object-fit:cover;border:2px solid rgba(255,255,255,0.04);box-shadow:0 8px 20px rgba(2,6,23,0.6)}
+.gif-placeholder{width:220px;height:220px;border-radius:10px;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.02));display:flex;align-items:center;justify-content:center;text-align:center;padding:12px;color:var(--muted);border:2px dashed rgba(255,255,255,0.04)}
+.gif-placeholder code{background:transparent;color:var(--accent-2)}
