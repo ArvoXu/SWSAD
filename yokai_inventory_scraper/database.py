@@ -146,6 +146,23 @@ def init_db():
     except Exception as e:
         print(f"An error occurred during database initialization: {e}")
 
+
+class Feedback(Base):
+    """
+    Stores anonymous feedback from users of the restock SOP UI.
+    We keep a client-generated user_id so we can detect repeat submissions
+    without tying feedback to a known identity.
+    """
+    __tablename__ = 'feedback'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String, nullable=False, index=True)
+    rating = Column(Integer, nullable=False)  # 1..5
+    comment = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(pytz.utc))
+
+    def to_dict(self):
+        return {c.name: getattr(self, c.name) for c in self.__table__.columns}
+
 # --- Convenience function for getting a DB session ---
 def get_db():
     """

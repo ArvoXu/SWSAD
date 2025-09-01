@@ -100,6 +100,95 @@
     return el;
   }
 
+  // Append feedback UI to final page dynamically so it's part of the flow
+  function appendFeedbackUI(finalPage){
+    const fbCard = document.createElement('div');
+    fbCard.className = 'card';
+    fbCard.style.marginTop = '14px';
+    fbCard.innerHTML = `
+      <div style="font-weight:700;margin-bottom:8px">給我們一個評價（匿名）</div>
+      <div id="starRow" class="star-row" aria-label="評分">
+        <button data-star="1" class="star-btn">☆</button>
+        <button data-star="2" class="star-btn">☆</button>
+        <button data-star="3" class="star-btn">☆</button>
+        <button data-star="4" class="star-btn">☆</button>
+        <button data-star="5" class="star-btn">☆</button>
+      </div>
+      <div id="ratingText" class="small" style="margin-top:8px;color:var(--muted)">選擇星數來給予評分</div>
+      <textarea id="fbComment" placeholder="可選：寫下改進建議或鼓勵的話..." rows="3" style="width:100%;margin-top:8px;padding:10px;border-radius:8px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);color:inherit"></textarea>
+      <div style="display:flex;gap:8px;margin-top:10px;justify-content:center">
+        <button id="submitFb" class="btn primary">送出評價</button>
+        <button id="skipFb" class="btn ghost">略過</button>
+      </div>
+      <div id="fbResult" class="small" style="margin-top:8px;color:var(--muted)"></div>
+    `;
+    finalPage.querySelector('.card').after(fbCard);
+
+    // client-side helper: persistent anonymous id stored in localStorage
+    function getOrCreateUserId(){
+      try{
+        const key = 'restockSOP_userId_v1';
+        let id = localStorage.getItem(key);
+        if(!id){
+          id = 'u_' + Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4);
+          localStorage.setItem(key, id);
+        }
+        return id;
+      }catch(e){ return 'u_anonymous'; }
+    }
+
+    const starRow = fbCard.querySelector('#starRow');
+    const ratingText = fbCard.querySelector('#ratingText');
+    const commentEl = fbCard.querySelector('#fbComment');
+    const submitBtn = fbCard.querySelector('#submitFb');
+    const skipBtn = fbCard.querySelector('#skipFb');
+    const resultEl = fbCard.querySelector('#fbResult');
+
+    const ratingMap = {
+      1: '認真? 😞',
+      2: '不太喜歡 😕',
+      3: '普 🙂',
+      4: '滿意 😄',
+      5: '完美！🌟'
+    };
+
+    let currentRating = 0;
+    function renderStars(r){
+      currentRating = r;
+      Array.from(starRow.querySelectorAll('.star-btn')).forEach(btn=>{
+        const s = parseInt(btn.dataset.star,10);
+        btn.textContent = s <= r ? '★' : '☆';
+        btn.classList.toggle('active', s <= r);
+      });
+      ratingText.textContent = r ? `${r} 顆星 — ${ratingMap[r]}` : '選擇星數來給予評分';
+    }
+
+    starRow.addEventListener('click', (ev)=>{
+      const btn = ev.target.closest('.star-btn');
+      if(!btn) return;
+      const s = parseInt(btn.dataset.star,10);
+      renderStars(s);
+    });
+
+    submitBtn.addEventListener('click', async ()=>{
+      if(currentRating < 1){ resultEl.textContent = '請先選擇星數。'; return; }
+      submitBtn.disabled = true; resultEl.textContent = '送出中…';
+      const payload = { userId: getOrCreateUserId(), rating: currentRating, comment: commentEl.value.trim() };
+      try{
+        const res = await fetch('/api/feedback', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+        if(res.status === 201){ resultEl.textContent = '感謝你的回饋！'; submitBtn.textContent = '已送出'; }
+        else if(res.status === 409){ resultEl.textContent = '看起來你剛剛已經送過類似回饋了，感謝！'; }
+        else {
+          const json = await res.json().catch(()=>({}));
+          resultEl.textContent = json.error || '送出失敗，請稍後再試。';
+        }
+      }catch(e){ resultEl.textContent = '無法連線到伺服器'; }
+      finally{ submitBtn.disabled = false; }
+    });
+
+    skipBtn.addEventListener('click', ()=>{ resultEl.textContent = '已略過評價，謝謝你！'; });
+  }
+
   // Render all pages
   pages.appendChild(createWelcomePage());
   steps.forEach((s,i)=>pages.appendChild(createStepPage(s,i)));
@@ -382,4 +471,7 @@
 
   // Initialize
   showPage(-1);
+  // ensure feedback UI is appended to the final page after pages are created
+  const finalPage = pages.querySelector(`.page[data-index='${steps.length}']`);
+  if(finalPage) appendFeedbackUI(finalPage);
 })();

@@ -22,7 +22,7 @@ from datetime import datetime
 
 
 # --- Custom Imports ---
-from database import init_db, get_db, Inventory, Store, Transaction, UpdateLog, Warehouse
+from database import init_db, get_db, Inventory, Store, Transaction, UpdateLog, Warehouse, Feedback
 from scraper import run_scraper as run_inventory_scraper_function, parse_inventory_from_text, save_to_database, save_to_json
 from salesscraper import run_sales_scraper
 from warehousescraper import run_warehouse_scraper
@@ -625,6 +625,45 @@ def get_data():
         
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/feedback', methods=['POST'])
+def submit_feedback():
+    """
+    Accepts anonymous feedback from the restockSOP UI.
+    Expected JSON: { userId: string, rating: int(1-5), comment: string|null }
+    """
+    data = request.get_json() or {}
+    user_id = data.get('userId')
+    rating = data.get('rating')
+    comment = data.get('comment')
+
+    if not user_id or not isinstance(user_id, str):
+        return jsonify({'success': False, 'error': 'missing userId'}), 400
+    try:
+        rating = int(rating)
+    except Exception:
+        return jsonify({'success': False, 'error': 'invalid rating'}), 400
+    if rating < 1 or rating > 5:
+        return jsonify({'success': False, 'error': 'rating out of range'}), 400
+
+    db: Session = next(get_db())
+    try:
+        # prevent duplicate identical submissions within short timeframe (simple guard)
+        recent = db.query(Feedback).filter(Feedback.user_id == user_id).order_by(Feedback.created_at.desc()).first()
+        if recent and recent.rating == rating and (recent.comment or '') == (comment or ''):
+            return jsonify({'success': False, 'error': 'duplicate'}), 409
+
+        fb = Feedback(user_id=user_id, rating=rating, comment=comment, created_at=datetime.now(pytz.utc))
+        db.add(fb)
+        db.commit()
+        return jsonify({'success': True}), 201
+    except Exception as e:
+        db.rollback()
+        logging.error('Failed to save feedback: %s', e, exc_info=True)
+        return jsonify({'success': False, 'error': 'server error'}), 500
     finally:
         db.close()
 

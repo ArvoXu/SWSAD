@@ -69,3 +69,11 @@ body{
 .small-muted{font-size:12px;color:var(--muted)}
 .footer-note{font-size:12px;color:var(--muted);margin-top:14px;text-align:center}
 @media(min-width:480px){.app{margin-top:22px}}
+
+/* feedback UI */
+.star-row{display:flex;gap:6px;justify-content:center}
+.star-btn{background:transparent;border:0;font-size:22px;color:var(--muted);cursor:pointer;padding:6px;border-radius:8px}
+.star-btn.active{color:var(--accent-2);transform:scale(1.06)}
+.star-btn:active{transform:scale(0.98)}
+.card textarea{resize:vertical}
+.card .small{color:var(--muted)}
