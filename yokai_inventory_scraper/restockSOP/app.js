@@ -26,7 +26,7 @@
       lead: '確認補貨狀況與機台外觀，最後清潔。<br>⚪ = 有貨  🟠 = 空<br>螢幕四個角的左上、右上、左下、右下分別對應1, 2, 3, 4',
       items: ['螢幕顯示補貨結果與實際擺放結果一致', '清潔：左下(3) 點擊 4 次，右上(2) 點擊 2 次', '確認機台外觀，擦拭髒汙'],
       note: '教學影片',
-      video: 'https://www.youtube.com/watch?v=8VPnyp9VL70'
+      video: 'https://youtu.be/oBLusJO8aOk'
     }
   ];
 
@@ -50,7 +50,7 @@
       <div class="card" style="margin-top:28px;text-align:center">
         <div style="font-weight:700;font-size:18px">說明</div>
         <div class="small muted" style="margin-top:8px;color:var(--muted)">請按照順序逐步完成每個階段，點選項目來標示已完成。</div> 
-        <a class="video-link" href="https://www.youtube.com/watch?v=8VPnyp9VL70" target="_blank" style="margin-top:8px;display:inline-block">▶ 教學影片（開啟）</a>
+        <a class="video-link" href="https://youtu.be/oBLusJO8aOk" target="_blank" style="margin-top:8px;display:inline-block">▶ 教學影片（開啟）</a>
         <div style="margin-top:14px">
           <button id="startBtn" class="btn primary">開始補貨</button>
         </div>
@@ -115,10 +115,12 @@
         <button data-star="5" class="star-btn">☆</button>
       </div>
       <div id="ratingText" class="small" style="margin-top:8px;color:var(--muted)">選擇星數來給予評分</div>
-      <textarea id="fbComment" placeholder="可選：寫下改進建議或鼓勵的話..." rows="3" style="width:100%;margin-top:8px;padding:10px;border-radius:8px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);color:inherit"></textarea>
-      <div style="display:flex;gap:8px;margin-top:10px;justify-content:center">
-        <button id="submitFb" class="btn primary">送出評價</button>
-        <button id="skipFb" class="btn ghost">略過</button>
+      <textarea id="fbComment" maxlength="500" placeholder="可選：寫下改進建議或鼓勵的話，或是補貨遇到的困難... (最多500字)" rows="3" style="width:100%;margin-top:8px;padding:10px;border-radius:8px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);color:inherit"></textarea>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+        <div id="fbCounter" class="small" style="color:var(--muted)">0 / 500</div>
+        <div>
+          <button id="submitFb" class="btn primary">送出評價</button>
+        </div>
       </div>
       <div id="fbResult" class="small" style="margin-top:8px;color:var(--muted)"></div>
     `;
@@ -139,10 +141,10 @@
 
     const starRow = fbCard.querySelector('#starRow');
     const ratingText = fbCard.querySelector('#ratingText');
-    const commentEl = fbCard.querySelector('#fbComment');
-    const submitBtn = fbCard.querySelector('#submitFb');
-    const skipBtn = fbCard.querySelector('#skipFb');
-    const resultEl = fbCard.querySelector('#fbResult');
+  const commentEl = fbCard.querySelector('#fbComment');
+  const submitBtn = fbCard.querySelector('#submitFb');
+  const resultEl = fbCard.querySelector('#fbResult');
+  const counterEl = fbCard.querySelector('#fbCounter');
 
     const ratingMap = {
       1: '認真? 😞',
@@ -186,7 +188,12 @@
       finally{ submitBtn.disabled = false; }
     });
 
-    skipBtn.addEventListener('click', ()=>{ resultEl.textContent = '已略過評價，謝謝你！'; });
+    // live character counter for comment (maxlength enforced at 500)
+    commentEl.addEventListener('input', ()=>{
+      const len = commentEl.value.length;
+      counterEl.textContent = `${len} / 500`;
+      if(len > 500) counterEl.style.color = '#ff7b7b'; else counterEl.style.color = 'var(--muted)';
+    });
   }
 
   // Render all pages

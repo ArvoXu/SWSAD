@@ -651,8 +651,20 @@ def submit_feedback():
 
     db: Session = next(get_db())
     try:
-        # prevent duplicate identical submissions within short timeframe (simple guard)
+        # server-side protections
+        if comment and isinstance(comment, str) and len(comment) > 500:
+            return jsonify({'success': False, 'error': 'comment too long'}), 400
+
+        # simple anti-flood: require at least 30 seconds between submissions from same user
         recent = db.query(Feedback).filter(Feedback.user_id == user_id).order_by(Feedback.created_at.desc()).first()
+        if recent:
+            try:
+                delta = datetime.now(pytz.utc) - recent.created_at
+                if delta.total_seconds() < 30:
+                    return jsonify({'success': False, 'error': 'rate_limited'}), 429
+            except Exception:
+                pass
+        # prevent duplicate identical submissions within short timeframe (simple guard)
         if recent and recent.rating == rating and (recent.comment or '') == (comment or ''):
             return jsonify({'success': False, 'error': 'duplicate'}), 409
 
