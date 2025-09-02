@@ -26,7 +26,7 @@ from email.message import EmailMessage
 
 
 # --- Custom Imports ---
-from database import init_db, get_db, Inventory, Store, Transaction, UpdateLog, Warehouse, User, NotificationSent
+from database import init_db, get_db, Inventory, Store, Transaction, UpdateLog, Warehouse, User, NotificationSent, Feedback
 from scraper import run_scraper as run_inventory_scraper_function, parse_inventory_from_text, save_to_database, save_to_json
 from salesscraper import run_sales_scraper
 from warehousescraper import run_warehouse_scraper
@@ -1249,6 +1249,57 @@ def presentation_page():
 def presentation_short():
     return redirect('/presentation.html')
 
+
+@app.route('/api/feedback', methods=['POST'])
+def submit_feedback():
+    """
+    Accepts anonymous feedback from the restockSOP UI.
+    Expected JSON: { userId: string, rating: int(1-5), comment: string|null }
+    """
+    data = request.get_json() or {}
+    user_id = data.get('userId')
+    rating = data.get('rating')
+    comment = data.get('comment')
+
+    if not user_id or not isinstance(user_id, str):
+        return jsonify({'success': False, 'error': 'missing userId'}), 400
+    try:
+        rating = int(rating)
+    except Exception:
+        return jsonify({'success': False, 'error': 'invalid rating'}), 400
+    if rating < 1 or rating > 5:
+        return jsonify({'success': False, 'error': 'rating out of range'}), 400
+
+    db: Session = next(get_db())
+    try:
+        # server-side protections
+        if comment and isinstance(comment, str) and len(comment) > 500:
+            return jsonify({'success': False, 'error': 'comment too long'}), 400
+
+        # simple anti-flood: require at least 30 seconds between submissions from same user
+        recent = db.query(Feedback).filter(Feedback.user_id == user_id).order_by(Feedback.created_at.desc()).first()
+        if recent:
+            try:
+                delta = datetime.now(pytz.utc) - recent.created_at
+                if delta.total_seconds() < 30:
+                    return jsonify({'success': False, 'error': 'rate_limited'}), 429
+            except Exception:
+                pass
+        # prevent duplicate identical submissions within short timeframe (simple guard)
+        if recent and recent.rating == rating and (recent.comment or '') == (comment or ''):
+            return jsonify({'success': False, 'error': 'duplicate'}), 409
+
+        fb = Feedback(user_id=user_id, rating=rating, comment=comment, created_at=datetime.now(pytz.utc))
+        db.add(fb)
+        db.commit()
+        return jsonify({'success': True}), 201
+    except Exception as e:
+        db.rollback()
+        logging.error('Failed to save feedback: %s', e, exc_info=True)
+        return jsonify({'success': False, 'error': 'server error'}), 500
+    finally:
+        db.close()
+
 @app.route('/api/update-logs', methods=['GET'])
 def get_update_logs():
     """Returns the last 50 update log entries, newest first."""
@@ -2239,6 +2290,13 @@ def logout():
 
 
 # --- Static File Serving ---
+@app.route('/restockSOP')
+def serve_restock_sop():
+    """Serve the mobile-first interactive restock SOP UI."""
+    # Serve the index.html located in the restockSOP subfolder
+    restock_dir = os.path.join(script_dir, 'restockSOP')
+    return send_from_directory(restock_dir, 'index.html')
+
 @app.route('/')
 def serve_index():
     if not session.get('logged_in'):
