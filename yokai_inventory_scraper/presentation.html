@@ -269,50 +269,72 @@
                 </div>
             </div>
         </div>
-        <div class="sales-controls glass" id="salesControls">
-          <div class="compare-row" style="display:flex; flex-direction:column; gap:18px; align-items:stretch; max-width:700px; margin:0 auto;">
-            <div class="mainline-block glass-card">
-              <div class="block-title" id="mainLineTitle">
-                <span class="compare-line-name">主線設定</span>
-                <i class="fas fa-edit edit-title-btn" style="margin-left: 8px; cursor: pointer; font-size: 0.9em; color: #666;"></i>
-              </div>
-              <div class="block-fields param-row">
-                <div class="date-block">
-                  <i class="fas fa-calendar-alt"></i>
-                  <label>日期</label>
-                  <input id="mainDatePicker"/>
-                </div>
-                <div class="date-block">
-                  <i class="fas fa-store"></i>
-                  <label>分店</label>
-                  <div id="mainStoreSelect" class="multi-select-input" tabindex="0" style="cursor:pointer;" placeholder="請選擇分店">請選擇分店</div>
-                </div>
-                <div class="date-block">
-                  <i class="fas fa-cubes"></i>
-                  <label>產品</label>
-                  <div id="mainProductSelect" class="multi-select-input" tabindex="0" style="cursor:pointer;" placeholder="請選擇產品">請選擇產品</div>
-                </div>
-              </div>
-            </div>
-            <div class="add-compare-block">
-              <button id="addCompareButton" class="add-compare-btn">
-                <i class="fas fa-plus"></i>
-                <span>新增對比</span>
-              </button>
-            </div>
-            <div id="compareLineContainer">
-              <!-- 對比線區塊將由 JavaScript 動態生成 -->
-            </div>
-          </div>
-        </div>
-        <!-- 還原時間單位切換器 -->
-        <div id="timeUnitSwitcher" class="time-unit-switcher"></div>
+    <!-- sales controls and time switcher have been moved into a settings modal to keep KPI/chart compact -->
         <div class="chart-switcher">
             <button class="chart-switch-btn active" data-chart="daily"><i class="fas fa-chart-line"></i> <span>銷售趨勢</span></button>
             <button class="chart-switch-btn" data-chart="store"><i class="fas fa-store"></i> <span>各分店銷售額</span></button>
             <button class="chart-switch-btn" data-chart="product"><i class="fas fa-cubes"></i> <span>產品銷售佔比</span></button>
-            <button class="chart-switch-btn" data-chart="payment"><i class="fas fa-credit-card"></i> <span>支付方式佔比</span></button>
+                                    <button class="chart-switch-btn" data-chart="payment"><i class="fas fa-credit-card"></i> <span>支付方式佔比</span></button>
+                                    <!-- gear button to open settings modal (not a chart-switch button) -->
+                                    <button id="openSettingsBtn" class="settings-btn toolbar-button" title="設定" aria-label="設定">
+                                        <i class="fas fa-cog"></i>
+                                    </button>
         </div>
+        
+                <!-- Settings modal (contains sales controls and time unit switcher) -->
+                <div id="settingsModal" class="modal-overlay" style="display:none;">
+                    <div class="modal-content glass-card" style="max-width:900px; width:95%;">
+                        <div class="modal-header">
+                            <span>圖表設定</span>
+                            <button id="settingsModalClose" class="modal-close-btn" style="border:none; background:transparent; font-size:1.1em; cursor:pointer;"><i class="fas fa-times"></i></button>
+                        </div>
+                        <div class="modal-body" style="padding:12px; display:flex; gap:18px; flex-direction:column;">
+                            <!-- Controls copied from previous sales-controls area (lightweight container) -->
+                            <div id="controlsPanel">
+                                <div class="compare-row" style="display:flex; flex-direction:column; gap:18px; align-items:stretch; max-width:700px; margin:0 auto;">
+                                    <div class="mainline-block glass-card">
+                                        <div class="block-title" id="mainLineTitle">
+                                            <span class="compare-line-name">主線設定</span>
+                                            <i class="fas fa-edit edit-title-btn" style="margin-left: 8px; cursor: pointer; font-size: 0.9em; color: #666;"></i>
+                                        </div>
+                                        <div class="block-fields param-row">
+                                            <div class="date-block">
+                                                <i class="fas fa-calendar-alt"></i>
+                                                <label>日期</label>
+                                                <input id="mainDatePicker"/>
+                                            </div>
+                                            <div class="date-block">
+                                                <i class="fas fa-store"></i>
+                                                <label>分店</label>
+                                                <div id="mainStoreSelect" class="multi-select-input" tabindex="0" style="cursor:pointer;" placeholder="請選擇分店">請選擇分店</div>
+                                            </div>
+                                            <div class="date-block">
+                                                <i class="fas fa-cubes"></i>
+                                                <label>產品</label>
+                                                <div id="mainProductSelect" class="multi-select-input" tabindex="0" style="cursor:pointer;" placeholder="請選擇產品">請選擇產品</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="add-compare-block">
+                                        <button id="addCompareButton" class="add-compare-btn">
+                                            <i class="fas fa-plus"></i>
+                                        </button>
+                                    </div>
+                    <div id="compareLineContainer">
+                                        <!-- 對比線區塊將由 JavaScript 動態生成 -->
+                                    </div>
+                                </div>
+                </div>
+
+                                                        <!-- time unit switcher copied here with label -->
+                                                        <div style="display:flex; gap:12px; align-items:center; justify-content:center;">
+                                                            <div style="font-weight:500; color:var(--text-primary);">銷售趨勢x軸單位:</div>
+                                                            <div id="timeUnitSwitcher" class="time-unit-switcher" style="align-self:center;"></div>
+                                                        </div>
+                        </div>
+                        <!-- removed apply button: settings render immediately -->
+                    </div>
+                </div>
         <div class="main-chart-container">
             <canvas id="mainSalesChart"></canvas>
             <div id="lineLegend" class="line-legend"></div>
@@ -373,6 +395,36 @@
     })();
     </script>
     <script src="presentation.js"></script>
+        <script>
+        // Settings modal toggle: open/close and apply
+        (function(){
+            function qs(sel){return document.querySelector(sel);} 
+            document.addEventListener('click', function(e){
+                // open settings
+                if(e.target.closest && e.target.closest('#openSettingsBtn')){
+                    const modal = qs('#settingsModal');
+                    if(modal) modal.style.display = 'flex';
+                }
+                // close settings
+                if(e.target.closest && e.target.closest('#settingsModalClose')){
+                    const modal = qs('#settingsModal');
+                    if(modal) modal.style.display = 'none';
+                }
+            });
+
+            // No apply button: settings are applied in real-time. Modal only opens/closes.
+
+            // click outside modal content closes it
+            const settingsModal = document.getElementById('settingsModal');
+            if(settingsModal){
+                settingsModal.addEventListener('click', function(ev){
+                    if(ev.target === settingsModal){
+                        settingsModal.style.display = 'none';
+                    }
+                });
+            }
+        })();
+        </script>
     <script>
     // Auth UI: toggle login link / avatar based on session
     async function refreshAuthUI(){

@@ -2627,7 +2627,7 @@
             const day = String(today.getDate()).padStart(2, '0');
             const salesReportTitle = document.getElementById('salesReportTitle');
             if(salesReportTitle) {
-                salesReportTitle.textContent = `${year}-${month}-${day} 銷售總覽`;
+                salesReportTitle.textContent = `銷售總覽`;
             }
 
             try {
