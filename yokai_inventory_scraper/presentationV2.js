@@ -19,9 +19,7 @@
     }
   }
 
-    // Diagnostic: print runtime grid values so we can confirm what's being used
-    console.info('[presentationV2] runtime grid cols=', cols, 'rows=', rows);
-    console.info('[presentationV2] overlay cell count=', overlay.querySelectorAll('.cell').length);
+    // remove diagnostic logs for normal runtime
 
   function placeModule(el){
   // read and clamp values to grid bounds
@@ -45,6 +43,23 @@
 
   // init modules
   document.querySelectorAll('.module').forEach(m=>placeModule(m));
+
+  // Recalculate placement on window resize to keep modules aligned and responsive
+  let resizeTimer = null;
+  window.addEventListener('resize', ()=>{
+    if(resizeTimer) clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(()=>{
+      // re-read css vars
+      cols = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--grid-columns')) || cols;
+      rows = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--grid-rows')) || rows;
+      // rebuild overlay cells if necessary
+      if(overlay.children.length !== cols*rows){
+        overlay.innerHTML = '';
+        for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){ const d=document.createElement('div'); d.className='cell'; d.dataset.col=c; d.dataset.row=r; overlay.appendChild(d); }
+      }
+      document.querySelectorAll('.module').forEach(m=>placeModule(m));
+    }, 120);
+  });
 
   // dragging
   let dragState=null;

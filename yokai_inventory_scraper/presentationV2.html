@@ -23,14 +23,16 @@
 
     <main class="dashboard">
       <div class="dashboard-inner">
-        <header class="dashboard-header">
-          <h1>Presentation V2</h1>
-        </header>
+        <div class="main-content">
+          <header class="dashboard-header">
+            <h1>Presentation V2</h1>
+          </header>
 
-        <div id="gridArea" class="grid-area">
-          <div id="gridOverlay" class="grid-overlay" aria-hidden="true"></div>
+          <div id="gridArea" class="grid-area">
+            <div class="grid-area-inner">
+              <div id="gridOverlay" class="grid-overlay" aria-hidden="true"></div>
 
-          <!-- modules: use data attributes for grid placement (x,y,w,h) -->
+              <!-- modules: use data attributes for grid placement (x,y,w,h) -->
           <!-- KPI modules (draggable & resizable) -->
           <div class="module kpi-module" id="m-kpi-total-sales" data-x="0" data-y="0" data-w="3" data-h="1">
             <div class="module-header">總銷售額</div>
@@ -73,8 +75,9 @@
             <div class="resize-handle resize-se"></div>
 
           </div>
-
-        </div>
+            </div>
+          </div>
+      </div>
 
       </div>
 

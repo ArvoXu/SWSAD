@@ -33,18 +33,43 @@ body{font-family: 'Microsoft JhengHei',sans-serif; background:#eef6ff; margin:0;
 
 .dashboard{flex:1}
 .dashboard-inner{
-    background:rgba(255,255,255,0.95);
-    border-radius:16px;
-    padding:24px;
-    box-shadow:0 10px 40px rgba(20,40,80,0.06);
-    height:calc(100vh - 96px);
-    overflow:auto;
+  background:rgba(255,255,255,0.95);
+  border-radius:16px;
+  padding:24px;
+  box-shadow:0 10px 40px rgba(20,40,80,0.06);
+  display:flex;
+  flex-direction:column;
+  /* Use available viewport with symmetric vertical padding inside */
+  min-height: calc(60vh);
+  max-height: calc(100vh - 96px);
+  overflow:auto;
+}
+
+.main-content{
+  /* center header + grid vertically with symmetric top/bottom space */
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  justify-content:center;
+  padding-top:24px;
+  padding-bottom:24px;
 }
 
 .dashboard-header{display:flex; align-items:center; justify-content:space-between; margin-bottom:16px}
 .dashboard-header h1{font-size:20px}
 
-.grid-area{position:relative; width:100%; aspect-ratio: 16/9; background:transparent}
+.grid-area{position:relative; width:100%; background:transparent}
+
+/* Keep a responsive max-height so grid doesn't push footer/header off-screen */
+.grid-area-inner{
+  width:100%;
+  height:0;
+  padding-bottom:56.25%; /* 16:9 fallback */
+  position:relative;
+}
+
+/* place overlay absolute inside grid-area */
+.grid-area > .grid-overlay{position:absolute; inset:0;}
 
 /* base grid for 9x5 */
 .grid-overlay{position:absolute; inset:0; display:grid; grid-template-columns: repeat(var(--grid-columns), 1fr); grid-template-rows: repeat(var(--grid-rows), 1fr); gap:var(--gutter); pointer-events:none;}
@@ -77,5 +102,17 @@ body{font-family: 'Microsoft JhengHei',sans-serif; background:#eef6ff; margin:0;
   .page-wrap{padding:18px}
   .sidebar{display:none}
   .dashboard-inner{padding:12px}
+  .main-content{padding-top:12px; padding-bottom:12px}
+  .module{padding:8px}
+  .kpi-value{font-size:18px}
+}
+
+@media(max-width:600px){
+  .content-wrapper{flex-direction:column}
+  .sidebar{display:none}
+  .page-wrap{padding:12px}
+  .dashboard-inner{padding:10px}
+  .dashboard-header h1{font-size:16px}
+  .module-header{font-size:13px}
 }
 
