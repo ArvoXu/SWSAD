@@ -1,24 +1,40 @@
 // Minimal grid snapping, drag and resize logic + sample charts
 (function(){
-  const cols = 9, rows = 5;
+  // Read grid dimensions from CSS variables so CSS and JS stay in sync
   const grid = document.getElementById('gridArea');
   const overlay = document.getElementById('gridOverlay');
+  const cssCols = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--grid-columns')) || 9;
+  const cssRows = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--grid-rows')) || 5;
+  let cols = cssCols, rows = cssRows;
 
-  // build overlay cells
-  for(let r=0;r<rows;r++){
-    for(let c=0;c<cols;c++){
+  // build overlay cells (clear first)
+  overlay.innerHTML = '';
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
       const div = document.createElement('div');
-      div.className='cell';
-      div.dataset.col=c; div.dataset.row=r;
+      div.className = 'cell';
+      div.dataset.col = c;
+      div.dataset.row = r;
       overlay.appendChild(div);
     }
   }
 
+    // Diagnostic: print runtime grid values so we can confirm what's being used
+    console.info('[presentationV2] runtime grid cols=', cols, 'rows=', rows);
+    console.info('[presentationV2] overlay cell count=', overlay.querySelectorAll('.cell').length);
+
   function placeModule(el){
-    const x = parseInt(el.dataset.x,10)||0;
-    const y = parseInt(el.dataset.y,10)||0;
-    const w = parseInt(el.dataset.w,10)||1;
-    const h = parseInt(el.dataset.h,10)||1;
+  // read and clamp values to grid bounds
+  let x = parseInt(el.dataset.x,10) || 0;
+  let y = parseInt(el.dataset.y,10) || 0;
+  let w = parseInt(el.dataset.w,10) || 1;
+  let h = parseInt(el.dataset.h,10) || 1;
+  if (x < 0) x = 0; if (y < 0) y = 0;
+  if (w < 1) w = 1; if (h < 1) h = 1;
+  if (x + w > cols) w = Math.max(1, cols - x);
+  if (y + h > rows) h = Math.max(1, rows - y);
+  // write back clamped values
+  el.dataset.x = x; el.dataset.y = y; el.dataset.w = w; el.dataset.h = h;
     const area = overlay.getBoundingClientRect();
     const cellW = area.width/cols; const cellH = area.height/rows;
     el.style.left = `${x*cellW}px`;
@@ -47,21 +63,34 @@
   document.addEventListener('pointermove', e=>{
     if(!dragState) return;
     const el = dragState.el;
-    const rect = overlay.getBoundingClientRect();
-    const cellW = rect.width/cols; const cellH = rect.height/rows;
+  const rect = overlay.getBoundingClientRect();
+  // re-read CSS vars in case layout changed (responsive)
+  cols = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--grid-columns')) || cols;
+  rows = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--grid-rows')) || rows;
+  const cellW = rect.width / cols; const cellH = rect.height / rows;
     if(dragState.type==='move'){
       const dx = Math.round((e.clientX - dragState.startX)/cellW);
       const dy = Math.round((e.clientY - dragState.startY)/cellH);
-      let nx = Math.max(0, Math.min(cols-1, dragState.origX + dx));
-      let ny = Math.max(0, Math.min(rows-1, dragState.origY + dy));
-      el.dataset.x = nx; el.dataset.y = ny;
+  let nx = Math.max(0, Math.min(cols - 1, dragState.origX + dx));
+  let ny = Math.max(0, Math.min(rows - 1, dragState.origY + dy));
+  // ensure module stays within bounds considering its size
+  const curW = parseInt(el.dataset.w, 10) || 1;
+  const curH = parseInt(el.dataset.h, 10) || 1;
+  if (nx + curW > cols) nx = cols - curW;
+  if (ny + curH > rows) ny = rows - curH;
+  el.dataset.x = nx; el.dataset.y = ny;
       placeModule(el);
     } else if(dragState.type==='resize'){
       const dw = Math.round((e.clientX - dragState.startX)/(rect.width/cols));
       const dh = Math.round((e.clientY - dragState.startY)/(rect.height/rows));
-      let nw = Math.max(1, Math.min(cols, dragState.startW + dw));
-      let nh = Math.max(1, Math.min(rows, dragState.startH + dh));
-      el.dataset.w = nw; el.dataset.h = nh;
+  let nw = Math.max(1, Math.min(cols, dragState.startW + dw));
+  let nh = Math.max(1, Math.min(rows, dragState.startH + dh));
+  // ensure resize does not overflow grid
+  const curX = parseInt(el.dataset.x, 10) || 0;
+  const curY = parseInt(el.dataset.y, 10) || 0;
+  if (curX + nw > cols) nw = cols - curX;
+  if (curY + nh > rows) nh = rows - curY;
+  el.dataset.w = nw; el.dataset.h = nh;
       placeModule(el);
     }
     // highlight cells currently covered
@@ -104,6 +133,22 @@
       });
 
       const trendData = dates.map(d=>byDate[d]||0);
+
+      // --- KPI calculations for same date range ---
+      const totalSales = Object.values(byDate).reduce((s,v)=>s+v,0);
+      const transactionsCount = data.filter(t=>{
+        const dt = new Date(t.date);
+        return dt >= start && dt <= end && parseFloat(t.amount) > 0;
+      }).length;
+      const avgTicket = transactionsCount > 0 ? Math.round((totalSales / transactionsCount) * 100) / 100 : 0;
+
+      // render KPI values
+      const elTotal = document.getElementById('kpi-total-sales');
+      const elTrans = document.getElementById('kpi-transactions');
+      const elAvg = document.getElementById('kpi-avg-value');
+      if(elTotal) elTotal.textContent = totalSales.toLocaleString();
+      if(elTrans) elTrans.textContent = transactionsCount.toLocaleString();
+      if(elAvg) elAvg.textContent = avgTicket.toLocaleString();
 
       const chartOptions = {
         responsive: true,

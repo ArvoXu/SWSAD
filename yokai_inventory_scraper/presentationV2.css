@@ -1,6 +1,6 @@
 :root{
   --grid-columns: 9;
-  --grid-rows: 5;
+  --grid-rows: 5; /* ensure 9x5 */
   --gutter: 12px;
   --panel-padding: 16px;
   --card-radius: 12px;
@@ -55,6 +55,10 @@ body{font-family: 'Microsoft JhengHei',sans-serif; background:#eef6ff; margin:0;
 .module-header{font-weight:600; padding:6px 8px; height:32px}
 .module-body{flex:1; padding:8px; min-height:0; display:flex; align-items:center; justify-content:center}
 .module canvas{width:100% !important; height:100% !important; max-height:100%}
+
+/* KPI specific */
+.kpi-module { display:flex; flex-direction:column; justify-content:center; }
+.kpi-value { font-size:24px; font-weight:700; color:var(--primary-color, #2196F3) }
 
 .resize-handle{width:18px; height:18px; position:absolute; right:6px; bottom:6px; background:linear-gradient(135deg,#2196F3,#673AB7); border-radius:4px; cursor:se-resize; opacity:0.9}
 
