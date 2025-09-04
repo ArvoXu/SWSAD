@@ -105,13 +105,102 @@
 
       const trendData = dates.map(d=>byDate[d]||0);
 
-      new Chart(document.getElementById('chart-sales-trend'),{type:'line', data:{labels:dates, datasets:[{label:'銷售', data:trendData, borderColor:'#2196F3', backgroundColor:'rgba(33,150,243,0.08)'}]}, options:{responsive:true}});
+      const chartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: true,
+            position: 'bottom'
+          }
+        }
+      };
 
-      new Chart(document.getElementById('chart-store-sales'),{type:'bar', data:{labels:Object.keys(storeTotals), datasets:[{label:'店家', data:Object.values(storeTotals), backgroundColor:'#36A2EB'}]}, options:{responsive:true}});
+      // 銷售趨勢圖
+      new Chart(document.getElementById('chart-sales-trend'), {
+        type: 'line',
+        data: {
+          labels: dates,
+          datasets: [{
+            data: trendData,
+            borderColor: '#2196F3',
+            backgroundColor: 'rgba(33,150,243,0.08)',
+            tension: 0.4
+          }]
+        },
+        options: {
+          ...chartOptions,
+          plugins: {
+            ...chartOptions.plugins,
+            legend: { display: false }
+          },
+          scales: {
+            x: { display: false },
+            y: { display: false }
+          }
+        }
+      });
 
-      new Chart(document.getElementById('chart-product-share'),{type:'doughnut', data:{labels:Object.keys(productTotals), datasets:[{data:Object.values(productTotals), backgroundColor:['#FF6384','#36A2EB','#FFCE56','#4BC0C0']}]} , options:{responsive:true}});
+      // 分店銷售圖
+      new Chart(document.getElementById('chart-store-sales'), {
+        type: 'bar',
+        data: {
+          labels: Object.keys(storeTotals),
+          datasets: [{
+            data: Object.values(storeTotals),
+            backgroundColor: '#36A2EB'
+          }]
+        },
+        options: {
+          ...chartOptions,
+          plugins: {
+            ...chartOptions.plugins,
+            legend: { display: false }
+          },
+          scales: {
+            x: { display: false },
+            y: { display: false }
+          }
+        }
+      });
 
-      new Chart(document.getElementById('chart-pay-share'),{type:'pie', data:{labels:Object.keys(payTotals), datasets:[{data:Object.values(payTotals), backgroundColor:['#8AC926','#FF9F40','#9966FF']}]} , options:{responsive:true}});
+      // 產品佔比圖
+      new Chart(document.getElementById('chart-product-share'), {
+        type: 'doughnut',
+        data: {
+          labels: Object.keys(productTotals),
+          datasets: [{
+            data: Object.values(productTotals),
+            backgroundColor: ['#FF6384','#36A2EB','#FFCE56','#4BC0C0']
+          }]
+        },
+        options: {
+          ...chartOptions,
+          plugins: {
+            ...chartOptions.plugins,
+            legend: { display: false }
+          }
+        }
+      });
+
+      // 支付方式佔比圖
+      new Chart(document.getElementById('chart-pay-share'), {
+        type: 'pie',
+        data: {
+          labels: Object.keys(payTotals),
+          datasets: [{
+            data: Object.values(payTotals),
+            backgroundColor: ['#8AC926','#FF9F40','#9966FF']
+          }]
+        },
+        options: {
+          ...chartOptions,
+          plugins: {
+            ...chartOptions.plugins,
+            legend: { display: false }
+          }
+        }
+      });
 
     }catch(e){ console.error('failed to load transactions',e) }
   }
