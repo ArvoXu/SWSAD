@@ -1250,6 +1250,12 @@ def presentation_short():
     return redirect('/presentation.html')
 
 
+@app.route('/presentationV2', methods=['GET'])
+def presentation_v2():
+    """Serve the new Presentation V2 page. No auth for now (can be changed later)."""
+    return send_from_directory(script_dir, 'presentationV2.html')
+
+
 @app.route('/api/feedback', methods=['POST'])
 def submit_feedback():
     """

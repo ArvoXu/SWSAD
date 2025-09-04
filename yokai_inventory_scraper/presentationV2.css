@@ -1,0 +1,51 @@
+:root{
+  --grid-columns: 9;
+  --grid-rows: 5;
+  --gutter: 12px;
+  --panel-padding: 16px;
+  --card-radius: 12px;
+}
+*{box-sizing:border-box}
+body{font-family: 'Microsoft JhengHei',sans-serif; background:#eef6ff; margin:0;}
+.page-wrap{display:flex; min-height:100vh; align-items:center; justify-content:center; padding:30px}
+
+.sidebar{width:160px; background:rgba(255,255,255,0.9); border-radius:12px; padding:20px; box-shadow:0 6px 24px rgba(0,0,0,0.08); margin-right:24px;}
+.logo{font-weight:700; font-size:18px; margin-bottom:12px}
+
+.dashboard{flex:1; max-width:1200px}
+.dashboard-inner{background:rgba(255,255,255,0.95); border-radius:16px; padding:24px; box-shadow:0 10px 40px rgba(20,40,80,0.06)}
+
+.dashboard-header{display:flex; align-items:center; justify-content:space-between; margin-bottom:16px}
+.dashboard-header h1{font-size:20px}
+
+.grid-area{position:relative; width:100%; aspect-ratio: 16/9; background:transparent}
+
+/* base grid for 9x5 */
+.grid-overlay{position:absolute; inset:0; display:grid; grid-template-columns: repeat(var(--grid-columns), 1fr); grid-template-rows: repeat(var(--grid-rows), 1fr); gap:var(--gutter); pointer-events:none;}
+.grid-overlay::before{content:''; position:absolute; inset:0; border-radius:12px;}
+.grid-overlay .cell{border:1px dashed rgba(33,150,243,0.08);}
+
+.module{position:absolute; background:linear-gradient(180deg,#fff,#f7fbff); border-radius:var(--card-radius); box-shadow:0 6px 24px rgba(10,30,60,0.06); padding:8px; overflow:hidden; display:flex; flex-direction:column; gap:8px;}
+.module-header{font-weight:600; padding:6px 8px}
+.module-body{flex:1; padding:8px}
+.module canvas{width:100% !important; height:100% !important}
+
+.resize-handle{width:18px; height:18px; position:absolute; right:6px; bottom:6px; background:linear-gradient(135deg,#2196F3,#673AB7); border-radius:4px; cursor:se-resize; opacity:0.9}
+
+/* overlay visible while dragging/resizing */
+.grid-overlay.visible{background:rgba(0,0,0,0.00)}
+.grid-overlay .cell.visible{background:rgba(33,150,243,0.12); border-color:rgba(33,150,243,0.22)}
+
+/* spacing from page edges to create floating effect */
+.page-wrap{padding:48px}
+
+/* module gap enforcement via internal margin */
+.module{padding:12px}
+
+/* small screens */
+@media(max-width:900px){
+  .page-wrap{padding:18px}
+  .sidebar{display:none}
+  .dashboard-inner{padding:12px}
+}
++
