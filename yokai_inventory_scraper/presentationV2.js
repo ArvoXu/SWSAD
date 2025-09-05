@@ -101,6 +101,8 @@
   const chartRegistry = new Map();
   // cache of last loaded data from /api/transactions so newly spawned modules can render immediately
   let lastLoadData = null;
+  // simple logger helper
+  const log = (...args)=>{ try{ console.log('[presentationV2]', ...args); }catch(e){} };
   // toolbox & trash
   const toolboxButton = document.querySelector('.toolbox-button');
   const toolboxPanel = document.querySelector('.toolbox-panel');
@@ -117,10 +119,16 @@
   const domTemplate = document.getElementById(templateId);
   const blueprint = moduleTemplates.get(templateId);
   const templateNode = domTemplate || blueprint;
+  log('toolbox spawn request for', templateId, 'dom?', !!domTemplate, 'blueprint?', !!blueprint);
   if(!templateNode) return;
   const clone = templateNode.cloneNode(true);
       const uid = templateId + '-' + Math.random().toString(36).slice(2,8);
       clone.id = uid;
+  // record which template this clone was created from
+  clone.dataset.templateId = templateId;
+  // make any descendant ids unique to avoid collisions (canvases handled earlier but do for all)
+  const descIds = clone.querySelectorAll('[id]');
+  descIds.forEach(d=>{ d.id = d.id + '-' + uid; });
   clone.dataset.x = 0; clone.dataset.y = 0; clone.dataset.w = templateNode.dataset.w || 1; clone.dataset.h = templateNode.dataset.h || 1;
       // ensure any canvas inside clone gets a unique id
       const canvases = clone.querySelectorAll('canvas');
@@ -135,11 +143,16 @@
       clone.classList.add('dragging');
       document.body.appendChild(clone);
       // initialize placeholder charts and if we have recent data, render into them
-      initChartsForModule(clone);
+      try{ initChartsForModule(clone); }catch(e){ log('initChartsForModule error', e); }
       if(lastLoadData){
+        log('rendering cached data into clone', clone.id);
         // render each canvas according to module semantics
         const cList = clone.querySelectorAll('canvas');
-        cList.forEach(c => { try{ renderChartForModuleCanvas(c.id, clone.id, lastLoadData); }catch(e){} });
+        cList.forEach(c => { try{ renderChartForModuleCanvas(c.id, clone.id, lastLoadData); }catch(e){ log('renderChartForModuleCanvas error', e); } });
+        // populate KPI values for clones of KPI templates
+        try{ setKpiValuesForModule(clone, templateId, lastLoadData); }catch(e){ log('setKpiValuesForModule error', e); }
+      } else {
+        log('no cached data available when spawning clone', clone.id);
       }
       // create drag state so pointermove will control this clone
       dragState = {
@@ -389,6 +402,25 @@
     }catch(e){ console.error('renderChartForModuleCanvas error', e); }
   }
 
+  // helper: populate KPI values for a newly cloned KPI module using lastLoadData
+  function setKpiValuesForModule(moduleEl, templateId, data){
+    if(!data) return;
+    // mapping of template ids to KPI element ids inside the template (assumes original templates used these ids)
+    const map = {
+      'm-kpi-total-sales': 'kpi-total-sales',
+      'm-kpi-transactions': 'kpi-transactions',
+      'm-kpi-avg-value': 'kpi-avg-value'
+    };
+    const kpiKey = map[templateId];
+    if(!kpiKey) return;
+  // find the descendant element in the clone that contains the original KPI id (ids were uniquified)
+  const el = Array.from(moduleEl.querySelectorAll('[id]')).find(n=>n.id && n.id.includes(kpiKey));
+    if(!el) return;
+  if(kpiKey === 'kpi-total-sales') { el.textContent = (data.totalSales||0).toLocaleString(); log('set KPI total-sales on', moduleEl.id, el.id, data.totalSales); }
+  else if(kpiKey === 'kpi-transactions') { el.textContent = (data.transactionsCount||0).toLocaleString(); log('set KPI transactions on', moduleEl.id, el.id, data.transactionsCount); }
+  else if(kpiKey === 'kpi-avg-value') { el.textContent = (data.avgTicket||0).toLocaleString(); log('set KPI avg on', moduleEl.id, el.id, data.avgTicket); }
+  }
+
     // toolbox UI behavior: toggle panel and enable dragging from toolbox items
     if(toolboxButton && toolboxPanel){
       toolboxButton.addEventListener('click', ()=>{
@@ -415,8 +447,9 @@
   // charts + KPIs
   async function loadLast30(){
     try{
-      const res = await fetch('/api/transactions'); if(!res.ok) return;
-      const data = await res.json();
+  log('fetching /api/transactions');
+  const res = await fetch('/api/transactions'); if(!res.ok){ log('/api/transactions response not ok', res.status); return; }
+  const data = await res.json(); log('/api/transactions returned', Array.isArray(data)?data.length:'non-array');
       const today = new Date(Math.max(...data.map(d=>new Date(d.date))));
       const end = new Date(today); end.setHours(23,59,59,999);
       const start = new Date(end); start.setDate(end.getDate()-29); start.setHours(0,0,0,0);
@@ -437,6 +470,7 @@
       const avgTicket = transactionsCount>0 ? Math.round((totalSales/transactionsCount)*100)/100 : 0;
   // cache for later usage by spawned modules
   lastLoadData = { dates, trendData, storeTotals, productTotals, payTotals, totalSales, transactionsCount, avgTicket };
+  log('lastLoadData cached', { totalSales, transactionsCount, avgTicket, stores: Object.keys(storeTotals).length });
       const elTotal = document.getElementById('kpi-total-sales'); const elTrans = document.getElementById('kpi-transactions'); const elAvg = document.getElementById('kpi-avg-value');
       if(elTotal) elTotal.textContent = totalSales.toLocaleString(); if(elTrans) elTrans.textContent = transactionsCount.toLocaleString(); if(elAvg) elAvg.textContent = avgTicket.toLocaleString();
       const chartOptions = { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:true, position:'bottom' } } };
