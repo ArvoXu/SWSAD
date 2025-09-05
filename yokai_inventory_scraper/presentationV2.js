@@ -56,11 +56,30 @@
   // final placement done above
   }
 
-  // localStorage persistence (orientation-specific)
-  function _layoutKeyForOrientation(ori){ return 'presentationV2.layout.' + (ori || getOrientation()); }
+  // localStorage persistence (orientation-specific) - redesigned
+  const LAYOUT_VERSION = 1;
+  function _layoutKeyForOrientation(ori){ return `presentationV2.layout.v${LAYOUT_VERSION}.` + (ori || getOrientation()); }
+
+  // debounced save helper
+  let _saveTimer = null;
+  function scheduleSave(delay = 250){
+    if(_saveTimer) clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(()=>{ try{ saveLayout(); }catch(e){ console.warn('scheduled save failed', e); } finally{ _saveTimer = null; } }, delay);
+  }
+
+  // map of chart instances for cleanup/rebuild
+  const chartRegistry = new Map();
+  // cache of last loaded data from /api/transactions so newly spawned modules can render immediately
+  let lastLoadData = null;
+  // simple logger helper (available early so persistence functions can use it)
+  const log = (...args)=>{ try{ console.log('[presentationV2]', ...args); }catch(e){} };
+
   function saveLayout(){
     try{
-      const list = Array.from(document.querySelectorAll('.module')).map(m=>({
+  // if a debounced save is waiting, clear it because we're performing immediate save
+  if(_saveTimer){ clearTimeout(_saveTimer); _saveTimer = null; }
+
+  const list = Array.from(document.querySelectorAll('.module')).map(m=>({
         id: m.id,
         x: parseInt(m.dataset.x||0,10),
         y: parseInt(m.dataset.y||0,10),
@@ -68,18 +87,25 @@
         h: parseInt(m.dataset.h||1,10),
         templateId: m.dataset.templateId || null
       }));
-      const payload = { cols, rows, modules:list, ts: Date.now() };
-      localStorage.setItem(_layoutKeyForOrientation(), JSON.stringify(payload));
-      log('layout saved', _layoutKeyForOrientation(), payload.modules.length);
-    }catch(e){ console.warn('saveLayout failed', e); }
+      const payload = { v: LAYOUT_VERSION, cols, rows, modules:list, ts: Date.now() };
+      const key = _layoutKeyForOrientation();
+  localStorage.setItem(key, JSON.stringify(payload));
+  log('layout saved', key, payload.modules.length);
+  console.log('[presentationV2] layout saved ->', key, payload.modules.length, 'modules', list.map(x=>x.id));
+    }catch(e){ console.error('[presentationV2] saveLayout failed', e); }
   }
 
   function loadLayout(){
     try{
-      const raw = localStorage.getItem(_layoutKeyForOrientation());
-      if(!raw) return;
+      const key = _layoutKeyForOrientation();
+      const raw = localStorage.getItem(key);
+      if(!raw){ console.log('[presentationV2] no saved layout for', key); return; }
       const obj = JSON.parse(raw);
-      if(!obj || !Array.isArray(obj.modules)) return;
+      if(!obj || !Array.isArray(obj.modules)) { console.warn('[presentationV2] saved layout invalid format, ignoring', key); return; }
+      if(!obj.v || obj.v !== LAYOUT_VERSION){ console.log('[presentationV2] saved layout version mismatch or absent, ignoring saved layout', key, obj && obj.v); return; }
+
+      console.log('[presentationV2] loading layout from', key, 'modules:', obj.modules.length);
+
       // authoritative restore: remove any existing modules not present in saved list,
       // recreate missing ones, then set positions/sizes.
       const savedIds = new Set(obj.modules.map(m=>m && m.id).filter(Boolean));
@@ -90,7 +116,8 @@
             // destroy charts inside
             existing.querySelectorAll('canvas').forEach(c=>{ const inst = chartRegistry.get(c.id); if(inst && inst.destroy) try{ inst.destroy(); }catch(e){} chartRegistry.delete(c.id); });
             existing.remove();
-          }catch(e){ }
+            console.log('[presentationV2] removed module not in saved layout:', existing.id);
+          }catch(e){ console.warn('[presentationV2] error removing module', existing.id, e); }
         }
       });
 
@@ -119,12 +146,20 @@
               // append to grid area
               gridAreaInner.appendChild(clone);
               el = clone;
+              console.log('[presentationV2] recreated module from template:', m.id, 'templateId:', tplId);
               // initialize charts if we have data
-              try{ initChartsForModule(el); if(lastLoadData) { el.querySelectorAll('canvas').forEach(c=>{ try{ renderChartForModuleCanvas(c.id, el.id, lastLoadData); }catch(e){} }); } }catch(e){}
-            }catch(e){ console.warn('failed to recreate module', m.id, e); }
+              try{ initChartsForModule(el); if(lastLoadData) { el.querySelectorAll('canvas').forEach(c=>{ try{ renderChartForModuleCanvas(c.id, el.id, lastLoadData); }catch(e){} }); } }catch(e){ console.warn('[presentationV2] initChartsForModule error', e); }
+            }catch(e){ console.warn('[presentationV2] failed to recreate module', m.id, e); }
           } else {
-            // cannot restore this module; skip
-            return;
+            // cannot restore this module; create a lightweight placeholder so user can see missing module
+            try{
+              const ph = document.createElement('div'); ph.className = 'module placeholder'; ph.id = m.id; ph.dataset.templateId = m.templateId || '';
+              ph.textContent = 'Missing template: ' + (m.templateId || 'unknown');
+              ph.style.border = '1px dashed #f00'; ph.style.background = '#fff7f7'; ph.style.padding = '8px';
+              gridAreaInner.appendChild(ph);
+              el = ph;
+              console.warn('[presentationV2] missing template for saved module', m.id, m.templateId);
+            }catch(e){ console.warn('[presentationV2] cannot create placeholder for', m.id, e); }
           }
         }
         // clamp values to current grid
@@ -132,11 +167,27 @@
         const ny = Math.max(0, Math.min(rows - (m.h||1), parseInt(m.y||0,10)));
         const nw = Math.max(1, Math.min(cols, parseInt(m.w||1,10)));
         const nh = Math.max(1, Math.min(rows, parseInt(m.h||1,10)));
-        el.dataset.x = nx; el.dataset.y = ny; el.dataset.w = nw; el.dataset.h = nh;
+        if(el){ el.dataset.x = nx; el.dataset.y = ny; el.dataset.w = nw; el.dataset.h = nh; }
       });
-      log('layout loaded', _layoutKeyForOrientation());
-    }catch(e){ console.warn('loadLayout failed', e); }
+      console.log('[presentationV2] layout loaded', key);
+    }catch(e){ console.warn('[presentationV2] loadLayout failed', e); }
   }
+
+  // observe grid child changes (add/remove) to ensure saves catch additions/deletions
+  try{
+    const gridObserver = new MutationObserver((mutations)=>{
+      let changed = false;
+      for(const m of mutations){ if(m.type === 'childList' && (m.addedNodes.length || m.removedNodes.length)) { changed = true; break; } }
+      if(changed){ console.log('[presentationV2] grid DOM changed, scheduling save'); scheduleSave(); }
+    });
+    gridObserver.observe(gridAreaInner, { childList: true });
+  }catch(e){ console.warn('[presentationV2] mutation observer not available', e); }
+
+  // ensure we save on visibility change / unload to reduce lost edits
+  try{
+    document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'hidden'){ try{ saveLayout(); }catch(e){} } });
+    window.addEventListener('beforeunload', ()=>{ try{ saveLayout(); }catch(e){} });
+  }catch(e){ }
 
   function placeModule(el){
     let x = parseInt(el.dataset.x,10)||0; let y = parseInt(el.dataset.y,10)||0; let w = parseInt(el.dataset.w,10)||1; let h = parseInt(el.dataset.h,10)||1;
@@ -162,17 +213,33 @@
     try{ moduleTemplates.set(m.id, m.cloneNode(true)); }catch(e){}
   });
 
+  // helper: clear default modules (remove all current modules, clear templates and saved layouts)
+  function clearDefaultsAndSave(){
+    try{
+      console.log('[presentationV2] clearing all modules and templates...');
+      // destroy charts and remove DOM modules
+      document.querySelectorAll('.module').forEach(m=>{
+        try{ m.querySelectorAll('canvas').forEach(c=>{ const inst = chartRegistry.get(c.id); if(inst && inst.destroy) try{ inst.destroy(); }catch(e){} chartRegistry.delete(c.id); }); }catch(e){}
+        try{ m.remove(); }catch(e){}
+      });
+      // clear in-memory templates
+      moduleTemplates.clear();
+      // remove saved layout keys for both orientations
+      ['landscape','portrait'].forEach(o=>{ const k = _layoutKeyForOrientation(o); try{ localStorage.removeItem(k); console.log('[presentationV2] removed saved layout key', k); }catch(e){ console.warn('[presentationV2] removeItem failed', k, e); } });
+      // write an empty layout to persist "no modules"
+      try{ saveLayout(); }catch(e){ console.warn('[presentationV2] saveLayout failed after clear', e); }
+      console.log('[presentationV2] clearDefaultsAndSave finished');
+    }catch(e){ console.warn('[presentationV2] clearDefaultsAndSave error', e); }
+  }
+
+  // expose a small API for manual debugging from DevTools
+  try{ window.presentationV2 = window.presentationV2 || {}; window.presentationV2.clearDefaults = clearDefaultsAndSave; window.presentationV2.saveLayout = saveLayout; window.presentationV2.loadLayout = loadLayout; console.log('[presentationV2] API exposed: presentationV2.clearDefaults(), .saveLayout(), .loadLayout()'); }catch(e){}
+
   // try to load saved layout for current orientation (will recreate clones if needed)
   try{ loadLayout(); document.querySelectorAll('.module').forEach(m=>placeModule(m)); }catch(e){ }
 
   // dragging / resizing (smooth, page-wide pointer movement with snap-on-release)
   let dragState = null;
-  // map of chart instances for cleanup/rebuild
-  const chartRegistry = new Map();
-  // cache of last loaded data from /api/transactions so newly spawned modules can render immediately
-  let lastLoadData = null;
-  // simple logger helper (moved earlier so persistence functions can use it)
-  const log = (...args)=>{ try{ console.log('[presentationV2]', ...args); }catch(e){} };
   // toolbox & trash
   const toolboxButton = document.querySelector('.toolbox-button');
   const toolboxPanel = document.querySelector('.toolbox-panel');
@@ -399,10 +466,11 @@
     // destroy chart instances inside this module
     const canvases = el.querySelectorAll('canvas');
     canvases.forEach(c=>{ const inst = chartRegistry.get(c.id); if(inst && inst.destroy) try{ inst.destroy(); }catch(e){} chartRegistry.delete(c.id); });
-    el.remove();
-          trashBin.classList.remove('visible','drag-over');
-          // save layout after deletion
-          try{ saveLayout(); }catch(e){}
+  console.log('[presentationV2] deleting module via trash drop:', el.id);
+  el.remove();
+      trashBin.classList.remove('visible','drag-over');
+      // save layout after deletion
+      try{ saveLayout(); console.log('[presentationV2] saveLayout called after deletion'); }catch(e){ console.warn('[presentationV2] saveLayout error after deletion', e); }
           dragState = null; return;
         }
       try{ if(e.target.releasePointerCapture) e.target.releasePointerCapture(e.pointerId); }catch(e){}
