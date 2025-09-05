@@ -11,7 +11,6 @@
 
   let cols = 9, rows = 5;
   function getOrientation(){ return window.innerWidth >= window.innerHeight ? 'landscape' : 'portrait'; }
-  function storageKey(){ return 'presentationV2_layout_' + getOrientation(); }
 
   function applyGridForOrientation(){
     const ori = getOrientation();
@@ -57,18 +56,86 @@
   // final placement done above
   }
 
+  // localStorage persistence (orientation-specific)
+  function _layoutKeyForOrientation(ori){ return 'presentationV2.layout.' + (ori || getOrientation()); }
   function saveLayout(){
-    const modules = Array.from(document.querySelectorAll('.module')).map(m=>({id:m.id,x:parseInt(m.dataset.x||0,10),y:parseInt(m.dataset.y||0,10),w:parseInt(m.dataset.w||1,10),h:parseInt(m.dataset.h||1,10)}));
-    try{ localStorage.setItem(storageKey(), JSON.stringify(modules)); }catch(e){}
+    try{
+      const list = Array.from(document.querySelectorAll('.module')).map(m=>({
+        id: m.id,
+        x: parseInt(m.dataset.x||0,10),
+        y: parseInt(m.dataset.y||0,10),
+        w: parseInt(m.dataset.w||1,10),
+        h: parseInt(m.dataset.h||1,10),
+        templateId: m.dataset.templateId || null
+      }));
+      const payload = { cols, rows, modules:list, ts: Date.now() };
+      localStorage.setItem(_layoutKeyForOrientation(), JSON.stringify(payload));
+      log('layout saved', _layoutKeyForOrientation(), payload.modules.length);
+    }catch(e){ console.warn('saveLayout failed', e); }
   }
 
   function loadLayout(){
     try{
-      const raw = localStorage.getItem(storageKey()); if(!raw) return false;
-      const items = JSON.parse(raw);
-      items.forEach(i=>{ const el = document.getElementById(i.id); if(el){ el.dataset.x = i.x; el.dataset.y = i.y; el.dataset.w = i.w; el.dataset.h = i.h; } });
-      return true;
-    }catch(e){ return false; }
+      const raw = localStorage.getItem(_layoutKeyForOrientation());
+      if(!raw) return;
+      const obj = JSON.parse(raw);
+      if(!obj || !Array.isArray(obj.modules)) return;
+      // authoritative restore: remove any existing modules not present in saved list,
+      // recreate missing ones, then set positions/sizes.
+      const savedIds = new Set(obj.modules.map(m=>m && m.id).filter(Boolean));
+      // destroy and remove any DOM modules that are not in savedIds
+      document.querySelectorAll('.module').forEach(existing => {
+        if(!savedIds.has(existing.id)){
+          try{
+            // destroy charts inside
+            existing.querySelectorAll('canvas').forEach(c=>{ const inst = chartRegistry.get(c.id); if(inst && inst.destroy) try{ inst.destroy(); }catch(e){} chartRegistry.delete(c.id); });
+            existing.remove();
+          }catch(e){ }
+        }
+      });
+
+      // now ensure each saved module exists and set its geometry
+      obj.modules.forEach(m => {
+        if(!m || !m.id) return;
+        let el = document.getElementById(m.id);
+        if(!el){
+          // try to recreate from templateId (if available)
+          const tplId = m.templateId;
+          const tplDom = tplId ? document.getElementById(tplId) : null;
+          const tplBlueprint = (typeof moduleTemplates !== 'undefined') ? moduleTemplates.get(tplId) : null;
+          const tpl = tplDom || tplBlueprint;
+          if(tpl){
+            try{
+              const clone = tpl.cloneNode(true);
+              clone.id = m.id;
+              // mark origin templateId
+              if(tplId) clone.dataset.templateId = tplId;
+              // uniquify descendant ids to avoid collisions
+              const desc = clone.querySelectorAll('[id]');
+              desc.forEach(d => { d.id = d.id + '-' + m.id; });
+              // uniquify canvases if present
+              const canvases = clone.querySelectorAll('canvas');
+              canvases.forEach((c, idx)=>{ const nid = c.id ? c.id + '-' + m.id : 'canvas-' + m.id + '-' + idx; c.id = nid; });
+              // append to grid area
+              gridAreaInner.appendChild(clone);
+              el = clone;
+              // initialize charts if we have data
+              try{ initChartsForModule(el); if(lastLoadData) { el.querySelectorAll('canvas').forEach(c=>{ try{ renderChartForModuleCanvas(c.id, el.id, lastLoadData); }catch(e){} }); } }catch(e){}
+            }catch(e){ console.warn('failed to recreate module', m.id, e); }
+          } else {
+            // cannot restore this module; skip
+            return;
+          }
+        }
+        // clamp values to current grid
+        const nx = Math.max(0, Math.min(cols - (m.w||1), parseInt(m.x||0,10)));
+        const ny = Math.max(0, Math.min(rows - (m.h||1), parseInt(m.y||0,10)));
+        const nw = Math.max(1, Math.min(cols, parseInt(m.w||1,10)));
+        const nh = Math.max(1, Math.min(rows, parseInt(m.h||1,10)));
+        el.dataset.x = nx; el.dataset.y = ny; el.dataset.w = nw; el.dataset.h = nh;
+      });
+      log('layout loaded', _layoutKeyForOrientation());
+    }catch(e){ console.warn('loadLayout failed', e); }
   }
 
   function placeModule(el){
@@ -86,8 +153,8 @@
   }
 
   // initialize
-  applyGridForOrientation(); fitDashboardToViewport(); const loaded = loadLayout();
-  document.querySelectorAll('.module').forEach(m=>placeModule(m)); if(loaded) document.querySelectorAll('.module').forEach(m=>placeModule(m));
+  applyGridForOrientation(); fitDashboardToViewport();
+  document.querySelectorAll('.module').forEach(m=>placeModule(m));
 
   // capture blueprint templates for all initial modules so deleting live instances doesn't remove the template
   const moduleTemplates = new Map();
@@ -95,13 +162,16 @@
     try{ moduleTemplates.set(m.id, m.cloneNode(true)); }catch(e){}
   });
 
+  // try to load saved layout for current orientation (will recreate clones if needed)
+  try{ loadLayout(); document.querySelectorAll('.module').forEach(m=>placeModule(m)); }catch(e){ }
+
   // dragging / resizing (smooth, page-wide pointer movement with snap-on-release)
   let dragState = null;
   // map of chart instances for cleanup/rebuild
   const chartRegistry = new Map();
   // cache of last loaded data from /api/transactions so newly spawned modules can render immediately
   let lastLoadData = null;
-  // simple logger helper
+  // simple logger helper (moved earlier so persistence functions can use it)
   const log = (...args)=>{ try{ console.log('[presentationV2]', ...args); }catch(e){} };
   // toolbox & trash
   const toolboxButton = document.querySelector('.toolbox-button');
@@ -144,7 +214,7 @@
       document.body.appendChild(clone);
       // initialize placeholder charts and if we have recent data, render into them
       try{ initChartsForModule(clone); }catch(e){ log('initChartsForModule error', e); }
-      if(lastLoadData){
+  if(lastLoadData){
         log('rendering cached data into clone', clone.id);
         // render each canvas according to module semantics
         const cList = clone.querySelectorAll('canvas');
@@ -319,24 +389,28 @@
       void el.offsetWidth;
       el.dataset.x = finalX; el.dataset.y = finalY; placeModule(el);
 
-      // remove dragging class; release pointer capture
+  // remove dragging class; release pointer capture
       el.classList.remove('dragging');
         // check if dropped into trash
         const trashRect = trashBin.getBoundingClientRect();
         const dropX = e.clientX; const dropY = e.clientY;
-        if(dropY >= trashRect.top && dropY <= trashRect.bottom && dropX >= trashRect.left && dropX <= trashRect.right){
+  if(dropY >= trashRect.top && dropY <= trashRect.bottom && dropX >= trashRect.left && dropX <= trashRect.right){
     // remove element and cleanup charts
     // destroy chart instances inside this module
     const canvases = el.querySelectorAll('canvas');
     canvases.forEach(c=>{ const inst = chartRegistry.get(c.id); if(inst && inst.destroy) try{ inst.destroy(); }catch(e){} chartRegistry.delete(c.id); });
     el.remove();
           trashBin.classList.remove('visible','drag-over');
-          dragState = null; saveLayout(); return;
+          // save layout after deletion
+          try{ saveLayout(); }catch(e){}
+          dragState = null; return;
         }
       try{ if(e.target.releasePointerCapture) e.target.releasePointerCapture(e.pointerId); }catch(e){}
       // remove snapping class after transition ends
       const onEnd = (ev)=>{ if(['left','top','width','height'].includes(ev.propertyName)){ el.classList.remove('snapping'); el.removeEventListener('transitionend', onEnd); } };
       el.addEventListener('transitionend', onEnd);
+  // save layout after move
+  try{ saveLayout(); }catch(e){}
     } else if(dragState.type === 'resize'){
       // compute final width/height in grid cells and animate
       const styleW = parseFloat(getComputedStyle(el).width) || dragState.startPxW;
@@ -354,12 +428,14 @@
       el.dataset.w = finalW; el.dataset.h = finalH; el.dataset.x = finalX; el.dataset.y = finalY; placeModule(el);
       const onEndResize = (ev)=>{ if(['width','height','left','top'].includes(ev.propertyName)){ el.classList.remove('snapping'); el.removeEventListener('transitionend', onEndResize); } };
       el.addEventListener('transitionend', onEndResize);
+  // save layout after resize
+  try{ saveLayout(); }catch(e){}
     }
 
       overlay.classList.remove('visible'); document.querySelectorAll('.grid-overlay .cell').forEach(c=>c.classList.remove('visible'));
       // hide trash
       trashBin.classList.remove('visible','drag-over');
-    dragState = null; saveLayout();
+    dragState = null;
   });
 
   // helper: initialize charts inside a module (if any) using existing data loader or placeholders
@@ -388,16 +464,20 @@
       // determine type by moduleId pattern
       if((moduleId && moduleId.includes('sales-trend')) || (canvasId && canvasId.includes('sales-trend'))){
         const cfg = { type:'line', data:{ labels:data.dates, datasets:[{ data:data.trendData, borderColor:'#2196F3', backgroundColor:'rgba(33,150,243,0.08)', tension:0.4 }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } }, scales:{ x:{display:false}, y:{display:false} } } };
-        const el = document.getElementById(canvasId); if(!el) return; const prev = chartRegistry.get(canvasId); if(prev && prev.destroy) prev.destroy(); chartRegistry.set(canvasId, new Chart(el, cfg));
+  const el = document.getElementById(canvasId); if(!el) return; try{ const prev = chartRegistry.get(canvasId) || (window.Chart && Chart.getChart && Chart.getChart(el)); if(prev && prev.destroy) try{ prev.destroy(); }catch(e){} chartRegistry.delete(canvasId); }catch(e){}
+  try{ const chart = new Chart(el, cfg); chartRegistry.set(canvasId, chart); }catch(e){ console.error('chart create failed', e); }
       } else if((moduleId && moduleId.includes('store-sales')) || (canvasId && canvasId.includes('store-sales'))){
         const cfg = { type:'bar', data:{ labels:Object.keys(data.storeTotals), datasets:[{ data:Object.values(data.storeTotals), backgroundColor:'#36A2EB' }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } }, scales:{ x:{display:false}, y:{display:false} } } };
-        const el = document.getElementById(canvasId); if(!el) return; const prev = chartRegistry.get(canvasId); if(prev && prev.destroy) prev.destroy(); chartRegistry.set(canvasId, new Chart(el, cfg));
+  const el = document.getElementById(canvasId); if(!el) return; try{ const prev = chartRegistry.get(canvasId) || (window.Chart && Chart.getChart && Chart.getChart(el)); if(prev && prev.destroy) try{ prev.destroy(); }catch(e){} chartRegistry.delete(canvasId); }catch(e){}
+  try{ const chart = new Chart(el, cfg); chartRegistry.set(canvasId, chart); }catch(e){ console.error('chart create failed', e); }
       } else if((moduleId && moduleId.includes('product-share')) || (canvasId && canvasId.includes('product-share'))){
         const cfg = { type:'doughnut', data:{ labels:Object.keys(data.productTotals), datasets:[{ data:Object.values(data.productTotals), backgroundColor:['#FF6384','#36A2EB','#FFCE56','#4BC0C0'] }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } } } };
-        const el = document.getElementById(canvasId); if(!el) return; const prev = chartRegistry.get(canvasId); if(prev && prev.destroy) prev.destroy(); chartRegistry.set(canvasId, new Chart(el, cfg));
+  const el = document.getElementById(canvasId); if(!el) return; try{ const prev = chartRegistry.get(canvasId) || (window.Chart && Chart.getChart && Chart.getChart(el)); if(prev && prev.destroy) try{ prev.destroy(); }catch(e){} chartRegistry.delete(canvasId); }catch(e){}
+  try{ const chart = new Chart(el, cfg); chartRegistry.set(canvasId, chart); }catch(e){ console.error('chart create failed', e); }
       } else if((moduleId && moduleId.includes('pay-share')) || (canvasId && canvasId.includes('pay-share'))){
         const cfg = { type:'pie', data:{ labels:Object.keys(data.payTotals), datasets:[{ data:Object.values(data.payTotals), backgroundColor:['#8AC926','#FF9F40','#9966FF'] }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } } } };
-        const el = document.getElementById(canvasId); if(!el) return; const prev = chartRegistry.get(canvasId); if(prev && prev.destroy) prev.destroy(); chartRegistry.set(canvasId, new Chart(el, cfg));
+  const el = document.getElementById(canvasId); if(!el) return; try{ const prev = chartRegistry.get(canvasId) || (window.Chart && Chart.getChart && Chart.getChart(el)); if(prev && prev.destroy) try{ prev.destroy(); }catch(e){} chartRegistry.delete(canvasId); }catch(e){}
+  try{ const chart = new Chart(el, cfg); chartRegistry.set(canvasId, chart); }catch(e){ console.error('chart create failed', e); }
       }
     }catch(e){ console.error('renderChartForModuleCanvas error', e); }
   }
@@ -439,7 +519,10 @@
     if(resizeTimer) clearTimeout(resizeTimer);
     resizeTimer = setTimeout(()=>{
       const prev = lastOri; lastOri = getOrientation(); applyGridForOrientation(); fitDashboardToViewport();
-      if(prev !== lastOri){ loadLayout(); }
+      if(prev !== lastOri){
+        // load orientation-specific layout when orientation changes
+        loadLayout();
+      }
       document.querySelectorAll('.module').forEach(m=>placeModule(m));
     }, 120);
   });
@@ -488,6 +571,15 @@
       makeOrUpdate('chart-store-sales', { type:'bar', data:{ labels:Object.keys(storeTotals), datasets:[{ data:Object.values(storeTotals), backgroundColor:'#36A2EB' }] }, options:{ ...chartOptions, plugins:{ ...chartOptions.plugins, legend:{ display:false } }, scales:{ x:{display:false}, y:{display:false} } } });
       makeOrUpdate('chart-product-share', { type:'doughnut', data:{ labels:Object.keys(productTotals), datasets:[{ data:Object.values(productTotals), backgroundColor:['#FF6384','#36A2EB','#FFCE56','#4BC0C0'] }] }, options:{ ...chartOptions, plugins:{ ...chartOptions.plugins, legend:{ display:false } } } });
       makeOrUpdate('chart-pay-share', { type:'pie', data:{ labels:Object.keys(payTotals), datasets:[{ data:Object.values(payTotals), backgroundColor:['#8AC926','#FF9F40','#9966FF'] }] }, options:{ ...chartOptions, plugins:{ ...chartOptions.plugins, legend:{ display:false } } } });
+      // render into any canvases inside modules (including cloned ones) and populate KPI clones
+      try{
+        document.querySelectorAll('.module').forEach(mod=>{
+          const canvases = mod.querySelectorAll('canvas');
+          canvases.forEach(c => { try{ renderChartForModuleCanvas(c.id, mod.id, lastLoadData); }catch(e){} });
+          // populate KPI clones if applicable
+          if(mod.dataset.templateId){ try{ setKpiValuesForModule(mod, mod.dataset.templateId, lastLoadData); }catch(e){} }
+        });
+      }catch(e){ console.warn('rendering into cloned modules failed', e); }
     }catch(e){ console.error('failed to load transactions',e); }
   }
   loadLast30();
