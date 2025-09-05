@@ -89,45 +89,127 @@
   applyGridForOrientation(); fitDashboardToViewport(); const loaded = loadLayout();
   document.querySelectorAll('.module').forEach(m=>placeModule(m)); if(loaded) document.querySelectorAll('.module').forEach(m=>placeModule(m));
 
-  // dragging / resizing
+  // dragging / resizing (smooth, page-wide pointer movement with snap-on-release)
   let dragState = null;
+
   document.addEventListener('pointerdown', e=>{
     const mod = e.target.closest('.module'); if(!mod) return;
+    const rect = mod.getBoundingClientRect();
+    const overlayRect = overlay.getBoundingClientRect();
     if(e.target.classList.contains('resize-handle')){
-      dragState = {type:'resize', el:mod, startX:e.clientX, startY:e.clientY, startW:parseInt(mod.dataset.w||1,10), startH:parseInt(mod.dataset.h||1,10)};
+      // store pixel-based start values for smooth resize
+      dragState = {
+        type: 'resize',
+        el: mod,
+        startX: e.clientX,
+        startY: e.clientY,
+        startPxW: rect.width,
+        startPxH: rect.height,
+        startRect: rect
+      };
     } else {
-      dragState = {type:'move', el:mod, startX:e.clientX, startY:e.clientY, origX:parseInt(mod.dataset.x||0,10), origY:parseInt(mod.dataset.y||0,10)};
+      // store pixel offsets so the module follows the pointer smoothly across the page
+      dragState = {
+        type: 'move',
+        el: mod,
+        startPointerX: e.clientX,
+        startPointerY: e.clientY,
+        pointerOffsetX: e.clientX - rect.left,
+        pointerOffsetY: e.clientY - rect.top,
+        startLeftPx: rect.left - overlayRect.left,
+        startTopPx: rect.top - overlayRect.top,
+        origX: parseInt(mod.dataset.x||0,10),
+        origY: parseInt(mod.dataset.y||0,10)
+      };
+      // ensure smooth visuals
+      mod.classList.add('dragging');
+      try{ if(e.target.setPointerCapture) e.target.setPointerCapture(e.pointerId); }catch(e){}
     }
-    overlay.classList.add('visible'); e.preventDefault();
+    overlay.classList.add('visible');
+    e.preventDefault();
   });
 
   document.addEventListener('pointermove', e=>{
     if(!dragState) return; const el = dragState.el; const rect = overlay.getBoundingClientRect();
     const cellW = rect.width / cols; const cellH = rect.height / rows;
+
+    // live, pixel-based movement for fluid visuals; compute snap preview separately
     if(dragState.type === 'move'){
-      const dx = Math.round((e.clientX - dragState.startX)/cellW);
-      const dy = Math.round((e.clientY - dragState.startY)/cellH);
-      let nx = Math.max(0, Math.min(cols-1, dragState.origX + dx));
-      let ny = Math.max(0, Math.min(rows-1, dragState.origY + dy));
+      // compute new pixel position relative to overlay (can be negative or beyond overlay)
+      const newLeftPx = e.clientX - dragState.pointerOffsetX - rect.left + rect.left - rect.left; // keep relative to rect
+      // simpler: compute absolute left relative to overlay left
+      const absLeft = e.clientX - dragState.pointerOffsetX - rect.left;
+      const absTop = e.clientY - dragState.pointerOffsetY - rect.top;
+
+      // set element position in pixels for smooth follow
+      el.style.left = absLeft + 'px';
+      el.style.top = absTop + 'px';
+
+      // compute snapped grid cell for preview
+      let snapX = Math.round(absLeft / cellW);
+      let snapY = Math.round(absTop / cellH);
       const curW = parseInt(el.dataset.w||1,10); const curH = parseInt(el.dataset.h||1,10);
-      if(nx + curW > cols) nx = cols - curW; if(ny + curH > rows) ny = rows - curH;
-      el.dataset.x = nx; el.dataset.y = ny; placeModule(el);
+      if(snapX < 0) snapX = 0; if(snapY < 0) snapY = 0;
+      if(snapX + curW > cols) snapX = cols - curW;
+      if(snapY + curH > rows) snapY = rows - curH;
+
+      // highlight preview cells
+      document.querySelectorAll('.grid-overlay .cell').forEach(c=>c.classList.remove('visible'));
+      for(let rr=snapY; rr<snapY+curH; rr++) for(let cc=snapX; cc<snapX+curW; cc++){ const idx = rr*cols + cc; const cell = overlay.children[idx]; if(cell) cell.classList.add('visible'); }
+
     } else if(dragState.type === 'resize'){
-      const dw = Math.round((e.clientX - dragState.startX)/(rect.width/cols));
-      const dh = Math.round((e.clientY - dragState.startY)/(rect.height/rows));
-      let nw = Math.max(1, Math.min(cols, dragState.startW + dw));
-      let nh = Math.max(1, Math.min(rows, dragState.startH + dh));
-      const curX = parseInt(el.dataset.x||0,10); const curY = parseInt(el.dataset.y||0,10);
-      if(curX + nw > cols) nw = cols - curX; if(curY + nh > rows) nh = rows - curY;
-      el.dataset.w = nw; el.dataset.h = nh; placeModule(el);
+      const rectEl = dragState.startRect; const deltaX = e.clientX - dragState.startX; const deltaY = e.clientY - dragState.startY;
+      const newPxW = Math.max(24, dragState.startPxW + deltaX);
+      const newPxH = Math.max(24, dragState.startPxH + deltaY);
+      el.style.width = newPxW + 'px'; el.style.height = newPxH + 'px';
+
+      // compute snap preview for resize
+      const relLeft = rectEl.left - rect.left; const relTop = rectEl.top - rect.top;
+      let snapW = Math.round(newPxW / (rect.width/cols));
+      let snapH = Math.round(newPxH / (rect.height/rows));
+      if(snapW < 1) snapW = 1; if(snapH < 1) snapH = 1;
+      const snapX = Math.max(0, Math.min(cols-1, Math.round(relLeft/(rect.width/cols))));
+      const snapY = Math.max(0, Math.min(rows-1, Math.round(relTop/(rect.height/rows))));
+      if(snapX + snapW > cols) snapW = cols - snapX; if(snapY + snapH > rows) snapH = rows - snapY;
+
+      document.querySelectorAll('.grid-overlay .cell').forEach(c=>c.classList.remove('visible'));
+      for(let rr=snapY; rr<snapY+snapH; rr++) for(let cc=snapX; cc<snapX+snapW; cc++){ const idx = rr*cols + cc; const cell = overlay.children[idx]; if(cell) cell.classList.add('visible'); }
     }
-    // highlight covered cells
-    document.querySelectorAll('.grid-overlay .cell').forEach(c=>c.classList.remove('visible'));
-    const x = parseInt(el.dataset.x||0,10), y = parseInt(el.dataset.y||0,10), w = parseInt(el.dataset.w||1,10), h = parseInt(el.dataset.h||1,10);
-    for(let rr=y; rr<y+h; rr++) for(let cc=x; cc<x+w; cc++){ const idx = rr*cols + cc; const cell = overlay.children[idx]; if(cell) cell.classList.add('visible'); }
   });
 
-  document.addEventListener('pointerup', ()=>{ if(dragState){ dragState=null; overlay.classList.remove('visible'); } saveLayout(); });
+  document.addEventListener('pointerup', e=>{
+    if(!dragState) return;
+    const el = dragState.el; const rect = overlay.getBoundingClientRect();
+    const cellW = rect.width / cols; const cellH = rect.height / rows;
+
+    if(dragState.type === 'move'){
+      // determine final snapped grid coordinates from current pixel left/top
+      const curLeft = parseFloat(getComputedStyle(el).left) || 0;
+      const curTop = parseFloat(getComputedStyle(el).top) || 0;
+      let finalX = Math.round(curLeft / cellW); let finalY = Math.round(curTop / cellH);
+      const curW = parseInt(el.dataset.w||1,10); const curH = parseInt(el.dataset.h||1,10);
+      if(finalX < 0) finalX = 0; if(finalY < 0) finalY = 0;
+      if(finalX + curW > cols) finalX = cols - curW; if(finalY + curH > rows) finalY = rows - curH;
+      el.dataset.x = finalX; el.dataset.y = finalY; placeModule(el);
+      el.classList.remove('dragging');
+      try{ if(e.target.releasePointerCapture) e.target.releasePointerCapture(e.pointerId); }catch(e){}
+    } else if(dragState.type === 'resize'){
+      // compute final width/height in grid cells
+      const styleW = parseFloat(getComputedStyle(el).width) || dragState.startPxW;
+      const styleH = parseFloat(getComputedStyle(el).height) || dragState.startPxH;
+      const relLeft = dragState.startRect.left - rect.left;
+      const relTop = dragState.startRect.top - rect.top;
+      let finalW = Math.round(styleW / (rect.width/cols)); let finalH = Math.round(styleH / (rect.height/rows));
+      if(finalW < 1) finalW = 1; if(finalH < 1) finalH = 1;
+      let finalX = Math.round(relLeft / (rect.width/cols)); let finalY = Math.round(relTop / (rect.height/rows));
+      if(finalX < 0) finalX = 0; if(finalY < 0) finalY = 0;
+      if(finalX + finalW > cols) finalW = cols - finalX; if(finalY + finalH > rows) finalH = rows - finalY;
+      el.dataset.w = finalW; el.dataset.h = finalH; el.dataset.x = finalX; el.dataset.y = finalY; placeModule(el);
+    }
+
+    overlay.classList.remove('visible'); document.querySelectorAll('.grid-overlay .cell').forEach(c=>c.classList.remove('visible'));
+    dragState = null; saveLayout();
+  });
 
   // responsive: resize/orientation
   let resizeTimer = null; let lastOri = getOrientation();
