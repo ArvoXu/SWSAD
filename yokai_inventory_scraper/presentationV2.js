@@ -23,21 +23,24 @@
   }
 
   function fitDashboardToViewport(){
-    const pageWrap = document.querySelector('.page-wrap');
-    const pwStyle = pageWrap ? getComputedStyle(pageWrap) : {paddingTop:'0px', paddingBottom:'0px'};
-    const padTop = parseInt(pwStyle.paddingTop)||0; const padBottom = parseInt(pwStyle.paddingBottom)||0;
-    const available = window.innerHeight - padTop - padBottom;
-  dashboardInner.style.height = available + 'px';
-  // avoid scrollbars inside dashboard: let content fit by explicit sizing
+  const pageWrap = document.querySelector('.page-wrap');
+  const pwStyle = pageWrap ? getComputedStyle(pageWrap) : {paddingTop:'0px', paddingBottom:'0px'};
+  const padBottom = parseInt(pwStyle.paddingBottom)||0;
+
+  // clear any CSS min/max constraints so our explicit height can take effect
+  dashboardInner.style.minHeight = '0px';
+  dashboardInner.style.maxHeight = 'none';
   dashboardInner.style.overflow = 'hidden';
-    const header = dashboardInner.querySelector('.dashboard-header');
-    const headerH = header ? header.getBoundingClientRect().height : 0;
-    const dbStyle = getComputedStyle(dashboardInner);
-    const dbPadTop = parseInt(dbStyle.paddingTop)||0; const dbPadBottom = parseInt(dbStyle.paddingBottom)||0;
-    const gridAvailable = Math.max(120, available - headerH - dbPadTop - dbPadBottom - 8);
-  gridAreaInner.style.height = gridAvailable + 'px';
+
+  // compute available vertical space from the top of the grid area to the viewport bottom
+  const gridTop = gridAreaInner.getBoundingClientRect().top;
+  // leave the same bottom padding as the page-wrap so distances remain symmetric
+  const availableForGrid = Math.max(120, window.innerHeight - padBottom - gridTop - 8);
+  gridAreaInner.style.height = availableForGrid + 'px';
   // clear padding-bottom fallback so explicit height is used (prevents double-height)
   gridAreaInner.style.paddingBottom = '0px';
+  // re-place modules to match updated overlay dimensions
+  document.querySelectorAll('.module').forEach(m=>placeModule(m));
   }
 
   function saveLayout(){
