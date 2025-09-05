@@ -34,13 +34,27 @@
 
   // compute available vertical space from the top of the grid area to the viewport bottom
   const gridTop = gridAreaInner.getBoundingClientRect().top;
-  // leave the same bottom padding as the page-wrap so distances remain symmetric
-  const availableForGrid = Math.max(120, window.innerHeight - padBottom - gridTop - 8);
-  gridAreaInner.style.height = availableForGrid + 'px';
-  // clear padding-bottom fallback so explicit height is used (prevents double-height)
-  gridAreaInner.style.paddingBottom = '0px';
-  // re-place modules to match updated overlay dimensions
-  document.querySelectorAll('.module').forEach(m=>placeModule(m));
+  // compute an initial height that fills from grid top down to viewport bottom (respect page-wrap bottom padding)
+  let targetH = Math.max(80, Math.floor(window.innerHeight - padBottom - gridTop - 8));
+  gridAreaInner.style.paddingBottom = '0px'; // clear the aspect-ratio fallback so explicit height wins
+
+  // apply height and ensure the whole document fits inside the viewport.
+  // If the page still overflows (scrollbar appears), iteratively shrink the grid a bit until it fits
+  const minCellH = 24; // safety: each cell must remain usable
+  const maxAttempts = 6;
+  let attempts = 0;
+  function applyHeight(h){ gridAreaInner.style.height = h + 'px'; document.querySelectorAll('.module').forEach(m=>placeModule(m)); }
+
+  applyHeight(targetH);
+  // if the page still scrolls, reduce the grid height by the overflow amount + small buffer
+  while(attempts < maxAttempts && (document.documentElement.scrollHeight > window.innerHeight || document.body.scrollHeight > window.innerHeight)){
+    const overflow = Math.max(0, document.documentElement.scrollHeight - window.innerHeight, document.body.scrollHeight - window.innerHeight);
+    if(overflow <= 2) break; // negligible
+    targetH = Math.max(minCellH * rows, targetH - (overflow + 6));
+    applyHeight(targetH);
+    attempts++;
+  }
+  // final placement done above
   }
 
   function saveLayout(){
