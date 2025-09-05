@@ -148,7 +148,14 @@
               el = clone;
               console.log('[presentationV2] recreated module from template:', m.id, 'templateId:', tplId);
               // initialize charts if we have data
-              try{ initChartsForModule(el); if(lastLoadData) { el.querySelectorAll('canvas').forEach(c=>{ try{ renderChartForModuleCanvas(c.id, el.id, lastLoadData); }catch(e){} }); } }catch(e){ console.warn('[presentationV2] initChartsForModule error', e); }
+              try{
+                initChartsForModule(el);
+                if(lastLoadData) {
+                  el.querySelectorAll('canvas').forEach(c=>{ try{ renderChartForModuleCanvas(c.id, el.id, lastLoadData); }catch(e){} });
+                  // populate KPI values for recreated KPI modules
+                  try{ setKpiValuesForModule(el, tplId, lastLoadData); }catch(e){}
+                }
+              }catch(e){ console.warn('[presentationV2] initChartsForModule error', e); }
             }catch(e){ console.warn('[presentationV2] failed to recreate module', m.id, e); }
           } else {
             // cannot restore this module; create a lightweight placeholder so user can see missing module
@@ -167,7 +174,11 @@
         const ny = Math.max(0, Math.min(rows - (m.h||1), parseInt(m.y||0,10)));
         const nw = Math.max(1, Math.min(cols, parseInt(m.w||1,10)));
         const nh = Math.max(1, Math.min(rows, parseInt(m.h||1,10)));
-        if(el){ el.dataset.x = nx; el.dataset.y = ny; el.dataset.w = nw; el.dataset.h = nh; }
+        if(el){
+          el.dataset.x = nx; el.dataset.y = ny; el.dataset.w = nw; el.dataset.h = nh;
+          // if we already have data cached, ensure KPI modules are populated
+          if(lastLoadData && el.dataset.templateId){ try{ setKpiValuesForModule(el, el.dataset.templateId, lastLoadData); }catch(e){} }
+        }
       });
       console.log('[presentationV2] layout loaded', key);
     }catch(e){ console.warn('[presentationV2] loadLayout failed', e); }
