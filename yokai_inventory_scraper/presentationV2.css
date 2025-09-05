@@ -58,6 +58,24 @@ body{font-family: 'Microsoft JhengHei',sans-serif; background:#eef6ff; margin:0;
 .dashboard-header{display:flex; align-items:center; justify-content:space-between; margin-bottom:16px}
 .dashboard-header h1{font-size:20px}
 
+/* toolbox in header (right aligned, compact) */
+.toolbox{position:relative; display:flex; align-items:center}
+.toolbox-button{background:transparent;border:0;padding:6px;border-radius:8px;cursor:pointer}
+.toolbox-button svg{display:block}
+.toolbox-panel{position:absolute; right:0; top:40px; width:260px; background:rgba(255,255,255,0.98); border-radius:10px; box-shadow:0 8px 30px rgba(10,30,60,0.12); padding:10px; z-index:12000}
+.toolbox-group{margin-bottom:8px}
+.group-title{font-size:12px;font-weight:700;color:#333;margin-bottom:6px}
+.toolbox-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px}
+.toolbox-item{padding:8px 10px;border-radius:8px;background:linear-gradient(180deg,#fff,#f6fbff);cursor:grab;display:flex;justify-content:space-between;align-items:center;font-size:13px;border:1px solid rgba(33,150,243,0.06)}
+.toolbox-item:active,.toolbox-item.dragging{opacity:0.8}
+.toolbox-item .icon{margin-left:8px;opacity:0.8}
+
+/* trash bin that appears at bottom while dragging */
+.trash-bin{position:fixed; left:50%; transform:translateX(-50%); bottom:18px; width:120px; height:56px; background:rgba(255,255,255,0.98); border-radius:999px; display:flex;align-items:center;justify-content:center;box-shadow:0 10px 30px rgba(0,0,0,0.12); z-index:13000; opacity:0; pointer-events:none; transition:opacity 160ms ease}
+.trash-bin.visible{opacity:1; pointer-events:auto}
+.trash-bin .icon{font-size:22px}
+.trash-bin.drag-over{background:linear-gradient(90deg,#ffebee,#ffcdd2)}
+
 .grid-area{position:relative; width:100%; background:transparent}
 
 /* Keep a responsive max-height so grid doesn't push footer/header off-screen */
@@ -95,7 +113,7 @@ body{font-family: 'Microsoft JhengHei',sans-serif; background:#eef6ff; margin:0;
 .module.dragging{
   transition: transform 0.06s linear; /* keep immediate follow for left/top while dragging */
   transform: translateZ(0);
-  z-index: 99999; /* very top while dragging */
+  z-index: 12999; /* just below trash while dragging */
   box-shadow: 0 22px 48px rgba(10,30,60,0.18);
   pointer-events: auto;
   will-change: left, top, transform;
@@ -112,7 +130,7 @@ body{font-family: 'Microsoft JhengHei',sans-serif; background:#eef6ff; margin:0;
 
 /* when module is temporarily fixed on body, ensure it appears above everything */
 .module[style*="position: fixed"]{
-  z-index: 100000;
+  z-index: 12999;
   pointer-events: auto;
 }
 

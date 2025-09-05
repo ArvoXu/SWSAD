@@ -89,11 +89,74 @@
   applyGridForOrientation(); fitDashboardToViewport(); const loaded = loadLayout();
   document.querySelectorAll('.module').forEach(m=>placeModule(m)); if(loaded) document.querySelectorAll('.module').forEach(m=>placeModule(m));
 
+  // capture blueprint templates for all initial modules so deleting live instances doesn't remove the template
+  const moduleTemplates = new Map();
+  document.querySelectorAll('.module').forEach(m=>{
+    try{ moduleTemplates.set(m.id, m.cloneNode(true)); }catch(e){}
+  });
+
   // dragging / resizing (smooth, page-wide pointer movement with snap-on-release)
   let dragState = null;
+  // map of chart instances for cleanup/rebuild
+  const chartRegistry = new Map();
+  // cache of last loaded data from /api/transactions so newly spawned modules can render immediately
+  let lastLoadData = null;
+  // toolbox & trash
+  const toolboxButton = document.querySelector('.toolbox-button');
+  const toolboxPanel = document.querySelector('.toolbox-panel');
+  const toolboxItems = Array.from(document.querySelectorAll('.toolbox-item'));
+  const trashBin = document.createElement('div'); trashBin.className = 'trash-bin'; trashBin.innerHTML = '<div class="icon">🗑️</div>'; document.body.appendChild(trashBin);
 
   document.addEventListener('pointerdown', e=>{
-    const mod = e.target.closest('.module'); if(!mod) return;
+    // allow starting drag from existing modules or from toolbox items
+    const tbItem = e.target.closest('.toolbox-item');
+    if(tbItem){
+      // spawn a new module clone from template id and immediately start dragging from pointer
+  const templateId = tbItem.dataset.moduleId;
+  // prefer DOM template, fallback to stored blueprint template
+  const domTemplate = document.getElementById(templateId);
+  const blueprint = moduleTemplates.get(templateId);
+  const templateNode = domTemplate || blueprint;
+  if(!templateNode) return;
+  const clone = templateNode.cloneNode(true);
+      const uid = templateId + '-' + Math.random().toString(36).slice(2,8);
+      clone.id = uid;
+  clone.dataset.x = 0; clone.dataset.y = 0; clone.dataset.w = templateNode.dataset.w || 1; clone.dataset.h = templateNode.dataset.h || 1;
+      // ensure any canvas inside clone gets a unique id
+      const canvases = clone.querySelectorAll('canvas');
+      canvases.forEach((c, idx)=>{ const nid = c.id ? c.id + '-' + uid : 'canvas-' + uid + '-' + idx; c.id = nid; });
+      // attach to body as fixed so we can position under pointer reliably
+      clone.style.position = 'fixed';
+      clone.style.left = (e.clientX - 40) + 'px';
+      clone.style.top = (e.clientY - 24) + 'px';
+      // reasonable default size until snap
+  clone.style.width = (templateNode.offsetWidth || 260) + 'px';
+  clone.style.height = (templateNode.offsetHeight || 120) + 'px';
+      clone.classList.add('dragging');
+      document.body.appendChild(clone);
+      // initialize placeholder charts and if we have recent data, render into them
+      initChartsForModule(clone);
+      if(lastLoadData){
+        // render each canvas according to module semantics
+        const cList = clone.querySelectorAll('canvas');
+        cList.forEach(c => { try{ renderChartForModuleCanvas(c.id, clone.id, lastLoadData); }catch(e){} });
+      }
+      // create drag state so pointermove will control this clone
+      dragState = {
+        type: 'move', el: clone,
+        startPointerX: e.clientX, startPointerY: e.clientY,
+        pointerOffsetX: 20, pointerOffsetY: 20,
+        startLeftPx: e.clientX - 20, startTopPx: e.clientY - 20,
+        origX: 0, origY: 0, detached: true, prevParent: null, prevNext: null
+      };
+      // show overlay and trash
+      overlay.classList.add('visible'); trashBin.classList.add('visible');
+      try{ if(e.target.setPointerCapture) e.target.setPointerCapture(e.pointerId); }catch(e){}
+      e.stopPropagation();
+      return; // we've set dragState for the new clone; skip normal handling
+    } else {
+      var mod = e.target.closest('.module'); if(!mod) return;
+    }
     const rect = mod.getBoundingClientRect();
     const overlayRect = overlay.getBoundingClientRect();
     if(e.target.classList.contains('resize-handle')){
@@ -107,7 +170,7 @@
         startPxH: rect.height,
         startRect: rect
       };
-    } else {
+  } else {
       // store pixel offsets so the module follows the pointer smoothly across the page
       dragState = {
         type: 'move',
@@ -173,6 +236,11 @@
       // highlight preview cells
       document.querySelectorAll('.grid-overlay .cell').forEach(c=>c.classList.remove('visible'));
       for(let rr=snapY; rr<snapY+curH; rr++) for(let cc=snapX; cc<snapX+curW; cc++){ const idx = rr*cols + cc; const cell = overlay.children[idx]; if(cell) cell.classList.add('visible'); }
+  // show trash bin while dragging
+  trashBin.classList.add('visible');
+  // detect if pointer over trash
+  const trashRect = trashBin.getBoundingClientRect();
+  if(e.clientY >= trashRect.top && e.clientY <= trashRect.bottom && e.clientX >= trashRect.left && e.clientX <= trashRect.right){ trashBin.classList.add('drag-over'); } else { trashBin.classList.remove('drag-over'); }
 
     } else if(dragState.type === 'resize'){
       const rectEl = dragState.startRect; const deltaX = e.clientX - dragState.startX; const deltaY = e.clientY - dragState.startY;
@@ -191,6 +259,8 @@
 
       document.querySelectorAll('.grid-overlay .cell').forEach(c=>c.classList.remove('visible'));
       for(let rr=snapY; rr<snapY+snapH; rr++) for(let cc=snapX; cc<snapX+snapW; cc++){ const idx = rr*cols + cc; const cell = overlay.children[idx]; if(cell) cell.classList.add('visible'); }
+    // show trash bin while resizing too
+    trashBin.classList.add('visible');
     }
   });
 
@@ -238,6 +308,18 @@
 
       // remove dragging class; release pointer capture
       el.classList.remove('dragging');
+        // check if dropped into trash
+        const trashRect = trashBin.getBoundingClientRect();
+        const dropX = e.clientX; const dropY = e.clientY;
+        if(dropY >= trashRect.top && dropY <= trashRect.bottom && dropX >= trashRect.left && dropX <= trashRect.right){
+    // remove element and cleanup charts
+    // destroy chart instances inside this module
+    const canvases = el.querySelectorAll('canvas');
+    canvases.forEach(c=>{ const inst = chartRegistry.get(c.id); if(inst && inst.destroy) try{ inst.destroy(); }catch(e){} chartRegistry.delete(c.id); });
+    el.remove();
+          trashBin.classList.remove('visible','drag-over');
+          dragState = null; saveLayout(); return;
+        }
       try{ if(e.target.releasePointerCapture) e.target.releasePointerCapture(e.pointerId); }catch(e){}
       // remove snapping class after transition ends
       const onEnd = (ev)=>{ if(['left','top','width','height'].includes(ev.propertyName)){ el.classList.remove('snapping'); el.removeEventListener('transitionend', onEnd); } };
@@ -261,9 +343,63 @@
       el.addEventListener('transitionend', onEndResize);
     }
 
-    overlay.classList.remove('visible'); document.querySelectorAll('.grid-overlay .cell').forEach(c=>c.classList.remove('visible'));
+      overlay.classList.remove('visible'); document.querySelectorAll('.grid-overlay .cell').forEach(c=>c.classList.remove('visible'));
+      // hide trash
+      trashBin.classList.remove('visible','drag-over');
     dragState = null; saveLayout();
   });
+
+  // helper: initialize charts inside a module (if any) using existing data loader or placeholders
+  function initChartsForModule(moduleEl){
+    const canvases = moduleEl.querySelectorAll('canvas');
+    canvases.forEach(c=>{
+      try{
+        // if a chart already exists for this canvas id, destroy it
+        const existing = chartRegistry.get(c.id); if(existing && existing.destroy) existing.destroy();
+      }catch(e){}
+      // try to instantiate a simple empty chart if canvas exists and data not ready
+      const ctx = c.getContext && c.getContext('2d'); if(!ctx) return;
+      // create a minimal placeholder chart so Chart.js has instance to manage sizing
+      try{
+        const chart = new Chart(c, { type:'bar', data:{ labels:[], datasets:[{ data:[] }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } }, scales:{ x:{display:false}, y:{display:false} } } });
+        chartRegistry.set(c.id, chart);
+        if(lastLoadData){ try{ renderChartForModuleCanvas(c.id, moduleEl.id, lastLoadData); }catch(e){} }
+      }catch(e){}
+    });
+  }
+
+  // helper: render a chart canvas according to module id and lastLoadData
+  function renderChartForModuleCanvas(canvasId, moduleId, data){
+    if(!data) return;
+    try{
+      // determine type by moduleId pattern
+      if((moduleId && moduleId.includes('sales-trend')) || (canvasId && canvasId.includes('sales-trend'))){
+        const cfg = { type:'line', data:{ labels:data.dates, datasets:[{ data:data.trendData, borderColor:'#2196F3', backgroundColor:'rgba(33,150,243,0.08)', tension:0.4 }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } }, scales:{ x:{display:false}, y:{display:false} } } };
+        const el = document.getElementById(canvasId); if(!el) return; const prev = chartRegistry.get(canvasId); if(prev && prev.destroy) prev.destroy(); chartRegistry.set(canvasId, new Chart(el, cfg));
+      } else if((moduleId && moduleId.includes('store-sales')) || (canvasId && canvasId.includes('store-sales'))){
+        const cfg = { type:'bar', data:{ labels:Object.keys(data.storeTotals), datasets:[{ data:Object.values(data.storeTotals), backgroundColor:'#36A2EB' }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } }, scales:{ x:{display:false}, y:{display:false} } } };
+        const el = document.getElementById(canvasId); if(!el) return; const prev = chartRegistry.get(canvasId); if(prev && prev.destroy) prev.destroy(); chartRegistry.set(canvasId, new Chart(el, cfg));
+      } else if((moduleId && moduleId.includes('product-share')) || (canvasId && canvasId.includes('product-share'))){
+        const cfg = { type:'doughnut', data:{ labels:Object.keys(data.productTotals), datasets:[{ data:Object.values(data.productTotals), backgroundColor:['#FF6384','#36A2EB','#FFCE56','#4BC0C0'] }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } } } };
+        const el = document.getElementById(canvasId); if(!el) return; const prev = chartRegistry.get(canvasId); if(prev && prev.destroy) prev.destroy(); chartRegistry.set(canvasId, new Chart(el, cfg));
+      } else if((moduleId && moduleId.includes('pay-share')) || (canvasId && canvasId.includes('pay-share'))){
+        const cfg = { type:'pie', data:{ labels:Object.keys(data.payTotals), datasets:[{ data:Object.values(data.payTotals), backgroundColor:['#8AC926','#FF9F40','#9966FF'] }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } } } };
+        const el = document.getElementById(canvasId); if(!el) return; const prev = chartRegistry.get(canvasId); if(prev && prev.destroy) prev.destroy(); chartRegistry.set(canvasId, new Chart(el, cfg));
+      }
+    }catch(e){ console.error('renderChartForModuleCanvas error', e); }
+  }
+
+    // toolbox UI behavior: toggle panel and enable dragging from toolbox items
+    if(toolboxButton && toolboxPanel){
+      toolboxButton.addEventListener('click', ()=>{
+        const open = toolboxButton.getAttribute('aria-expanded') === 'true';
+        toolboxButton.setAttribute('aria-expanded', (!open).toString());
+        toolboxPanel.hidden = open;
+      });
+    }
+
+  // NOTE: toolbox item pointer handling is managed by the document-level pointerdown
+  // to avoid duplicate pointer capture we do not attach per-item pointer handlers here.
 
   // responsive: resize/orientation
   let resizeTimer = null; let lastOri = getOrientation();
@@ -299,13 +435,25 @@
       const totalSales = Object.values(byDate).reduce((s,v)=>s+v,0);
       const transactionsCount = data.filter(t=>{ const dt = new Date(t.date); return dt >= start && dt <= end && parseFloat(t.amount) > 0; }).length;
       const avgTicket = transactionsCount>0 ? Math.round((totalSales/transactionsCount)*100)/100 : 0;
+  // cache for later usage by spawned modules
+  lastLoadData = { dates, trendData, storeTotals, productTotals, payTotals, totalSales, transactionsCount, avgTicket };
       const elTotal = document.getElementById('kpi-total-sales'); const elTrans = document.getElementById('kpi-transactions'); const elAvg = document.getElementById('kpi-avg-value');
       if(elTotal) elTotal.textContent = totalSales.toLocaleString(); if(elTrans) elTrans.textContent = transactionsCount.toLocaleString(); if(elAvg) elAvg.textContent = avgTicket.toLocaleString();
       const chartOptions = { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:true, position:'bottom' } } };
-      new Chart(document.getElementById('chart-sales-trend'), { type:'line', data:{ labels:dates, datasets:[{ data:trendData, borderColor:'#2196F3', backgroundColor:'rgba(33,150,243,0.08)', tension:0.4 }] }, options:{ ...chartOptions, plugins:{ ...chartOptions.plugins, legend:{ display:false } }, scales:{ x:{display:false}, y:{display:false} } } });
-      new Chart(document.getElementById('chart-store-sales'), { type:'bar', data:{ labels:Object.keys(storeTotals), datasets:[{ data:Object.values(storeTotals), backgroundColor:'#36A2EB' }] }, options:{ ...chartOptions, plugins:{ ...chartOptions.plugins, legend:{ display:false } }, scales:{ x:{display:false}, y:{display:false} } } });
-      new Chart(document.getElementById('chart-product-share'), { type:'doughnut', data:{ labels:Object.keys(productTotals), datasets:[{ data:Object.values(productTotals), backgroundColor:['#FF6384','#36A2EB','#FFCE56','#4BC0C0'] }] }, options:{ ...chartOptions, plugins:{ ...chartOptions.plugins, legend:{ display:false } } } });
-      new Chart(document.getElementById('chart-pay-share'), { type:'pie', data:{ labels:Object.keys(payTotals), datasets:[{ data:Object.values(payTotals), backgroundColor:['#8AC926','#FF9F40','#9966FF'] }] }, options:{ ...chartOptions, plugins:{ ...chartOptions.plugins, legend:{ display:false } } } });
+      // create or update Chart instances and register them
+      const makeOrUpdate = (cid, cfg)=>{
+        const el = document.getElementById(cid); if(!el) return;
+        try{
+          const prev = chartRegistry.get(el.id);
+          if(prev && prev.destroy) prev.destroy();
+        }catch(e){}
+        try{ const chart = new Chart(el, cfg); chartRegistry.set(el.id, chart); }catch(e){}
+      };
+
+      makeOrUpdate('chart-sales-trend', { type:'line', data:{ labels:dates, datasets:[{ data:trendData, borderColor:'#2196F3', backgroundColor:'rgba(33,150,243,0.08)', tension:0.4 }] }, options:{ ...chartOptions, plugins:{ ...chartOptions.plugins, legend:{ display:false } }, scales:{ x:{display:false}, y:{display:false} } } });
+      makeOrUpdate('chart-store-sales', { type:'bar', data:{ labels:Object.keys(storeTotals), datasets:[{ data:Object.values(storeTotals), backgroundColor:'#36A2EB' }] }, options:{ ...chartOptions, plugins:{ ...chartOptions.plugins, legend:{ display:false } }, scales:{ x:{display:false}, y:{display:false} } } });
+      makeOrUpdate('chart-product-share', { type:'doughnut', data:{ labels:Object.keys(productTotals), datasets:[{ data:Object.values(productTotals), backgroundColor:['#FF6384','#36A2EB','#FFCE56','#4BC0C0'] }] }, options:{ ...chartOptions, plugins:{ ...chartOptions.plugins, legend:{ display:false } } } });
+      makeOrUpdate('chart-pay-share', { type:'pie', data:{ labels:Object.keys(payTotals), datasets:[{ data:Object.values(payTotals), backgroundColor:['#8AC926','#FF9F40','#9966FF'] }] }, options:{ ...chartOptions, plugins:{ ...chartOptions.plugins, legend:{ display:false } } } });
     }catch(e){ console.error('failed to load transactions',e); }
   }
   loadLast30();
