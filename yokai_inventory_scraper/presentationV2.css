@@ -15,18 +15,7 @@ body{font-family: 'Microsoft JhengHei',sans-serif; background:#eef6ff; margin:0;
     max-width:1400px;
 }
 
-.sidebar{
-    width:160px;
-    background:rgba(255,255,255,0.9);
-    border-radius:12px;
-    padding:20px;
-    box-shadow:0 6px 24px rgba(0,0,0,0.08);
-    margin-right:24px;
-    display:flex;
-    flex-direction:column;
-}
 .logo{font-weight:700; font-size:18px; margin-bottom:24px}
-.side-nav{display:flex; flex-direction:column; gap:16px; flex:1}
 .nav-item{padding:8px 12px; border-radius:8px; cursor:pointer; transition:background 0.2s}
 .nav-item:hover{background:rgba(33,150,243,0.1)}
 .user{margin-top:auto; font-size:14px; color:#666}
@@ -100,7 +89,6 @@ body{font-family: 'Microsoft JhengHei',sans-serif; background:#eef6ff; margin:0;
 /* small screens */
 @media(max-width:900px){
   .page-wrap{padding:18px}
-  .sidebar{display:none}
   .dashboard-inner{padding:12px}
   .main-content{padding-top:12px; padding-bottom:12px}
   .module{padding:8px}
@@ -109,7 +97,6 @@ body{font-family: 'Microsoft JhengHei',sans-serif; background:#eef6ff; margin:0;
 
 @media(max-width:600px){
   .content-wrapper{flex-direction:column}
-  .sidebar{display:none}
   .page-wrap{padding:12px}
   .dashboard-inner{padding:10px}
   .dashboard-header h1{font-size:16px}
