@@ -93,15 +93,28 @@ body{font-family: 'Microsoft JhengHei',sans-serif; background:#eef6ff; margin:0;
 
 /* Smooth dragging visuals: follow pointer using pixel positions and slightly elevate module */
 .module.dragging{
-  transition: transform 0.06s linear, left 0s, top 0s; /* no snap delay for left/top which are set directly */
+  transition: transform 0.06s linear; /* keep immediate follow for left/top while dragging */
   transform: translateZ(0);
-  z-index: 9999;
-  box-shadow: 0 18px 40px rgba(10,30,60,0.12);
+  z-index: 99999; /* very top while dragging */
+  box-shadow: 0 22px 48px rgba(10,30,60,0.18);
   pointer-events: auto;
+  will-change: left, top, transform;
 }
 
 /* while dragging allow pointer to move over overlay (overlay pointer-events none by default) */
 .grid-overlay{pointer-events:none}
+
+/* snapping animation when applying grid-aligned final position */
+.module.snapping{
+  transition: left 220ms cubic-bezier(.2,.9,.2,1), top 220ms cubic-bezier(.2,.9,.2,1), width 220ms cubic-bezier(.2,.9,.2,1), height 220ms cubic-bezier(.2,.9,.2,1), box-shadow 220ms ease;
+  z-index: 10000; /* still above normal modules while animating */
+}
+
+/* when module is temporarily fixed on body, ensure it appears above everything */
+.module[style*="position: fixed"]{
+  z-index: 100000;
+  pointer-events: auto;
+}
 
 /* spacing from page edges to create floating effect */
 .page-wrap{padding:48px}

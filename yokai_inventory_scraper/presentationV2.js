@@ -121,9 +121,19 @@
         origX: parseInt(mod.dataset.x||0,10),
         origY: parseInt(mod.dataset.y||0,10)
       };
-      // ensure smooth visuals
-      mod.classList.add('dragging');
-      try{ if(e.target.setPointerCapture) e.target.setPointerCapture(e.pointerId); }catch(e){}
+  // detach element to document.body so it floats above everything
+  dragState.detached = true;
+  dragState.prevParent = mod.parentNode;
+  dragState.prevNext = mod.nextSibling;
+  // set fixed positioning using viewport coords
+  mod.style.position = 'fixed';
+  mod.style.left = rect.left + 'px';
+  mod.style.top = rect.top + 'px';
+  mod.style.width = rect.width + 'px';
+  mod.style.height = rect.height + 'px';
+  mod.classList.add('dragging');
+  document.body.appendChild(mod);
+  try{ if(e.target.setPointerCapture) e.target.setPointerCapture(e.pointerId); }catch(e){}
     }
     overlay.classList.add('visible');
     e.preventDefault();
@@ -135,19 +145,26 @@
 
     // live, pixel-based movement for fluid visuals; compute snap preview separately
     if(dragState.type === 'move'){
-      // compute new pixel position relative to overlay (can be negative or beyond overlay)
-      const newLeftPx = e.clientX - dragState.pointerOffsetX - rect.left + rect.left - rect.left; // keep relative to rect
-      // simpler: compute absolute left relative to overlay left
-      const absLeft = e.clientX - dragState.pointerOffsetX - rect.left;
-      const absTop = e.clientY - dragState.pointerOffsetY - rect.top;
+      // if detached (fixed), follow viewport pointer; otherwise follow relative to overlay
+      const curLeftPx = e.clientX - dragState.pointerOffsetX;
+      const curTopPx = e.clientY - dragState.pointerOffsetY;
+      if(dragState.detached){
+        // fixed positioning in viewport
+        el.style.left = curLeftPx + 'px';
+        el.style.top = curTopPx + 'px';
+      } else {
+        // relative to overlay
+        const absLeft = curLeftPx - rect.left;
+        const absTop = curTopPx - rect.top;
+        el.style.left = absLeft + 'px';
+        el.style.top = absTop + 'px';
+      }
 
-      // set element position in pixels for smooth follow
-      el.style.left = absLeft + 'px';
-      el.style.top = absTop + 'px';
-
-      // compute snapped grid cell for preview
-      let snapX = Math.round(absLeft / cellW);
-      let snapY = Math.round(absTop / cellH);
+      // compute snapped grid cell for preview (always relative to overlay)
+      const absLeftForSnap = (e.clientX - dragState.pointerOffsetX) - rect.left;
+      const absTopForSnap = (e.clientY - dragState.pointerOffsetY) - rect.top;
+      let snapX = Math.round(absLeftForSnap / cellW);
+      let snapY = Math.round(absTopForSnap / cellH);
       const curW = parseInt(el.dataset.w||1,10); const curH = parseInt(el.dataset.h||1,10);
       if(snapX < 0) snapX = 0; if(snapY < 0) snapY = 0;
       if(snapX + curW > cols) snapX = cols - curW;
@@ -183,18 +200,50 @@
     const cellW = rect.width / cols; const cellH = rect.height / rows;
 
     if(dragState.type === 'move'){
-      // determine final snapped grid coordinates from current pixel left/top
-      const curLeft = parseFloat(getComputedStyle(el).left) || 0;
-      const curTop = parseFloat(getComputedStyle(el).top) || 0;
+      // determine final snapped grid coordinates from current pixel left/top (relative to overlay)
+      // current pixel left when detached: el.style.left (viewport px); when attached: computed left is overlay-relative
+      const curLeftViewport = parseFloat(el.style.left) || 0;
+      const curTopViewport = parseFloat(el.style.top) || 0;
+      // convert to overlay-relative
+      const curLeft = (dragState.detached ? (curLeftViewport - rect.left) : curLeftViewport);
+      const curTop = (dragState.detached ? (curTopViewport - rect.top) : curTopViewport);
       let finalX = Math.round(curLeft / cellW); let finalY = Math.round(curTop / cellH);
       const curW = parseInt(el.dataset.w||1,10); const curH = parseInt(el.dataset.h||1,10);
       if(finalX < 0) finalX = 0; if(finalY < 0) finalY = 0;
       if(finalX + curW > cols) finalX = cols - curW; if(finalY + curH > rows) finalY = rows - curH;
+
+      // animate to snapped position and reattach to grid-area-inner
+      const finalLeftPx = finalX * cellW;
+      const finalTopPx = finalY * cellH;
+
+      // restore element into gridAreaInner as absolute positioned element with current overlay-relative coords
+      const currentOverlayLeft = curLeft;
+      const currentOverlayTop = curTop;
+
+      // if detached, move back into grid area before animating
+      if(dragState.detached){
+        // set absolute position within gridAreaInner to match current visual position
+        el.style.position = 'absolute';
+        el.style.left = currentOverlayLeft + 'px';
+        el.style.top = currentOverlayTop + 'px';
+        // append back to grid-area-inner so placeModule and transitions work
+        gridAreaInner.appendChild(el);
+      }
+
+      // add snapping class to animate
+      el.classList.add('snapping');
+      // force reflow then set final (placeModule will set width/height too)
+      void el.offsetWidth;
       el.dataset.x = finalX; el.dataset.y = finalY; placeModule(el);
+
+      // remove dragging class; release pointer capture
       el.classList.remove('dragging');
       try{ if(e.target.releasePointerCapture) e.target.releasePointerCapture(e.pointerId); }catch(e){}
+      // remove snapping class after transition ends
+      const onEnd = (ev)=>{ if(['left','top','width','height'].includes(ev.propertyName)){ el.classList.remove('snapping'); el.removeEventListener('transitionend', onEnd); } };
+      el.addEventListener('transitionend', onEnd);
     } else if(dragState.type === 'resize'){
-      // compute final width/height in grid cells
+      // compute final width/height in grid cells and animate
       const styleW = parseFloat(getComputedStyle(el).width) || dragState.startPxW;
       const styleH = parseFloat(getComputedStyle(el).height) || dragState.startPxH;
       const relLeft = dragState.startRect.left - rect.left;
@@ -204,7 +253,12 @@
       let finalX = Math.round(relLeft / (rect.width/cols)); let finalY = Math.round(relTop / (rect.height/rows));
       if(finalX < 0) finalX = 0; if(finalY < 0) finalY = 0;
       if(finalX + finalW > cols) finalW = cols - finalX; if(finalY + finalH > rows) finalH = rows - finalY;
+
+      el.classList.add('snapping');
+      void el.offsetWidth;
       el.dataset.w = finalW; el.dataset.h = finalH; el.dataset.x = finalX; el.dataset.y = finalY; placeModule(el);
+      const onEndResize = (ev)=>{ if(['width','height','left','top'].includes(ev.propertyName)){ el.classList.remove('snapping'); el.removeEventListener('transitionend', onEndResize); } };
+      el.addEventListener('transitionend', onEndResize);
     }
 
     overlay.classList.remove('visible'); document.querySelectorAll('.grid-overlay .cell').forEach(c=>c.classList.remove('visible'));
