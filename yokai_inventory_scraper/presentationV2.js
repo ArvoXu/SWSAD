@@ -10,6 +10,9 @@
   }
 
   let cols = 9, rows = 5;
+  // computed pixel size for a single grid cell (square) and gutter between cells
+  let cellSize = 100;
+  let gutter = 12; // will be read from CSS if available
   function getOrientation(){ return window.innerWidth >= window.innerHeight ? 'landscape' : 'portrait'; }
 
   function applyGridForOrientation(){
@@ -22,38 +25,81 @@
   }
 
   function fitDashboardToViewport(){
-  const pageWrap = document.querySelector('.page-wrap');
-  const pwStyle = pageWrap ? getComputedStyle(pageWrap) : {paddingTop:'0px', paddingBottom:'0px'};
-  const padBottom = parseInt(pwStyle.paddingBottom)||0;
+    const pageWrap = document.querySelector('.page-wrap');
+    const pwStyle = pageWrap ? getComputedStyle(pageWrap) : {paddingTop:'0px', paddingBottom:'0px'};
+    const padBottom = parseInt(pwStyle.paddingBottom)||0;
 
-  // clear any CSS min/max constraints so our explicit height can take effect
-  dashboardInner.style.minHeight = '0px';
-  dashboardInner.style.maxHeight = 'none';
-  dashboardInner.style.overflow = 'hidden';
+    // clear any CSS min/max constraints so our explicit sizing can take effect
+    dashboardInner.style.minHeight = '0px';
+    dashboardInner.style.maxHeight = 'none';
+    dashboardInner.style.overflow = 'hidden';
 
-  // compute available vertical space from the top of the grid area to the viewport bottom
-  const gridTop = gridAreaInner.getBoundingClientRect().top;
-  // compute an initial height that fills from grid top down to viewport bottom (respect page-wrap bottom padding)
-  let targetH = Math.max(80, Math.floor(window.innerHeight - padBottom - gridTop - 8));
-  gridAreaInner.style.paddingBottom = '0px'; // clear the aspect-ratio fallback so explicit height wins
+    // read gutter from CSS if present
+    try{ const rootStyle = getComputedStyle(document.documentElement); const cssGutter = parseInt(rootStyle.getPropertyValue('--gutter')); if(!isNaN(cssGutter)) gutter = cssGutter; }catch(e){}
 
-  // apply height and ensure the whole document fits inside the viewport.
-  // If the page still overflows (scrollbar appears), iteratively shrink the grid a bit until it fits
-  const minCellH = 24; // safety: each cell must remain usable
-  const maxAttempts = 6;
-  let attempts = 0;
-  function applyHeight(h){ gridAreaInner.style.height = h + 'px'; document.querySelectorAll('.module').forEach(m=>placeModule(m)); }
+    // compute available area for the grid
+    const gridTop = gridAreaInner.getBoundingClientRect().top;
+    const availW = Math.max(40, gridAreaInner.parentElement.clientWidth || window.innerWidth);
+    const availH = Math.max(40, window.innerHeight - padBottom - gridTop - 8);
 
-  applyHeight(targetH);
-  // if the page still scrolls, reduce the grid height by the overflow amount + small buffer
-  while(attempts < maxAttempts && (document.documentElement.scrollHeight > window.innerHeight || document.body.scrollHeight > window.innerHeight)){
-    const overflow = Math.max(0, document.documentElement.scrollHeight - window.innerHeight, document.body.scrollHeight - window.innerHeight);
-    if(overflow <= 2) break; // negligible
-    targetH = Math.max(minCellH * rows, targetH - (overflow + 6));
-    applyHeight(targetH);
-    attempts++;
-  }
-  // final placement done above
+    const minCell = 24; // safety minimum cell pixel size
+    // account for gutter spaces between cells
+    const maxCellW = Math.floor((availW - Math.max(0, (cols-1) * gutter)) / cols);
+    const maxCellH = Math.floor((availH - Math.max(0, (rows-1) * gutter)) / rows);
+    cellSize = Math.max(minCell, Math.floor(Math.min(maxCellW, maxCellH)));
+
+    // compute full pixel grid size (including gutters) and center it
+    const gridPxW = cellSize * cols + Math.max(0, (cols-1) * gutter);
+    const gridPxH = cellSize * rows + Math.max(0, (rows-1) * gutter);
+    gridAreaInner.style.paddingBottom = '0px';
+    gridAreaInner.style.width = gridPxW + 'px';
+    gridAreaInner.style.height = gridPxH + 'px';
+    // center the grid-area within its parent
+    gridAreaInner.style.marginLeft = 'auto';
+    gridAreaInner.style.marginRight = 'auto';
+
+    // Make dashboardInner wrap tightly around the grid result and center the whole dashboard
+    try{
+      const dbStyle = getComputedStyle(dashboardInner);
+      const padL = parseInt(dbStyle.paddingLeft) || 0;
+      const padR = parseInt(dbStyle.paddingRight) || 0;
+      const totalDesiredWidth = gridPxW + padL + padR;
+      // allow responsive fallback if viewport is narrower
+      const maxAvail = (pageWrap && pageWrap.clientWidth) ? pageWrap.clientWidth : window.innerWidth;
+      if(totalDesiredWidth > maxAvail){
+        dashboardInner.style.width = '100%';
+        dashboardInner.style.maxWidth = '100%';
+      } else {
+        dashboardInner.style.width = totalDesiredWidth + 'px';
+        dashboardInner.style.maxWidth = '';
+      }
+      dashboardInner.style.marginLeft = 'auto';
+      dashboardInner.style.marginRight = 'auto';
+      // ensure grid area is centered inside the dashboardInner
+      gridAreaInner.style.margin = '0 auto';
+    }catch(e){ }
+
+    // expose CSS vars for use in CSS rules and modules
+    document.documentElement.style.setProperty('--cell-size-px', String(cellSize) + 'px');
+    document.documentElement.style.setProperty('--grid-px-w', String(gridPxW) + 'px');
+    document.documentElement.style.setProperty('--grid-px-h', String(gridPxH) + 'px');
+
+    // If the document still overflows vertically, try to shrink cells a bit until it fits
+    const maxAttempts = 8; let attempts = 0;
+    while(attempts < maxAttempts && (document.documentElement.scrollHeight > window.innerHeight || document.body.scrollHeight > window.innerHeight)){
+      if(cellSize <= minCell) break;
+      cellSize = Math.max(minCell, cellSize - 4);
+      const gw = cellSize * cols + Math.max(0, (cols-1) * gutter);
+      const gh = cellSize * rows + Math.max(0, (rows-1) * gutter);
+      gridAreaInner.style.width = gw + 'px'; gridAreaInner.style.height = gh + 'px';
+      document.documentElement.style.setProperty('--cell-size-px', String(cellSize) + 'px');
+      document.documentElement.style.setProperty('--grid-px-w', String(gw) + 'px');
+      document.documentElement.style.setProperty('--grid-px-h', String(gh) + 'px');
+      attempts++;
+    }
+
+    // finally place modules according to new cellSize
+    document.querySelectorAll('.module').forEach(m=>placeModule(m));
   }
 
   // localStorage persistence (orientation-specific) - redesigned
@@ -206,12 +252,16 @@
     if(x + w > cols) w = Math.max(1, cols - x);
     if(y + h > rows) h = Math.max(1, rows - y);
     el.dataset.x = x; el.dataset.y = y; el.dataset.w = w; el.dataset.h = h;
-    const area = overlay.getBoundingClientRect();
-    const cellW = area.width / cols; const cellH = area.height / rows;
-    el.style.left = (x * cellW) + 'px';
-    el.style.top = (y * cellH) + 'px';
-    el.style.width = Math.max(40, w * cellW - 12) + 'px';
-    el.style.height = Math.max(40, h * cellH - 12) + 'px';
+  // compute with square cells and gutter spacing
+  const cellOuterW = cellSize + gutter; const cellOuterH = cellSize + gutter;
+  const leftPx = x * cellOuterW;
+  const topPx = y * cellOuterH;
+  const widthPx = Math.max(40, (w * cellSize) + Math.max(0, (w-1) * gutter) - 12);
+  const heightPx = Math.max(40, (h * cellSize) + Math.max(0, (h-1) * gutter) - 12);
+  el.style.left = leftPx + 'px';
+  el.style.top = topPx + 'px';
+  el.style.width = widthPx + 'px';
+  el.style.height = heightPx + 'px';
   }
 
   // initialize
@@ -364,8 +414,10 @@
   });
 
   document.addEventListener('pointermove', e=>{
-    if(!dragState) return; const el = dragState.el; const rect = overlay.getBoundingClientRect();
-    const cellW = rect.width / cols; const cellH = rect.height / rows;
+  if(!dragState) return; const el = dragState.el;
+  // use gridAreaInner as reference for overlay coordinates
+  const gridRect = gridAreaInner.getBoundingClientRect();
+  const cellOuterW = cellSize + gutter; const cellOuterH = cellSize + gutter;
 
     // live, pixel-based movement for fluid visuals; compute snap preview separately
     if(dragState.type === 'move'){
@@ -377,18 +429,18 @@
         el.style.left = curLeftPx + 'px';
         el.style.top = curTopPx + 'px';
       } else {
-        // relative to overlay
-        const absLeft = curLeftPx - rect.left;
-        const absTop = curTopPx - rect.top;
+        // relative to grid area
+        const absLeft = curLeftPx - gridRect.left;
+        const absTop = curTopPx - gridRect.top;
         el.style.left = absLeft + 'px';
         el.style.top = absTop + 'px';
       }
 
-      // compute snapped grid cell for preview (always relative to overlay)
-      const absLeftForSnap = (e.clientX - dragState.pointerOffsetX) - rect.left;
-      const absTopForSnap = (e.clientY - dragState.pointerOffsetY) - rect.top;
-      let snapX = Math.round(absLeftForSnap / cellW);
-      let snapY = Math.round(absTopForSnap / cellH);
+      // compute snapped grid cell for preview (always relative to grid area)
+      const absLeftForSnap = (e.clientX - dragState.pointerOffsetX) - gridRect.left;
+      const absTopForSnap = (e.clientY - dragState.pointerOffsetY) - gridRect.top;
+      let snapX = Math.round(absLeftForSnap / cellOuterW);
+      let snapY = Math.round(absTopForSnap / cellOuterH);
       const curW = parseInt(el.dataset.w||1,10); const curH = parseInt(el.dataset.h||1,10);
       if(snapX < 0) snapX = 0; if(snapY < 0) snapY = 0;
       if(snapX + curW > cols) snapX = cols - curW;
@@ -404,19 +456,19 @@
   if(e.clientY >= trashRect.top && e.clientY <= trashRect.bottom && e.clientX >= trashRect.left && e.clientX <= trashRect.right){ trashBin.classList.add('drag-over'); } else { trashBin.classList.remove('drag-over'); }
 
     } else if(dragState.type === 'resize'){
-      const rectEl = dragState.startRect; const deltaX = e.clientX - dragState.startX; const deltaY = e.clientY - dragState.startY;
-      const newPxW = Math.max(24, dragState.startPxW + deltaX);
-      const newPxH = Math.max(24, dragState.startPxH + deltaY);
-      el.style.width = newPxW + 'px'; el.style.height = newPxH + 'px';
+  const rectEl = dragState.startRect; const deltaX = e.clientX - dragState.startX; const deltaY = e.clientY - dragState.startY;
+  const newPxW = Math.max(24, dragState.startPxW + deltaX);
+  const newPxH = Math.max(24, dragState.startPxH + deltaY);
+  el.style.width = newPxW + 'px'; el.style.height = newPxH + 'px';
 
-      // compute snap preview for resize
-      const relLeft = rectEl.left - rect.left; const relTop = rectEl.top - rect.top;
-      let snapW = Math.round(newPxW / (rect.width/cols));
-      let snapH = Math.round(newPxH / (rect.height/rows));
-      if(snapW < 1) snapW = 1; if(snapH < 1) snapH = 1;
-      const snapX = Math.max(0, Math.min(cols-1, Math.round(relLeft/(rect.width/cols))));
-      const snapY = Math.max(0, Math.min(rows-1, Math.round(relTop/(rect.height/rows))));
-      if(snapX + snapW > cols) snapW = cols - snapX; if(snapY + snapH > rows) snapH = rows - snapY;
+  // compute snap preview for resize using cellOuter sizes
+  const relLeft = rectEl.left - gridRect.left; const relTop = rectEl.top - gridRect.top;
+  let snapW = Math.round(newPxW / cellOuterW);
+  let snapH = Math.round(newPxH / cellOuterH);
+  if(snapW < 1) snapW = 1; if(snapH < 1) snapH = 1;
+  const snapX = Math.max(0, Math.min(cols-1, Math.round(relLeft / cellOuterW)));
+  const snapY = Math.max(0, Math.min(rows-1, Math.round(relTop / cellOuterH)));
+  if(snapX + snapW > cols) snapW = cols - snapX; if(snapY + snapH > rows) snapH = rows - snapY;
 
       document.querySelectorAll('.grid-overlay .cell').forEach(c=>c.classList.remove('visible'));
       for(let rr=snapY; rr<snapY+snapH; rr++) for(let cc=snapX; cc<snapX+snapW; cc++){ const idx = rr*cols + cc; const cell = overlay.children[idx]; if(cell) cell.classList.add('visible'); }
@@ -427,25 +479,25 @@
 
   document.addEventListener('pointerup', e=>{
     if(!dragState) return;
-    const el = dragState.el; const rect = overlay.getBoundingClientRect();
-    const cellW = rect.width / cols; const cellH = rect.height / rows;
+  const el = dragState.el; const gridRect = gridAreaInner.getBoundingClientRect();
+  const cellOuterW = cellSize + gutter; const cellOuterH = cellSize + gutter;
 
     if(dragState.type === 'move'){
       // determine final snapped grid coordinates from current pixel left/top (relative to overlay)
       // current pixel left when detached: el.style.left (viewport px); when attached: computed left is overlay-relative
-      const curLeftViewport = parseFloat(el.style.left) || 0;
-      const curTopViewport = parseFloat(el.style.top) || 0;
-      // convert to overlay-relative
-      const curLeft = (dragState.detached ? (curLeftViewport - rect.left) : curLeftViewport);
-      const curTop = (dragState.detached ? (curTopViewport - rect.top) : curTopViewport);
-      let finalX = Math.round(curLeft / cellW); let finalY = Math.round(curTop / cellH);
+  const curLeftViewport = parseFloat(el.style.left) || 0;
+  const curTopViewport = parseFloat(el.style.top) || 0;
+  // convert to grid-area-relative
+  const curLeft = (dragState.detached ? (curLeftViewport - gridRect.left) : curLeftViewport);
+  const curTop = (dragState.detached ? (curTopViewport - gridRect.top) : curTopViewport);
+  let finalX = Math.round(curLeft / cellOuterW); let finalY = Math.round(curTop / cellOuterH);
       const curW = parseInt(el.dataset.w||1,10); const curH = parseInt(el.dataset.h||1,10);
       if(finalX < 0) finalX = 0; if(finalY < 0) finalY = 0;
       if(finalX + curW > cols) finalX = cols - curW; if(finalY + curH > rows) finalY = rows - curH;
 
       // animate to snapped position and reattach to grid-area-inner
-      const finalLeftPx = finalX * cellW;
-      const finalTopPx = finalY * cellH;
+  const finalLeftPx = finalX * cellOuterW;
+  const finalTopPx = finalY * cellOuterH;
 
       // restore element into gridAreaInner as absolute positioned element with current overlay-relative coords
       const currentOverlayLeft = curLeft;
@@ -465,7 +517,7 @@
       el.classList.add('snapping');
       // force reflow then set final (placeModule will set width/height too)
       void el.offsetWidth;
-      el.dataset.x = finalX; el.dataset.y = finalY; placeModule(el);
+  el.dataset.x = finalX; el.dataset.y = finalY; placeModule(el);
 
   // remove dragging class; release pointer capture
       el.classList.remove('dragging');
@@ -494,11 +546,11 @@
       // compute final width/height in grid cells and animate
       const styleW = parseFloat(getComputedStyle(el).width) || dragState.startPxW;
       const styleH = parseFloat(getComputedStyle(el).height) || dragState.startPxH;
-      const relLeft = dragState.startRect.left - rect.left;
-      const relTop = dragState.startRect.top - rect.top;
-      let finalW = Math.round(styleW / (rect.width/cols)); let finalH = Math.round(styleH / (rect.height/rows));
+      const relLeft = dragState.startRect.left - gridRect.left;
+      const relTop = dragState.startRect.top - gridRect.top;
+      let finalW = Math.round(styleW / cellOuterW); let finalH = Math.round(styleH / cellOuterH);
       if(finalW < 1) finalW = 1; if(finalH < 1) finalH = 1;
-      let finalX = Math.round(relLeft / (rect.width/cols)); let finalY = Math.round(relTop / (rect.height/rows));
+      let finalX = Math.round(relLeft / cellOuterW); let finalY = Math.round(relTop / cellOuterH);
       if(finalX < 0) finalX = 0; if(finalY < 0) finalY = 0;
       if(finalX + finalW > cols) finalW = cols - finalX; if(finalY + finalH > rows) finalH = rows - finalY;
 

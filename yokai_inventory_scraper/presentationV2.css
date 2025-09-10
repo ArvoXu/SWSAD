@@ -81,10 +81,11 @@ body{font-family: 'Microsoft JhengHei',sans-serif; background:#eef6ff; margin:0;
 /* Keep a responsive max-height so grid doesn't push footer/header off-screen */
 .grid-area-inner{
   width:100%;
-  height:0;
-  padding-bottom:56.25%; /* 16:9 fallback */
+  /* height and width may be set from JS to enforce square cells; allow explicit sizing */
+  height:auto; /* JS will set height when square grid mode is active */
+  padding-bottom:0; /* JS will clear aspect-ratio fallback when used */
   position:relative;
-}
+ }
 
 /* place overlay absolute inside grid-area */
 .grid-area > .grid-overlay{position:absolute; inset:0;}
@@ -95,6 +96,12 @@ body{font-family: 'Microsoft JhengHei',sans-serif; background:#eef6ff; margin:0;
 .grid-overlay .cell{border:1px dashed rgba(33,150,243,0.08);}
 
 .module{position:absolute; background:linear-gradient(180deg,#fff,#f7fbff); border-radius:var(--card-radius); box-shadow:0 6px 24px rgba(10,30,60,0.06); padding:8px; overflow:hidden; display:flex; flex-direction:column;}
+
+/* size-specific styles by grid units (examples) */
+.module[data-w="1"][data-h="1"] .module-body{font-size:calc(var(--cell-size-px,80px) * 0.12)}
+.module[data-w="2"][data-h="2"] .module-body{font-size:calc(var(--cell-size-px,80px) * 0.14)}
+.module[data-w="1"][data-h="2"] .module-body{display:flex; flex-direction:column; align-items:center}
+.module[data-w="3"][data-h="1"] .module-body{display:flex; flex-direction:row; align-items:center; justify-content:space-between}
 .module-header{font-weight:600; padding:6px 8px; height:32px}
 .module-body{flex:1; padding:8px; min-height:0; display:flex; align-items:center; justify-content:center}
 .module canvas{width:100% !important; height:100% !important; max-height:100%}
