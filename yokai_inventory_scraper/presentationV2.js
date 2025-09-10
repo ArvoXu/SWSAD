@@ -13,6 +13,9 @@
   // computed pixel size for a single grid cell (square) and gutter between cells
   let cellSize = 100;
   let gutter = 12; // will be read from CSS if available
+  // threshold (px) under which we consider cells "small" and apply compact row rules
+  // 調整此值以改變何時啟用小螢幕（compact）排列，預設 200px
+  const SMALL_CELL_PX_THRESHOLD = 100;
   function getOrientation(){ return window.innerWidth >= window.innerHeight ? 'landscape' : 'portrait'; }
 
   function applyGridForOrientation(){
@@ -669,8 +672,8 @@
   function renderMachineCards(container, machines, cols, rows){
     // build grid with cols x rows layout; center content
     container.innerHTML = '';
-    container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-    container.style.gridAutoRows = '1fr';
+  container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  container.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
     machines.forEach(m=>{
       const card = document.createElement('div'); card.className = 'machine-card';
       const t = document.createElement('div'); t.className='title'; t.textContent = m.name + ' (' + m.id + ')';
@@ -686,9 +689,22 @@
     const grid = mod.querySelector('.carousel-grid'); if(!grid) return;
     // determine number of cards from module w/h
     const w = parseInt(mod.dataset.w||1,10); const h = parseInt(mod.dataset.h||1,10);
-    const perView = computeCardsPerView(w,h);
-    // compute rows/cols for layout roughly square-ish: prefer cols = w, rows = h
-    const cols = Math.max(1, w); const rows = Math.max(1, h);
+    // base cols/rows from module dataset
+    let cols = Math.max(1, w); let rows = Math.max(1, h);
+    // compute effective per-cell pixel size using module height if available
+    try{
+      const rect = mod.getBoundingClientRect();
+      const modHeight = rect.height || mod.offsetHeight || 0;
+      // account for padding/gutter approximations used in placeModule where heightPx = h*cellSize + (h-1)*gutter - 12
+      const approxGutter = (typeof gutter === 'number') ? gutter : 12;
+      const effectiveCellPx = Math.max(0, Math.floor((modHeight + 12 - Math.max(0, (h-1) * approxGutter)) / Math.max(1, h)));
+  // if effective cell size is small, apply compact row rules:
+  // rule: h maps to rows by roughly h:rows = 2:1 (每兩格高度顯示一列)
+  // 例如 h=2 -> rows=1, h=3 -> rows=1 (取前一個整數), h=4 -> rows=2, h=5 -> rows=2, h=6 -> rows=3
+  // we use Math.floor(h/2) but ensure at least 1 row
+  if(effectiveCellPx > 0 && effectiveCellPx < SMALL_CELL_PX_THRESHOLD){ rows = Math.max(1, Math.floor(h / 2)); }
+    }catch(e){}
+    const perView = computeCardsPerView(cols, rows);
     // create window into sim machines, starting at 0
     let idx = 0;
     function tick(){
