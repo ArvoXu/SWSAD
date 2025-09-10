@@ -201,6 +201,8 @@
                   // populate KPI values for recreated KPI modules
                   try{ setKpiValuesForModule(el, tplId, lastLoadData); }catch(e){}
                 }
+              // initialize machine carousel if template contains it
+              try{ if(el.querySelector && el.querySelector('.machine-carousel')) initMachineCarouselForModule(el); }catch(e){}
               }catch(e){ console.warn('[presentationV2] initChartsForModule error', e); }
             }catch(e){ console.warn('[presentationV2] failed to recreate module', m.id, e); }
           } else {
@@ -281,10 +283,14 @@
       // destroy charts and remove DOM modules
       document.querySelectorAll('.module').forEach(m=>{
         try{ m.querySelectorAll('canvas').forEach(c=>{ const inst = chartRegistry.get(c.id); if(inst && inst.destroy) try{ inst.destroy(); }catch(e){} chartRegistry.delete(c.id); }); }catch(e){}
+        // keep modules that are explicit templates (have data-template attribute)
+        try{ if(m.hasAttribute && m.hasAttribute('data-template')){ return; } }catch(e){}
+        try{ stopExistingCarousel(m.id); }catch(e){}
         try{ m.remove(); }catch(e){}
       });
-      // clear in-memory templates
+      // rebuild in-memory templates from remaining DOM modules (so toolbox templates persist)
       moduleTemplates.clear();
+      document.querySelectorAll('.module').forEach(m=>{ try{ if(m.id) moduleTemplates.set(m.id, m.cloneNode(true)); }catch(e){} });
       // remove saved layout keys for both orientations
       ['landscape','portrait'].forEach(o=>{ const k = _layoutKeyForOrientation(o); try{ localStorage.removeItem(k); console.log('[presentationV2] removed saved layout key', k); }catch(e){ console.warn('[presentationV2] removeItem failed', k, e); } });
       // write an empty layout to persist "no modules"
@@ -342,6 +348,8 @@
       document.body.appendChild(clone);
       // initialize placeholder charts and if we have recent data, render into them
       try{ initChartsForModule(clone); }catch(e){ log('initChartsForModule error', e); }
+  // ensure carousel init for clone if it contains the carousel markup
+  try{ if(clone.querySelector && clone.querySelector('.machine-carousel')){ initMachineCarouselForModule(clone); } }catch(e){}
   if(lastLoadData){
         log('rendering cached data into clone', clone.id);
         // render each canvas according to module semantics
@@ -529,6 +537,8 @@
     // destroy chart instances inside this module
     const canvases = el.querySelectorAll('canvas');
     canvases.forEach(c=>{ const inst = chartRegistry.get(c.id); if(inst && inst.destroy) try{ inst.destroy(); }catch(e){} chartRegistry.delete(c.id); });
+  // cleanup carousel timers
+  try{ stopExistingCarousel(el.id); }catch(e){}
   console.log('[presentationV2] deleting module via trash drop:', el.id);
   el.remove();
       trashBin.classList.remove('visible','drag-over');
@@ -542,6 +552,8 @@
       el.addEventListener('transitionend', onEnd);
   // save layout after move
   try{ saveLayout(); }catch(e){}
+  // re-init carousel for this module (update per-view after move/attach)
+  try{ initMachineCarouselForModule(el); }catch(e){}
     } else if(dragState.type === 'resize'){
       // compute final width/height in grid cells and animate
       const styleW = parseFloat(getComputedStyle(el).width) || dragState.startPxW;
@@ -561,6 +573,8 @@
       el.addEventListener('transitionend', onEndResize);
   // save layout after resize
   try{ saveLayout(); }catch(e){}
+  // re-init carousel for this module (update per-view after resize)
+  try{ initMachineCarouselForModule(el); }catch(e){}
     }
 
       overlay.classList.remove('visible'); document.querySelectorAll('.grid-overlay .cell').forEach(c=>c.classList.remove('visible'));
@@ -586,6 +600,8 @@
         if(lastLoadData){ try{ renderChartForModuleCanvas(c.id, moduleEl.id, lastLoadData); }catch(e){} }
       }catch(e){}
     });
+  // initialize machine carousel if present
+  try{ if(moduleEl.querySelector('.machine-carousel')){ initMachineCarouselForModule(moduleEl); } }catch(e){}
   }
 
   // helper: render a chart canvas according to module id and lastLoadData
@@ -631,6 +647,78 @@
   else if(kpiKey === 'kpi-transactions') { el.textContent = (data.transactionsCount||0).toLocaleString(); log('set KPI transactions on', moduleEl.id, el.id, data.transactionsCount); }
   else if(kpiKey === 'kpi-avg-value') { el.textContent = (data.avgTicket||0).toLocaleString(); log('set KPI avg on', moduleEl.id, el.id, data.avgTicket); }
   }
+
+  // ---- machine carousel implementation ----
+  // in-memory simulated machine list (20 machines)
+  const _simMachines = Array.from({length:20}, (_,i)=>({
+    name: '機台-' + String(i+1).padStart(2,'0'),
+    id: 'M' + String(1000 + i),
+    stock: Math.floor(Math.random()*100),
+    capacity: 100
+  }));
+
+  // map of running carousel timers by module id for cleanup
+  const carouselRegistry = new Map();
+
+  function computeCardsPerView(w,h){
+    // number of cards to display equals w * h
+    const n = Math.max(1, (parseInt(w,10)||1) * (parseInt(h,10)||1));
+    return n;
+  }
+
+  function renderMachineCards(container, machines, cols, rows){
+    // build grid with cols x rows layout; center content
+    container.innerHTML = '';
+    container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    container.style.gridAutoRows = '1fr';
+    machines.forEach(m=>{
+      const card = document.createElement('div'); card.className = 'machine-card';
+      const t = document.createElement('div'); t.className='title'; t.textContent = m.name + ' (' + m.id + ')';
+      const meta = document.createElement('div'); meta.className='meta'; meta.textContent = '庫存: ' + m.stock + '/' + m.capacity;
+      const barWrap = document.createElement('div'); barWrap.className = 'bar';
+      const bar = document.createElement('i'); bar.style.width = Math.max(2, Math.round((m.stock / m.capacity) * 100)) + '%'; barWrap.appendChild(bar);
+      card.appendChild(t); card.appendChild(meta); card.appendChild(barWrap);
+      container.appendChild(card);
+    });
+  }
+
+  function initMachineCarouselForModule(mod){
+    const grid = mod.querySelector('.carousel-grid'); if(!grid) return;
+    // determine number of cards from module w/h
+    const w = parseInt(mod.dataset.w||1,10); const h = parseInt(mod.dataset.h||1,10);
+    const perView = computeCardsPerView(w,h);
+    // compute rows/cols for layout roughly square-ish: prefer cols = w, rows = h
+    const cols = Math.max(1, w); const rows = Math.max(1, h);
+    // create window into sim machines, starting at 0
+    let idx = 0;
+    function tick(){
+      // slice perView machines starting at idx, wrap-around
+      const out = [];
+      for(let i=0;i<perView;i++){ out.push(_simMachines[(idx + i) % _simMachines.length]); }
+      renderMachineCards(grid, out, cols, rows);
+      // ensure centering and that grid items don't stretch oddly
+      grid.style.display = 'grid'; grid.style.placeItems = 'center'; grid.style.justifyContent = 'center'; grid.style.alignContent = 'center';
+      // advance by full page (perView) so pages are non-overlapping
+      idx = (idx + perView) % _simMachines.length;
+    }
+  // immediately render and start interval
+  // stop any previous carousel for this module first
+  stopExistingCarousel(mod.id);
+  idx = 0; tick();
+  const t = setInterval(tick, 2000);
+  // store stop handle and metadata for cleanup
+  carouselRegistry.set(mod.id, { timer: t, idxStart: idx, perView });
+    // make sure module content stays centered inside module-body
+    const viewport = mod.querySelector('.carousel-viewport'); if(viewport) viewport.classList.add('centered');
+  }
+
+  function stopExistingCarousel(modId){
+    const entry = carouselRegistry.get(modId); if(entry){ try{ clearInterval(entry.timer); }catch(e){} carouselRegistry.delete(modId); }
+  }
+
+  // when module is removed or cleared, cleanup carousel timers
+  const _orig_clearDefaults = window.presentationV2 && window.presentationV2.clearDefaults ? window.presentationV2.clearDefaults : null;
+
 
     // toolbox UI behavior: toggle panel and enable dragging from toolbox items
     if(toolboxButton && toolboxPanel){

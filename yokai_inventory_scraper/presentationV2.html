@@ -35,6 +35,7 @@
                     <li class="toolbox-item" data-module-id="m-store-sales">各分店銷售 <span class="icon">📊</span></li>
                     <li class="toolbox-item" data-module-id="m-product-share">產品銷售佔比 <span class="icon">🍰</span></li>
                     <li class="toolbox-item" data-module-id="m-pay-share">支付方式佔比 <span class="icon">💳</span></li>
+                    <li class="toolbox-item" data-module-id="m-machine-carousel">機台輪播 (模擬) <span class="icon">🔁</span></li>
                   </ul>
                 </div>
               </div>
@@ -87,6 +88,18 @@
             <div class="module-body"><canvas id="chart-pay-share"></canvas></div>
             <div class="resize-handle resize-se"></div>
 
+          </div>
+          <!-- machine carousel template (toolbox source) -->
+          <div class="module" id="m-machine-carousel" data-x="3" data-y="3" data-w="3" data-h="2" data-template="machine-carousel">
+            <div class="module-header">機台輪播 (模擬)</div>
+            <div class="module-body">
+              <div class="machine-carousel" aria-live="polite" role="region">
+                <div class="carousel-viewport">
+                  <div class="carousel-grid"></div>
+                </div>
+              </div>
+            </div>
+            <div class="resize-handle resize-se"></div>
           </div>
             </div>
           </div>
