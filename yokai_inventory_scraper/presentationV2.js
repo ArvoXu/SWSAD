@@ -680,13 +680,49 @@
 
   async function loadInventorySummary(){
     try{
-      const res = await fetch('/api/inventory-summary');
+      // Use legacy v1 endpoint (/get-data) and perform aggregation on the frontend.
+      // This keeps the API unchanged and lets the UI compute per-store totals.
+      const res = await fetch('/get-data');
       if(!res.ok) return null;
       const j = await res.json();
-      if(j && j.success && Array.isArray(j.machines)){
-        lastInventoryData = j.machines;
-        return lastInventoryData;
-      }
+      if(!j || !j.success || !Array.isArray(j.data)) return null;
+
+      const rows = j.data;
+      // group by a canonical machine key to avoid double-counting.
+      // Prefer explicit machine id (machineId or machine_id) when available; otherwise use the raw store string.
+      const groups = new Map();
+      const seenRowIds = new Set();
+      const DEFAULT_CAPACITY = 50; // frontend default if server doesn't expose capacity
+      // normalization helper: trim, collapse spaces, replace fullwidth spaces and lowercase for stable keys
+      const norm = s => String(s || '').replace(/\u3000/g, ' ').trim().replace(/\s+/g, ' ').toLowerCase();
+      rows.forEach(r => {
+        const rawStore = r.store || r.storeName || r.storeKey || 'unknown';
+        const machineIdRaw = (r.machineId || r.machine_id || '') || '';
+        const machineId = String(machineIdRaw).trim();
+        const qty = Number(r.quantity || r.qty || 0) || 0;
+
+        // build canonical key using normalized store + normalized machine id (if present)
+        const storeNorm = norm(rawStore);
+        const machineNorm = machineId ? norm(machineId) : '';
+        const machineKey = machineNorm ? `${storeNorm}::${machineNorm}` : storeNorm;
+
+        if(!groups.has(machineKey)) groups.set(machineKey, { rawStore: rawStore, machineId: machineId, total_qty: 0, capacity: (Number(r.capacity) || DEFAULT_CAPACITY) });
+        const g = groups.get(machineKey);
+        g.total_qty += qty;
+        if(r.capacity && Number(r.capacity) > 0) g.capacity = Math.max(g.capacity || DEFAULT_CAPACITY, Number(r.capacity));
+      });
+
+      // produce array in the shape the carousel expects: {store, total_qty, capacity, percent100, barRatio}
+      // produce array: keep raw totals (do NOT clamp to capacity). Display name will be cleaned later.
+      const out = Array.from(groups.values()).map(g => {
+        const cap = (g.capacity && g.capacity > 0) ? g.capacity : DEFAULT_CAPACITY;
+        const total = Math.max(0, Math.round(g.total_qty));
+        const ratio = cap > 0 ? (total / cap) : 0; // may exceed 1
+        return { store: g.rawStore, machineId: g.machineId, total_qty: total, capacity: cap, percent100: Math.round(ratio * 100), barRatio: ratio };
+      });
+
+      lastInventoryData = out;
+      return lastInventoryData;
     }catch(e){ console.warn('[presentationV2] loadInventorySummary failed', e); }
     return null;
   }
@@ -759,19 +795,43 @@
     function tick(){
       // choose source: prefer real data if available, otherwise fallback to simulated
       const source = (Array.isArray(lastInventoryData) && lastInventoryData.length) ? lastInventoryData : _simMachines;
-      const srcLen = Math.max(1, source.length);
+      const srcLen = source.length;
       const out = [];
+      if(srcLen === 0){
+        renderMachineCards(grid, out, cols, rows);
+        return;
+      }
+
+      // If source has fewer items than perView, show each unique item once (no repeats)
+      if(srcLen <= perView){
+        for(let i=0;i<srcLen;i++){
+          const item = source[i];
+          if(!item) continue;
+          const nameRaw = (item.store !== undefined) ? item.store : (item.name || '');
+          const name = String(nameRaw).replace(/-[A-Za-z0-9_]{1,8}$/, '');
+          const stock = (item.total_qty !== undefined) ? (item.total_qty || 0) : (item.stock || 0);
+          const capacity = (item.capacity !== undefined) ? item.capacity : (item.capacity || 50);
+          out.push({ name, stock, capacity });
+        }
+        // if fewer than perView, pad with empty placeholders so grid keeps layout
+        while(out.length < perView) out.push({ name: '', stock: 0, capacity: 50 });
+        renderMachineCards(grid, out, cols, rows);
+        // advance index so next tick will not change content if source unchanged
+        idx = (idx + srcLen) % Math.max(1, srcLen);
+        return;
+      }
+
+      // Normal paging: show a page-worth of items without duplication across a page
       for(let i=0;i<perView;i++){
         const item = source[(idx + i) % srcLen];
         if(!item) continue;
-        // API now returns per-store aggregates (no machine_id)
-        if(item.store !== undefined){
-          out.push({ name: item.store, stock: item.total_qty || 0, capacity: item.capacity || 50 });
-        } else {
-          out.push(item);
-        }
+        const nameRaw = (item.store !== undefined) ? item.store : (item.name || '');
+        const name = String(nameRaw).replace(/-[A-Za-z0-9_]{1,8}$/, '');
+        const stock = (item.total_qty !== undefined) ? (item.total_qty || 0) : (item.stock || 0);
+        const capacity = (item.capacity !== undefined) ? item.capacity : (item.capacity || 50);
+        out.push({ name, stock, capacity });
       }
-  renderMachineCards(grid, out, cols, rows);
+      renderMachineCards(grid, out, cols, rows);
       // advance by full page (perView) so pages are non-overlapping
       idx = (idx + perView) % srcLen;
     }
@@ -779,7 +839,8 @@
   // stop any previous carousel for this module first
   stopExistingCarousel(mod.id);
   idx = 0; tick();
-  const t = setInterval(tick, 2000);
+  // production rotation interval = 5 seconds (was 2000ms for testing)
+  const t = setInterval(tick, 5000);
   // store stop handle and metadata for cleanup
   carouselRegistry.set(mod.id, { timer: t, idxStart: idx, perView });
     // make sure module content stays centered inside module-body
