@@ -306,7 +306,18 @@
   try{ window.presentationV2 = window.presentationV2 || {}; window.presentationV2.clearDefaults = clearDefaultsAndSave; window.presentationV2.saveLayout = saveLayout; window.presentationV2.loadLayout = loadLayout; console.log('[presentationV2] API exposed: presentationV2.clearDefaults(), .saveLayout(), .loadLayout()'); }catch(e){}
 
   // try to load saved layout for current orientation (will recreate clones if needed)
-  try{ loadLayout(); document.querySelectorAll('.module').forEach(m=>placeModule(m)); }catch(e){ }
+  try{ 
+    loadLayout();
+    document.querySelectorAll('.module').forEach(m=>placeModule(m));
+    // After layout and placeModule run, ensure any machine carousel modules are properly initialized.
+    // Use requestAnimationFrame so DOM layout and CSS sizing have settled (fixes issue where carousels
+    // required a drag/resize to render after reload).
+    requestAnimationFrame(()=>{
+      document.querySelectorAll('.module').forEach(m=>{
+        try{ if(m.querySelector && m.querySelector('.machine-carousel')) initMachineCarouselForModule(m); }catch(e){}
+      });
+    });
+  }catch(e){ }
 
   // dragging / resizing (smooth, page-wide pointer movement with snap-on-release)
   let dragState = null;
@@ -677,7 +688,7 @@
     machines.forEach(m=>{
       const card = document.createElement('div'); card.className = 'machine-card';
       const t = document.createElement('div'); t.className='title'; t.textContent = m.name + ' (' + m.id + ')';
-      const meta = document.createElement('div'); meta.className='meta'; meta.textContent = '庫存: ' + m.stock + '/' + m.capacity;
+  const meta = document.createElement('div'); meta.className='meta'; meta.textContent = m.stock + '/' + m.capacity;
       const barWrap = document.createElement('div'); barWrap.className = 'bar';
       const bar = document.createElement('i'); bar.style.width = Math.max(2, Math.round((m.stock / m.capacity) * 100)) + '%'; barWrap.appendChild(bar);
       card.appendChild(t); card.appendChild(meta); card.appendChild(barWrap);
