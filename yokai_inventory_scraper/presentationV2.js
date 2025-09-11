@@ -14,7 +14,8 @@
   let cellSize = 100;
   let gutter = 12; // will be read from CSS if available
   // threshold (px) under which we consider cells "small" and apply compact row rules
-  // 調整此值以改變何時啟用小螢幕（compact）排列，預設 200px
+  // 調整此值以改變何時啟用小螢幕（compact）排列。
+  // 預設 110px。若想手動微調，請修改此常數為你想要的閾值（例如 90 或 120）。
   const SMALL_CELL_PX_THRESHOLD = 110;
   function getOrientation(){ return window.innerWidth >= window.innerHeight ? 'landscape' : 'portrait'; }
 
@@ -733,11 +734,24 @@
       // account for padding/gutter approximations used in placeModule where heightPx = h*cellSize + (h-1)*gutter - 12
       const approxGutter = (typeof gutter === 'number') ? gutter : 12;
       const effectiveCellPx = Math.max(0, Math.floor((modHeight + 12 - Math.max(0, (h-1) * approxGutter)) / Math.max(1, h)));
-  // if effective cell size is small, apply compact row rules:
-  // rule: h maps to rows by roughly h:rows = 2:1 (每兩格高度顯示一列)
-  // 例如 h=2 -> rows=1, h=3 -> rows=1 (取前一個整數), h=4 -> rows=2, h=5 -> rows=2, h=6 -> rows=3
-  // we use Math.floor(h/2) but ensure at least 1 row
-  if(effectiveCellPx > 0 && effectiveCellPx < SMALL_CELL_PX_THRESHOLD){ rows = Math.max(1, Math.floor(h / 2)); }
+  // if effective cell size is small, apply custom compact row mapping.
+  // New mapping when effectiveCellPx < SMALL_CELL_PX_THRESHOLD:
+  //   h == 2 -> rows = 1
+  //   h == 3 -> rows = 2
+  //   h == 4 or h == 5 -> rows = 3
+  //   h == 6 -> rows = 5
+  // This preserves vertical density for small cell heights while keeping content readable.
+  // To manually tweak: change SMALL_CELL_PX_THRESHOLD above or edit this switch mapping.
+  if(effectiveCellPx > 0 && effectiveCellPx < SMALL_CELL_PX_THRESHOLD){
+    switch(h){
+      case 2: rows = 1; break;
+      case 3: rows = 2; break;
+      case 4:
+      case 5: rows = 3; break;
+      case 6: rows = 5; break;
+      default: rows = Math.max(1, Math.floor(h/2));
+    }
+  }
     }catch(e){}
     const perView = computeCardsPerView(cols, rows);
     // create window into sim machines, starting at 0
