@@ -15,7 +15,7 @@
   let gutter = 12; // will be read from CSS if available
   // threshold (px) under which we consider cells "small" and apply compact row rules
   // 調整此值以改變何時啟用小螢幕（compact）排列，預設 200px
-  const SMALL_CELL_PX_THRESHOLD = 100;
+  const SMALL_CELL_PX_THRESHOLD = 110;
   function getOrientation(){ return window.innerWidth >= window.innerHeight ? 'landscape' : 'portrait'; }
 
   function applyGridForOrientation(){
