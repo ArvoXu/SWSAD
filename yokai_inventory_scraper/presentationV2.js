@@ -704,9 +704,12 @@
     container.innerHTML = '';
   container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
   container.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+  // ensure grid items fill cells uniformly
+  container.style.alignItems = 'stretch';
+  container.style.justifyItems = 'stretch';
     machines.forEach(m=>{
       const card = document.createElement('div'); card.className = 'machine-card';
-      const t = document.createElement('div'); t.className='title'; t.textContent = m.name;
+  const t = document.createElement('div'); t.className='title'; t.textContent = m.name; t.title = m.name || '';
       const meta = document.createElement('div'); meta.className='meta'; meta.textContent = (m.stock || 0) + '/' + (m.capacity || 50);
       const barWrap = document.createElement('div'); barWrap.className = 'bar';
       const cap = (m.capacity && m.capacity > 0) ? m.capacity : 50;
@@ -754,9 +757,7 @@
           out.push(item);
         }
       }
-      renderMachineCards(grid, out, cols, rows);
-      // ensure centering and that grid items don't stretch oddly
-      grid.style.display = 'grid'; grid.style.placeItems = 'center'; grid.style.justifyContent = 'center'; grid.style.alignContent = 'center';
+  renderMachineCards(grid, out, cols, rows);
       // advance by full page (perView) so pages are non-overlapping
       idx = (idx + perView) % srcLen;
     }
