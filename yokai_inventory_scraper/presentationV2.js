@@ -695,7 +695,7 @@
       const DEFAULT_CAPACITY = 50; // frontend default if server doesn't expose capacity
       // normalization helper: trim, collapse spaces, replace fullwidth spaces and lowercase for stable keys
       const norm = s => String(s || '').replace(/\u3000/g, ' ').trim().replace(/\s+/g, ' ').toLowerCase();
-      rows.forEach(r => {
+  rows.forEach(r => {
         const rawStore = r.store || r.storeName || r.storeKey || 'unknown';
         const machineIdRaw = (r.machineId || r.machine_id || '') || '';
         const machineId = String(machineIdRaw).trim();
@@ -706,10 +706,13 @@
         const machineNorm = machineId ? norm(machineId) : '';
         const machineKey = machineNorm ? `${storeNorm}::${machineNorm}` : storeNorm;
 
-        if(!groups.has(machineKey)) groups.set(machineKey, { rawStore: rawStore, machineId: machineId, total_qty: 0, capacity: (Number(r.capacity) || DEFAULT_CAPACITY) });
-        const g = groups.get(machineKey);
-        g.total_qty += qty;
-        if(r.capacity && Number(r.capacity) > 0) g.capacity = Math.max(g.capacity || DEFAULT_CAPACITY, Number(r.capacity));
+  if(!groups.has(machineKey)) groups.set(machineKey, { rawStore: rawStore, machineId: machineId, total_qty: 0, capacity: (Number(r.capacity) || DEFAULT_CAPACITY), products: new Map() });
+  const g = groups.get(machineKey);
+  g.total_qty += qty;
+  if(r.capacity && Number(r.capacity) > 0) g.capacity = Math.max(g.capacity || DEFAULT_CAPACITY, Number(r.capacity));
+  // accumulate per-product quantities (support several field names)
+  const prodName = (r.productName || r.product_name || r.product || '').toString() || '';
+  if(prodName){ const prev = g.products.get(prodName) || 0; g.products.set(prodName, prev + qty); }
       });
 
       // produce array in the shape the carousel expects: {store, total_qty, capacity, percent100, barRatio}
@@ -718,7 +721,9 @@
         const cap = (g.capacity && g.capacity > 0) ? g.capacity : DEFAULT_CAPACITY;
         const total = Math.max(0, Math.round(g.total_qty));
         const ratio = cap > 0 ? (total / cap) : 0; // may exceed 1
-        return { store: g.rawStore, machineId: g.machineId, total_qty: total, capacity: cap, percent100: Math.round(ratio * 100), barRatio: ratio };
+        // convert products map to array
+        const products = Array.from(g.products.entries()).map(([name, qty])=>({ name, qty }));
+        return { store: g.rawStore, machineId: g.machineId, total_qty: total, capacity: cap, percent100: Math.round(ratio * 100), barRatio: ratio, products };
       });
 
       lastInventoryData = out;
@@ -759,6 +764,25 @@
 
   function initMachineCarouselForModule(mod){
     const grid = mod.querySelector('.carousel-grid'); if(!grid) return;
+    // add module header button (if module has a header region)
+    try{
+      const header = mod.querySelector('.module-header') || mod.querySelector('.module-title') || mod;
+      if(header && !header.querySelector('.carousel-open-btn')){
+        const btn = document.createElement('button');
+        btn.className = 'carousel-open-btn'; btn.type = 'button'; btn.title = '檢視機台清單'; btn.innerText = '⋯';
+        // Prevent the global module drag start from capturing this interaction.
+        // Stop propagation on pointer/mouse/touch down so the document-level pointerdown
+        // handler doesn't begin a drag operation when user intends to click the button.
+        ['pointerdown','mousedown','touchstart'].forEach(ev => {
+          btn.addEventListener(ev, function(e){
+            try{ e.stopPropagation(); }catch(err){}
+            try{ if(e.pointerId && btn.setPointerCapture) btn.setPointerCapture(e.pointerId); }catch(err){}
+          });
+        });
+        btn.addEventListener('click', (e)=>{ e.stopPropagation(); openMachineListModal(); });
+        header.appendChild(btn);
+      }
+    }catch(e){ /* ignore header injection failures */ }
     // determine number of cards from module w/h
     const w = parseInt(mod.dataset.w||1,10); const h = parseInt(mod.dataset.h||1,10);
     // base cols/rows from module dataset
@@ -834,6 +858,167 @@
       renderMachineCards(grid, out, cols, rows);
       // advance by full page (perView) so pages are non-overlapping
       idx = (idx + perView) % srcLen;
+    }
+
+    // modal helpers (scoped per-module)
+    function colorForString(s){
+      let h = 0; if(!s) s = String(Math.random()); for(let i=0;i<s.length;i++){ h = (h*31 + s.charCodeAt(i)) % 360; } return `hsl(${h},60%,65%)`;
+    }
+
+    function openMachineListModal(){
+      const data = (Array.isArray(lastInventoryData) && lastInventoryData.length) ? lastInventoryData : [];
+      let modal = document.querySelector('.machine-list-modal');
+      if(!modal){
+        modal = document.createElement('div'); modal.className = 'machine-list-modal';
+        modal.innerHTML = '\n          <div class="mlm-overlay"></div>\n          <div class="mlm-dialog">\n            <div class="mlm-header">機台清單 <button class="mlm-close" title="關閉">✕</button></div>\n            <div class="mlm-body"><div class="mlm-list"></div></div>\n          </div>';
+        document.body.appendChild(modal);
+        modal.querySelector('.mlm-close').addEventListener('click', ()=>closeMachineListModal());
+        modal.querySelector('.mlm-overlay').addEventListener('click', ()=>closeMachineListModal());
+      }
+      renderMachineList(modal, data);
+      modal.classList.add('open');
+    }
+
+    function closeMachineListModal(){ const modal = document.querySelector('.machine-list-modal'); if(modal) modal.classList.remove('open'); }
+
+    function renderMachineList(modal, rows){
+      const list = modal.querySelector('.mlm-list'); if(!list) return; list.innerHTML = '';
+      const sorted = rows.slice().sort((a,b)=> (a.store||'').localeCompare(b.store||'') || (a.machineId||'').localeCompare(b.machineId||''));
+      sorted.forEach(r => {
+        const item = document.createElement('div'); item.className = 'mlm-row';
+        // top row: title + small id
+        const top = document.createElement('div'); top.className = 'mlm-top';
+        const left = document.createElement('div'); left.className = 'mlm-left';
+        const title = document.createElement('div'); title.className = 'mlm-title'; title.innerText = r.store || '無名稱';
+        const sub = document.createElement('div'); sub.className = 'mlm-sub'; sub.innerText = r.machineId || '';
+        left.appendChild(title); left.appendChild(sub);
+        top.appendChild(left);
+
+        // bottom row: stats (xx / capacity) + stacked bar
+  const bottom = document.createElement('div'); bottom.className = 'mlm-stats';
+  const cap = (r.capacity && Number(r.capacity) > 0) ? Number(r.capacity) : DEFAULT_CAPACITY;
+  const total = r.products && r.products.length ? r.products.reduce((s,p)=>s+(Number(p.qty||p.quantity||0)),0) : (Number(r.total_qty||0) || 0);
+
+  const barWrap = document.createElement('div'); barWrap.className = 'mlm-right';
+  const bar = document.createElement('div'); bar.className = 'mlm-bar';
+        // render product segments
+        let filled = 0;
+        if(r.products && r.products.length){
+          r.products.forEach(p => {
+            const qty = Number(p.qty||0);
+            const pct = cap > 0 ? Math.max(0, (qty/cap)*100) : 0; // proportion of capacity
+            filled += qty;
+            const seg = document.createElement('div'); seg.className = 'mlm-seg'; seg.style.width = pct + '%'; seg.style.background = colorForString(p.name || String(Math.random())); seg.title = `${p.name}：${qty}`;
+            bar.appendChild(seg);
+          });
+        } else {
+          // if no product breakdown, show single filled segment for total
+          const pct = cap > 0 ? Math.min(100, (total/cap)*100) : 0;
+          const seg = document.createElement('div'); seg.className = 'mlm-seg'; seg.style.width = pct + '%'; seg.style.background = '#36A2EB'; seg.title = `庫存：${total}`;
+          bar.appendChild(seg);
+          filled = total;
+        }
+        // append gray remainder for empty space up to capacity
+        const rem = Math.max(0, cap - filled);
+        if(cap > 0){ const remPct = Math.max(0, Math.min(100, (rem / cap) * 100)); if(remPct > 0){ const segg = document.createElement('div'); segg.className = 'mlm-seg mlm-empty'; segg.style.width = remPct + '%'; segg.style.background = '#e6e9ee'; segg.title = `可用空位：${rem}`; bar.appendChild(segg); } }
+
+  barWrap.appendChild(bar);
+  bottom.appendChild(barWrap);
+
+        // make each row clickable to toggle inline detail view
+        item.style.cursor = 'pointer';
+        item.addEventListener('click', (e)=>{ e.stopPropagation(); toggleInlineDetail(item, r); });
+        item.appendChild(top); item.appendChild(bottom);
+        list.appendChild(item);
+      });
+    }
+    // toggle inline detail expansion under the stacked bar
+    function toggleInlineDetail(item, r){
+      // if already expanded, remove it
+      const existing = item.querySelector('.mlm-inline-detail');
+      if(existing){ existing.remove(); return; }
+      // build inline detail (adapted from presentation.js renderStoreCards detailHtml)
+      const salesData = window.salesData || window.fullSalesData || {};
+      const store = r.store || '';
+      const machineSalesData = salesData[store] || null;
+      const products = (r.products && r.products.length) ? r.products.map(p=>({ name: p.name, quantity: Number(p.qty||p.quantity||0) })) : [];
+      const inStockProducts = new Map(products.map(p=>[p.name, p.quantity]));
+      const allProductNames = new Set([ ...products.map(p=>p.name).filter(Boolean), ...(machineSalesData ? Object.keys(machineSalesData) : []) ]);
+      let processedProducts = [];
+      allProductNames.forEach(productName => {
+        const salesInfo = machineSalesData ? machineSalesData[productName] : null;
+        processedProducts.push({ name: productName, quantity: inStockProducts.get(productName) || 0, sales: salesInfo ? salesInfo.count : 0, lastSoldDate: salesInfo ? salesInfo.lastSoldDate : '' });
+      });
+      if(machineSalesData) processedProducts.sort((a,b)=> b.sales - a.sales);
+
+  const wrapper = document.createElement('div'); wrapper.className = 'mlm-inline-detail';
+      // top: re-show refill/lastUpdated if available; trigger loading of sales data if missing
+  const infoRow = document.createElement('div'); infoRow.className = 'mlm-inline-info';
+  let infoText = r.lastUpdated ? `補貨: ${r.lastUpdated}` : '';
+  if(!machineSalesData){
+    infoText += (infoText? ' · ' : '') + '載入交易資料中...';
+    // try to fetch transactions and re-render this detail when available
+    if(typeof loadLast30 === 'function'){
+      // fire-and-forget, then re-open the detail to pick up salesData
+      loadLast30().then(()=>{
+        try{ const ex = item.querySelector('.mlm-inline-detail'); if(ex) ex.remove(); toggleInlineDetail(item, r); }catch(e){}
+      }).catch(()=>{});
+  }
+  }
+  infoRow.innerText = infoText;
+  wrapper.appendChild(infoRow);
+
+      // render medals (前三名) and sold items
+      const medals = ['🥇','🥈','🥉'];
+      const productsWithSales = processedProducts.filter(p=>p.sales>0);
+      const productsWithoutSales = processedProducts.filter(p=>p.sales===0);
+
+      for(let i=0;i<3;i++){
+        const product = productsWithSales[i];
+        const row = document.createElement('div'); row.className = 'detail-item';
+        const left = document.createElement('div'); left.className = 'detail-name';
+        const right = document.createElement('div'); right.className = 'detail-qty';
+        if(product){
+          left.innerText = `${medals[i]} ${product.name}`;
+          right.innerText = (product.quantity===0) ? '⚠️' : String(product.quantity);
+          let tparts = [`過去一個月銷量為 ${product.sales}`]; if(product.quantity===0) tparts.push(`已在 ${product.lastSoldDate} 完售，請盡早補貨`);
+          row.title = tparts.join('，');
+        } else {
+          left.innerText = `${medals[i]} -`;
+          right.innerText = '-';
+          row.title = `該機台過去一個月只銷售 ${productsWithSales.length} 樣產品`;
+        }
+        row.appendChild(left); row.appendChild(right); wrapper.appendChild(row);
+      }
+
+      // other sold products
+      if(productsWithSales.length>3){
+        productsWithSales.slice(3).forEach(product=>{
+          const row = document.createElement('div'); row.className = 'detail-item';
+            const left = document.createElement('div'); left.className = 'detail-name'; left.innerText = product.name;
+            const right = document.createElement('div'); right.className = 'detail-qty'; right.innerText = (product.quantity===0)?'⚠️':String(product.quantity);
+            row.title = `過去一個月銷量為 ${product.sales}`;
+            row.appendChild(left); row.appendChild(right); wrapper.appendChild(row);
+        });
+      }
+
+      // products without sales
+      productsWithoutSales.forEach(product=>{
+        const row = document.createElement('div'); row.className = 'detail-item';
+        const left = document.createElement('div'); left.className = 'detail-name'; left.innerText = product.name;
+        const right = document.createElement('div'); right.className = 'detail-qty'; right.innerText = String(product.quantity);
+        row.title = '該產品於過去一個月未有銷售紀錄';
+        row.appendChild(left); row.appendChild(right); wrapper.appendChild(row);
+      });
+
+      // total
+      const totalRow = document.createElement('div'); totalRow.className = 'detail-total';
+      const tl = document.createElement('div'); tl.innerText = '總計';
+      const tr = document.createElement('div'); tr.innerText = processedProducts.reduce((s,p)=>s + (Number(p.quantity)||0),0);
+      totalRow.appendChild(tl); totalRow.appendChild(tr); wrapper.appendChild(totalRow);
+
+      // insert after bottom (stacked bar)
+      const bottom = item.querySelector('.mlm-stats'); if(bottom) bottom.insertAdjacentElement('afterend', wrapper);
     }
   // immediately render and start interval
   // stop any previous carousel for this module first
@@ -938,6 +1123,41 @@
           if(mod.dataset.templateId){ try{ setKpiValuesForModule(mod, mod.dataset.templateId, lastLoadData); }catch(e){} }
         });
       }catch(e){ console.warn('rendering into cloned modules failed', e); }
+          // Additionally, aggregate per-store/per-product sales for the last 30 days
+          try{
+            if(Array.isArray(data)){
+              // attach parsed jsDate to each item for consistency
+              data.forEach(d=>{ if(d.date && typeof d.date === 'string'){ const dt=new Date(d.date); d.jsDate = isNaN(dt.getTime())?null:dt; } else d.jsDate = null; });
+              const today = new Date(); today.setHours(0,0,0,0);
+              const end = new Date(today); end.setHours(23,59,59,999);
+              const start = new Date(end); start.setDate(end.getDate() - 29); start.setHours(0,0,0,0);
+              const recent = data.filter(d=> d.jsDate && d.jsDate >= start && d.jsDate <= end && parseFloat(d.amount) > 0);
+              const aggregatedSales = {};
+              recent.forEach(sale => {
+                if(!sale.shopName || !sale.product) return;
+                const shopName = String(sale.shopName).trim();
+                const productName = String(sale.product).trim();
+                if(!aggregatedSales[shopName]) aggregatedSales[shopName] = {};
+                if(!aggregatedSales[shopName][productName]) aggregatedSales[shopName][productName] = { count:0, lastSoldDate: '1970-01-01' };
+                aggregatedSales[shopName][productName].count += 1;
+                aggregatedSales[shopName].totalSales = (aggregatedSales[shopName].totalSales||0) + (parseFloat(sale.amount)||0);
+                const saleDateStr = sale.jsDate.toISOString().split('T')[0];
+                if(saleDateStr > aggregatedSales[shopName][productName].lastSoldDate) aggregatedSales[shopName][productName].lastSoldDate = saleDateStr;
+              });
+              // expose for compatibility with presentation.js expectations
+              window.fullSalesData = data;
+              window.last30DaysSalesData = aggregatedSales;
+              // also make a convenience mapping used in V2 detail code
+              // structure: salesData[store][product] = { count, lastSoldDate }
+              const salesDataMap = {};
+              Object.keys(aggregatedSales).forEach(store => {
+                salesDataMap[store] = {};
+                Object.keys(aggregatedSales[store]).forEach(k=>{ if(k !== 'totalSales') salesDataMap[store][k] = { count: aggregatedSales[store][k].count, lastSoldDate: aggregatedSales[store][k].lastSoldDate }; });
+              });
+              window.salesData = salesDataMap;
+              log('presentationV2: salesData aggregated and exposed on window');
+            }
+          }catch(e){ console.warn('presentationV2: failed to aggregate sales data', e); }
     }catch(e){ console.error('failed to load transactions',e); }
   }
   loadLast30();
