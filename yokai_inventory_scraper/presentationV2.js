@@ -887,9 +887,13 @@
   log('fetching /api/transactions');
   const res = await fetch('/api/transactions'); if(!res.ok){ log('/api/transactions response not ok', res.status); return; }
   const data = await res.json(); log('/api/transactions returned', Array.isArray(data)?data.length:'non-array');
-      const today = new Date(Math.max(...data.map(d=>new Date(d.date))));
-      const end = new Date(today); end.setHours(23,59,59,999);
-      const start = new Date(end); start.setDate(end.getDate()-29); start.setHours(0,0,0,0);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const end = new Date(today);
+      end.setHours(23, 59, 59, 999);
+      const start = new Date(end);
+      start.setDate(end.getDate() - 29); // 30天區間
+      start.setHours(0, 0, 0, 0);
       const dates = [];
       for(let i=0;i<30;i++){ const dt = new Date(start); dt.setDate(start.getDate()+i); dates.push(dt.toISOString().split('T')[0]); }
       const byDate = {}, storeTotals = {}, productTotals = {}, payTotals = {};
