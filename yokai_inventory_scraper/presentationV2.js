@@ -312,9 +312,12 @@
     // After layout and placeModule run, ensure any machine carousel modules are properly initialized.
     // Use requestAnimationFrame so DOM layout and CSS sizing have settled (fixes issue where carousels
     // required a drag/resize to render after reload).
-    requestAnimationFrame(()=>{
-      document.querySelectorAll('.module').forEach(m=>{
-        try{ if(m.querySelector && m.querySelector('.machine-carousel')) initMachineCarouselForModule(m); }catch(e){}
+    // load real inventory first, then init carousels after layout stabilizes
+    loadInventorySummary().finally(()=>{
+      requestAnimationFrame(()=>{
+        document.querySelectorAll('.module').forEach(m=>{
+          try{ if(m.querySelector && m.querySelector('.machine-carousel')) initMachineCarouselForModule(m); }catch(e){}
+        });
       });
     });
   }catch(e){ }
@@ -663,13 +666,29 @@
   }
 
   // ---- machine carousel implementation ----
-  // in-memory simulated machine list (20 machines)
+  // in-memory simulated machine list (20 machines) - compact shape without machine_id
   const _simMachines = Array.from({length:20}, (_,i)=>({
     name: '機台-' + String(i+1).padStart(2,'0'),
-    id: 'M' + String(1000 + i),
     stock: Math.floor(Math.random()*100),
     capacity: 100
   }));
+
+  // cached inventory summary loaded from server (preferred over simulation)
+  // array of {store,total_qty,capacity,barRatio} (no machine_id)
+  let lastInventoryData = null;
+
+  async function loadInventorySummary(){
+    try{
+      const res = await fetch('/api/inventory-summary');
+      if(!res.ok) return null;
+      const j = await res.json();
+      if(j && j.success && Array.isArray(j.machines)){
+        lastInventoryData = j.machines;
+        return lastInventoryData;
+      }
+    }catch(e){ console.warn('[presentationV2] loadInventorySummary failed', e); }
+    return null;
+  }
 
   // map of running carousel timers by module id for cleanup
   const carouselRegistry = new Map();
@@ -687,10 +706,12 @@
   container.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
     machines.forEach(m=>{
       const card = document.createElement('div'); card.className = 'machine-card';
-      const t = document.createElement('div'); t.className='title'; t.textContent = m.name + ' (' + m.id + ')';
-  const meta = document.createElement('div'); meta.className='meta'; meta.textContent = m.stock + '/' + m.capacity;
+      const t = document.createElement('div'); t.className='title'; t.textContent = m.name;
+      const meta = document.createElement('div'); meta.className='meta'; meta.textContent = (m.stock || 0) + '/' + (m.capacity || 50);
       const barWrap = document.createElement('div'); barWrap.className = 'bar';
-      const bar = document.createElement('i'); bar.style.width = Math.max(2, Math.round((m.stock / m.capacity) * 100)) + '%'; barWrap.appendChild(bar);
+      const cap = (m.capacity && m.capacity > 0) ? m.capacity : 50;
+      const pct = Math.max(0, Math.min(100, Math.round(((m.stock||0) / cap) * 100)));
+      const bar = document.createElement('i'); bar.style.width = Math.max(2, pct) + '%'; barWrap.appendChild(bar);
       card.appendChild(t); card.appendChild(meta); card.appendChild(barWrap);
       container.appendChild(card);
     });
@@ -719,14 +740,25 @@
     // create window into sim machines, starting at 0
     let idx = 0;
     function tick(){
-      // slice perView machines starting at idx, wrap-around
+      // choose source: prefer real data if available, otherwise fallback to simulated
+      const source = (Array.isArray(lastInventoryData) && lastInventoryData.length) ? lastInventoryData : _simMachines;
+      const srcLen = Math.max(1, source.length);
       const out = [];
-      for(let i=0;i<perView;i++){ out.push(_simMachines[(idx + i) % _simMachines.length]); }
+      for(let i=0;i<perView;i++){
+        const item = source[(idx + i) % srcLen];
+        if(!item) continue;
+        // API now returns per-store aggregates (no machine_id)
+        if(item.store !== undefined){
+          out.push({ name: item.store, stock: item.total_qty || 0, capacity: item.capacity || 50 });
+        } else {
+          out.push(item);
+        }
+      }
       renderMachineCards(grid, out, cols, rows);
       // ensure centering and that grid items don't stretch oddly
       grid.style.display = 'grid'; grid.style.placeItems = 'center'; grid.style.justifyContent = 'center'; grid.style.alignContent = 'center';
       // advance by full page (perView) so pages are non-overlapping
-      idx = (idx + perView) % _simMachines.length;
+      idx = (idx + perView) % srcLen;
     }
   // immediately render and start interval
   // stop any previous carousel for this module first

@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import OperationalError
 from sqlalchemy import or_, and_
+from sqlalchemy import func
 import subprocess
 import logging
 import traceback
@@ -681,6 +682,53 @@ def get_data():
     finally:
         db.close()
 
+@app.route('/api/inventory-summary', methods=['GET'])
+def api_inventory_summary():
+    """
+        Returns a compact inventory summary grouped by store for presentationV2.
+        Fields returned per item:
+            - store: machine/store name
+            - total_qty: sum of quantities for that store
+            - capacity: configured machine capacity (integer)
+            - percent100: integer 0..100 representing (total_qty / capacity) * 100
+            - barRatio: float 0..1 for bar rendering (total_qty / capacity)
+
+    This endpoint is additive for presentation V2 and should not affect v1 APIs.
+    """
+    db: Session = next(get_db())
+    try:
+        # machine capacity (per your note). Adjust here if different machines have different caps.
+        MACHINE_CAPACITY = int(os.getenv('MACHINE_CAPACITY', '50'))
+
+        # Aggregate by store only (machine_id removed to save UI space)
+        rows = db.query(
+            Inventory.store.label('store'),
+            func.sum(Inventory.quantity).label('total_qty')
+        ).group_by(Inventory.store).all()
+
+        result = []
+        for r in rows:
+            total = int(r.total_qty or 0)
+            cap = MACHINE_CAPACITY
+            try:
+                percent100 = int(round((total / cap) * 100)) if cap > 0 else 0
+            except Exception:
+                percent100 = 0
+            percent100 = max(0, min(100, percent100))
+            bar_ratio = (total / cap) if cap > 0 else 0
+            result.append({
+                'store': r.store,
+                'total_qty': total,
+                'capacity': cap,
+                'percent100': percent100,
+                'barRatio': max(0, min(1, bar_ratio))
+            })
+        return jsonify({'success': True, 'machines': result})
+    except Exception as e:
+        logging.exception('api_inventory_summary failed')
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
 
 def is_admin():
     """Helper: current session indicates admin if session['logged_in']==True (existing behavior)."""
