@@ -121,6 +121,10 @@
   const chartRegistry = new Map();
   // cache of last loaded data from /api/transactions so newly spawned modules can render immediately
   let lastLoadData = null;
+  // promise guard to avoid concurrent / repeated loads
+  let salesLoadPromise = null;
+  // cache of stores known to have no sales in last 30 days to avoid retry storm
+  const noSalesStores = new Set();
   // simple logger helper (available early so persistence functions can use it)
   const log = (...args)=>{ try{ console.log('[presentationV2]', ...args); }catch(e){} };
 
@@ -688,7 +692,27 @@
       if(!j || !j.success || !Array.isArray(j.data)) return null;
 
       const rows = j.data;
-      // group by a canonical machine key to avoid double-counting.
+      // Build a storeNotesAndAddresses map (keyed by `${store}-${machineId}`) so V2 can display address/note like V1
+      try{
+        const notes = {};
+        let latestProcessTime = 0;
+        rows.forEach(item => {
+          const storeKey = `${item.store}-${item.machineId}`;
+          if (!notes[storeKey]) {
+            notes[storeKey] = {
+              address: item.address || '',
+              note: item.note || '',
+              sales: item.manualSales || 0
+            };
+          }
+          const processTimeValue = item.processTime ? new Date(item.processTime).getTime() : 0;
+          if (processTimeValue > latestProcessTime) latestProcessTime = processTimeValue;
+        });
+        window.storeNotesAndAddresses = notes;
+        if(latestProcessTime > 0) window.updateTime = new Date(latestProcessTime).toLocaleString('zh-TW');
+        console.log('[presentationV2] populated window.storeNotesAndAddresses from /get-data');
+      }catch(e){ console.warn('[presentationV2] failed to build storeNotesAndAddresses', e); }
+  // group by a canonical machine key to avoid double-counting.
       // Prefer explicit machine id (machineId or machine_id) when available; otherwise use the raw store string.
       const groups = new Map();
       const seenRowIds = new Set();
@@ -706,10 +730,25 @@
         const machineNorm = machineId ? norm(machineId) : '';
         const machineKey = machineNorm ? `${storeNorm}::${machineNorm}` : storeNorm;
 
-  if(!groups.has(machineKey)) groups.set(machineKey, { rawStore: rawStore, machineId: machineId, total_qty: 0, capacity: (Number(r.capacity) || DEFAULT_CAPACITY), products: new Map() });
+  if(!groups.has(machineKey)) groups.set(machineKey, { rawStore: rawStore, machineId: machineId, total_qty: 0, capacity: (Number(r.capacity) || DEFAULT_CAPACITY), products: new Map(), lastUpdated: '', lastUpdatedTs: 0 });
   const g = groups.get(machineKey);
   g.total_qty += qty;
   if(r.capacity && Number(r.capacity) > 0) g.capacity = Math.max(g.capacity || DEFAULT_CAPACITY, Number(r.capacity));
+  // capture last_updated / lastUpdated from inventory rows (choose latest)
+  try{
+    const cand = r.lastUpdated || r.last_updated || r.last_updated_at || r.last_updated_time || r.processTime || '';
+    if(cand){
+      const candStr = String(cand).split(' (')[0];
+      const dt = new Date(candStr);
+      if(!isNaN(dt.getTime())){
+        const ts = dt.getTime();
+        if(ts > (g.lastUpdatedTs || 0)){
+          g.lastUpdatedTs = ts;
+          g.lastUpdated = String(cand);
+        }
+      }
+    }
+  }catch(e){}
   // accumulate per-product quantities (support several field names)
   const prodName = (r.productName || r.product_name || r.product || '').toString() || '';
   if(prodName){ const prev = g.products.get(prodName) || 0; g.products.set(prodName, prev + qty); }
@@ -723,7 +762,20 @@
         const ratio = cap > 0 ? (total / cap) : 0; // may exceed 1
         // convert products map to array
         const products = Array.from(g.products.entries()).map(([name, qty])=>({ name, qty }));
-        return { store: g.rawStore, machineId: g.machineId, total_qty: total, capacity: cap, percent100: Math.round(ratio * 100), barRatio: ratio, products };
+        // format short lastUpdated as MM/DD HH:MM using the stored lastUpdated timestamp
+        const formatShort = (raw)=>{
+          if(!raw) return '';
+          const s = String(raw).split(' (')[0];
+          const d = new Date(s);
+          if(isNaN(d.getTime())) return '';
+          const mm = d.getMonth() + 1;
+          const dd = d.getDate();
+          const hh = String(d.getHours()).padStart(2,'0');
+          const min = String(d.getMinutes()).padStart(2,'0');
+          return `${mm}/${dd} ${hh}:${min}`;
+        };
+        const lastUpdatedShort = formatShort(g.lastUpdated);
+        return { store: g.rawStore, machineId: g.machineId, total_qty: total, capacity: cap, percent100: Math.round(ratio * 100), barRatio: ratio, products, lastUpdated: lastUpdatedShort };
       });
 
       lastInventoryData = out;
@@ -882,7 +934,18 @@
     function closeMachineListModal(){ const modal = document.querySelector('.machine-list-modal'); if(modal) modal.classList.remove('open'); }
 
     function renderMachineList(modal, rows){
-      const list = modal.querySelector('.mlm-list'); if(!list) return; list.innerHTML = '';
+  const list = modal.querySelector('.mlm-list'); if(!list) return; list.innerHTML = '';
+  // add a sticky header row: left = 機台名稱, right = 過去30天銷售
+  const header = document.createElement('div'); header.className = 'mlm-row mlm-header-row';
+  const htop = document.createElement('div'); htop.className = 'mlm-top';
+  const hleft = document.createElement('div'); hleft.className = 'mlm-left';
+  const htitle = document.createElement('div'); htitle.className = 'mlm-title'; htitle.innerText = '機台名稱';
+  hleft.appendChild(htitle);
+  htop.appendChild(hleft);
+  const hright = document.createElement('div'); hright.className = 'mlm-top-right'; hright.innerText = '過去30天銷售';
+  htop.appendChild(hright);
+  header.appendChild(htop);
+  list.appendChild(header);
       const sorted = rows.slice().sort((a,b)=> (a.store||'').localeCompare(b.store||'') || (a.machineId||'').localeCompare(b.machineId||''));
       sorted.forEach(r => {
         const item = document.createElement('div'); item.className = 'mlm-row';
@@ -893,6 +956,21 @@
         const sub = document.createElement('div'); sub.className = 'mlm-sub'; sub.innerText = r.machineId || '';
         left.appendChild(title); left.appendChild(sub);
         top.appendChild(left);
+        // right: show last 30 days sales amount / count similar to V1
+        try{
+          const salesAgg = window.last30DaysSalesData || {};
+          const salesMap = window.salesData || {};
+          const msAgg = salesAgg[r.store] || null;
+          const machineSalesTotal = msAgg ? (msAgg.totalSales || 0) : 0;
+          let machineSalesCount = 0;
+          if(salesMap[r.store]){
+            machineSalesCount = Object.values(salesMap[r.store]).reduce((s,v)=>s + (v && v.count? v.count : 0), 0);
+          }
+          const right = document.createElement('div'); right.className = 'mlm-top-right';
+          if(machineSalesTotal > 0 || machineSalesCount > 0){ right.innerText = `${machineSalesTotal.toLocaleString()} 元 / ${machineSalesCount} 份`; }
+          else { right.innerText = '無'; }
+          top.appendChild(right);
+        }catch(e){ /* ignore if globals not present */ }
 
         // bottom row: stats (xx / capacity) + stacked bar
   const bottom = document.createElement('div'); bottom.className = 'mlm-stats';
@@ -932,12 +1010,12 @@
         list.appendChild(item);
       });
     }
-    // toggle inline detail expansion under the stacked bar
-    function toggleInlineDetail(item, r){
+  // toggle inline detail expansion under the stacked bar
+  async function toggleInlineDetail(item, r){
       // if already expanded, remove it
       const existing = item.querySelector('.mlm-inline-detail');
       if(existing){ existing.remove(); return; }
-      // build inline detail (adapted from presentation.js renderStoreCards detailHtml)
+  // build inline detail (adapted from presentation.js renderStoreCards detailHtml)
       const salesData = window.salesData || window.fullSalesData || {};
       const store = r.store || '';
       const machineSalesData = salesData[store] || null;
@@ -952,21 +1030,29 @@
       if(machineSalesData) processedProducts.sort((a,b)=> b.sales - a.sales);
 
   const wrapper = document.createElement('div'); wrapper.className = 'mlm-inline-detail';
-      // top: re-show refill/lastUpdated if available; trigger loading of sales data if missing
+      // top: re-show refill/lastUpdated if available; include address/note like V1; do not trigger loading here
   const infoRow = document.createElement('div'); infoRow.className = 'mlm-inline-info';
   let infoText = r.lastUpdated ? `補貨: ${r.lastUpdated}` : '';
   if(!machineSalesData){
-    infoText += (infoText? ' · ' : '') + '載入交易資料中...';
-    // try to fetch transactions and re-render this detail when available
-    if(typeof loadLast30 === 'function'){
-      // fire-and-forget, then re-open the detail to pick up salesData
-      loadLast30().then(()=>{
-        try{ const ex = item.querySelector('.mlm-inline-detail'); if(ex) ex.remove(); toggleInlineDetail(item, r); }catch(e){}
-      }).catch(()=>{});
-  }
+    // Do not trigger network loads on click. If no sales data is present, show the friendly message.
+    infoText += (infoText? ' · ' : '') + '過去30天沒有訂單紀錄';
+    // remember this store has no recent sales to avoid future unnecessary checks
+    try{ noSalesStores.add(store); }catch(e){}
   }
   infoRow.innerText = infoText;
   wrapper.appendChild(infoRow);
+
+  // show address and note if present (mimic V1: window.storeNotesAndAddresses)
+  try{
+    const storeNotes = window.storeNotesAndAddresses || {};
+    // V1 stores notes under the key `${store}-${machineId}`. Try that first,
+    // then fall back to store-only key for compatibility.
+    const storeKey = (r.machineId) ? `${store}-${r.machineId}` : store;
+    const noteDataRaw = storeNotes[storeKey] || storeNotes[store] || { address: '', note: '' };
+    const maskedNoteData = window.__maskFields ? { address: window.__maskFields.getOrCreate ? window.__maskFields.getOrCreate('address', noteDataRaw.address) : noteDataRaw.address, note: window.__maskFields.getOrCreate ? window.__maskFields.getOrCreate('note', noteDataRaw.note) : noteDataRaw.note } : noteDataRaw;
+    if(maskedNoteData.address){ const addr = document.createElement('div'); addr.className = 'mlm-detail-address'; addr.innerText = `地址: ${maskedNoteData.address}`; wrapper.appendChild(addr); }
+    if(maskedNoteData.note){ const noteEl = document.createElement('div'); noteEl.className = 'mlm-detail-note'; noteEl.innerText = `備註: ${maskedNoteData.note}`; wrapper.appendChild(noteEl); }
+  }catch(e){ /* ignore */ }
 
       // render medals (前三名) and sold items
       const medals = ['🥇','🥈','🥉'];
@@ -1067,99 +1153,101 @@
   });
 
   // charts + KPIs
-  async function loadLast30(){
-    try{
-  log('fetching /api/transactions');
-  const res = await fetch('/api/transactions'); if(!res.ok){ log('/api/transactions response not ok', res.status); return; }
-  const data = await res.json(); log('/api/transactions returned', Array.isArray(data)?data.length:'non-array');
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const end = new Date(today);
-      end.setHours(23, 59, 59, 999);
-      const start = new Date(end);
-      start.setDate(end.getDate() - 29); // 30天區間
-      start.setHours(0, 0, 0, 0);
-      const dates = [];
-      for(let i=0;i<30;i++){ const dt = new Date(start); dt.setDate(start.getDate()+i); dates.push(dt.toISOString().split('T')[0]); }
-      const byDate = {}, storeTotals = {}, productTotals = {}, payTotals = {};
-      data.forEach(t=>{
-        const d = (new Date(t.date)).toISOString().split('T')[0];
-        if(new Date(t.date) < start || new Date(t.date) > end) return;
-        byDate[d] = (byDate[d]||0) + (parseFloat(t.amount)||0);
-        storeTotals[t.shopName] = (storeTotals[t.shopName]||0) + (parseFloat(t.amount)||0);
-        productTotals[t.product] = (productTotals[t.product]||0) + (parseFloat(t.amount)||0);
-        payTotals[t.payType] = (payTotals[t.payType]||0) + (parseFloat(t.amount)||0);
-      });
-      const trendData = dates.map(d=>byDate[d]||0);
-      const totalSales = Object.values(byDate).reduce((s,v)=>s+v,0);
-      const transactionsCount = data.filter(t=>{ const dt = new Date(t.date); return dt >= start && dt <= end && parseFloat(t.amount) > 0; }).length;
-      const avgTicket = transactionsCount>0 ? Math.round((totalSales/transactionsCount)*100)/100 : 0;
-  // cache for later usage by spawned modules
-  lastLoadData = { dates, trendData, storeTotals, productTotals, payTotals, totalSales, transactionsCount, avgTicket };
-  log('lastLoadData cached', { totalSales, transactionsCount, avgTicket, stores: Object.keys(storeTotals).length });
-      const elTotal = document.getElementById('kpi-total-sales'); const elTrans = document.getElementById('kpi-transactions'); const elAvg = document.getElementById('kpi-avg-value');
-      if(elTotal) elTotal.textContent = totalSales.toLocaleString(); if(elTrans) elTrans.textContent = transactionsCount.toLocaleString(); if(elAvg) elAvg.textContent = avgTicket.toLocaleString();
-      const chartOptions = { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:true, position:'bottom' } } };
-      // create or update Chart instances and register them
-      const makeOrUpdate = (cid, cfg)=>{
-        const el = document.getElementById(cid); if(!el) return;
-        try{
-          const prev = chartRegistry.get(el.id);
-          if(prev && prev.destroy) prev.destroy();
-        }catch(e){}
-        try{ const chart = new Chart(el, cfg); chartRegistry.set(el.id, chart); }catch(e){}
-      };
-
-      makeOrUpdate('chart-sales-trend', { type:'line', data:{ labels:dates, datasets:[{ data:trendData, borderColor:'#2196F3', backgroundColor:'rgba(33,150,243,0.08)', tension:0.4 }] }, options:{ ...chartOptions, plugins:{ ...chartOptions.plugins, legend:{ display:false } }, scales:{ x:{display:false}, y:{display:false} } } });
-      makeOrUpdate('chart-store-sales', { type:'bar', data:{ labels:Object.keys(storeTotals), datasets:[{ data:Object.values(storeTotals), backgroundColor:'#36A2EB' }] }, options:{ ...chartOptions, plugins:{ ...chartOptions.plugins, legend:{ display:false } }, scales:{ x:{display:false}, y:{display:false} } } });
-      makeOrUpdate('chart-product-share', { type:'doughnut', data:{ labels:Object.keys(productTotals), datasets:[{ data:Object.values(productTotals), backgroundColor:['#FF6384','#36A2EB','#FFCE56','#4BC0C0'] }] }, options:{ ...chartOptions, plugins:{ ...chartOptions.plugins, legend:{ display:false } } } });
-      makeOrUpdate('chart-pay-share', { type:'pie', data:{ labels:Object.keys(payTotals), datasets:[{ data:Object.values(payTotals), backgroundColor:['#8AC926','#FF9F40','#9966FF'] }] }, options:{ ...chartOptions, plugins:{ ...chartOptions.plugins, legend:{ display:false } } } });
-      // render into any canvases inside modules (including cloned ones) and populate KPI clones
+  function loadLast30(){
+    // avoid concurrent fetches; reuse in-flight promise
+    if(salesLoadPromise) return salesLoadPromise;
+    salesLoadPromise = (async ()=>{
       try{
-        document.querySelectorAll('.module').forEach(mod=>{
-          const canvases = mod.querySelectorAll('canvas');
-          canvases.forEach(c => { try{ renderChartForModuleCanvas(c.id, mod.id, lastLoadData); }catch(e){} });
-          // populate KPI clones if applicable
-          if(mod.dataset.templateId){ try{ setKpiValuesForModule(mod, mod.dataset.templateId, lastLoadData); }catch(e){} }
+        log('fetching /api/transactions');
+        const res = await fetch('/api/transactions'); if(!res.ok){ log('/api/transactions response not ok', res.status); return; }
+        const data = await res.json(); log('/api/transactions returned', Array.isArray(data)?data.length:'non-array');
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const end = new Date(today);
+        end.setHours(23, 59, 59, 999);
+        const start = new Date(end);
+        start.setDate(end.getDate() - 29); // 30天區間
+        start.setHours(0, 0, 0, 0);
+        const dates = [];
+        for(let i=0;i<30;i++){ const dt = new Date(start); dt.setDate(start.getDate()+i); dates.push(dt.toISOString().split('T')[0]); }
+        const byDate = {}, storeTotals = {}, productTotals = {}, payTotals = {};
+        data.forEach(t=>{
+          const d = (new Date(t.date)).toISOString().split('T')[0];
+          if(new Date(t.date) < start || new Date(t.date) > end) return;
+          byDate[d] = (byDate[d]||0) + (parseFloat(t.amount)||0);
+          storeTotals[t.shopName] = (storeTotals[t.shopName]||0) + (parseFloat(t.amount)||0);
+          productTotals[t.product] = (productTotals[t.product]||0) + (parseFloat(t.amount)||0);
+          payTotals[t.payType] = (payTotals[t.payType]||0) + (parseFloat(t.amount)||0);
         });
-      }catch(e){ console.warn('rendering into cloned modules failed', e); }
-          // Additionally, aggregate per-store/per-product sales for the last 30 days
-          try{
-            if(Array.isArray(data)){
-              // attach parsed jsDate to each item for consistency
-              data.forEach(d=>{ if(d.date && typeof d.date === 'string'){ const dt=new Date(d.date); d.jsDate = isNaN(dt.getTime())?null:dt; } else d.jsDate = null; });
-              const today = new Date(); today.setHours(0,0,0,0);
-              const end = new Date(today); end.setHours(23,59,59,999);
-              const start = new Date(end); start.setDate(end.getDate() - 29); start.setHours(0,0,0,0);
-              const recent = data.filter(d=> d.jsDate && d.jsDate >= start && d.jsDate <= end && parseFloat(d.amount) > 0);
-              const aggregatedSales = {};
-              recent.forEach(sale => {
-                if(!sale.shopName || !sale.product) return;
-                const shopName = String(sale.shopName).trim();
-                const productName = String(sale.product).trim();
-                if(!aggregatedSales[shopName]) aggregatedSales[shopName] = {};
-                if(!aggregatedSales[shopName][productName]) aggregatedSales[shopName][productName] = { count:0, lastSoldDate: '1970-01-01' };
-                aggregatedSales[shopName][productName].count += 1;
-                aggregatedSales[shopName].totalSales = (aggregatedSales[shopName].totalSales||0) + (parseFloat(sale.amount)||0);
-                const saleDateStr = sale.jsDate.toISOString().split('T')[0];
-                if(saleDateStr > aggregatedSales[shopName][productName].lastSoldDate) aggregatedSales[shopName][productName].lastSoldDate = saleDateStr;
-              });
-              // expose for compatibility with presentation.js expectations
-              window.fullSalesData = data;
-              window.last30DaysSalesData = aggregatedSales;
-              // also make a convenience mapping used in V2 detail code
-              // structure: salesData[store][product] = { count, lastSoldDate }
-              const salesDataMap = {};
-              Object.keys(aggregatedSales).forEach(store => {
-                salesDataMap[store] = {};
-                Object.keys(aggregatedSales[store]).forEach(k=>{ if(k !== 'totalSales') salesDataMap[store][k] = { count: aggregatedSales[store][k].count, lastSoldDate: aggregatedSales[store][k].lastSoldDate }; });
-              });
-              window.salesData = salesDataMap;
-              log('presentationV2: salesData aggregated and exposed on window');
-            }
-          }catch(e){ console.warn('presentationV2: failed to aggregate sales data', e); }
-    }catch(e){ console.error('failed to load transactions',e); }
+        const trendData = dates.map(d=>byDate[d]||0);
+        const totalSales = Object.values(byDate).reduce((s,v)=>s+v,0);
+        const transactionsCount = data.filter(t=>{ const dt = new Date(t.date); return dt >= start && dt <= end && parseFloat(t.amount) > 0; }).length;
+        const avgTicket = transactionsCount>0 ? Math.round((totalSales/transactionsCount)*100)/100 : 0;
+        // cache for later usage by spawned modules
+        lastLoadData = { dates, trendData, storeTotals, productTotals, payTotals, totalSales, transactionsCount, avgTicket };
+        log('lastLoadData cached', { totalSales, transactionsCount, avgTicket, stores: Object.keys(storeTotals).length });
+        const elTotal = document.getElementById('kpi-total-sales'); const elTrans = document.getElementById('kpi-transactions'); const elAvg = document.getElementById('kpi-avg-value');
+        if(elTotal) elTotal.textContent = totalSales.toLocaleString(); if(elTrans) elTrans.textContent = transactionsCount.toLocaleString(); if(elAvg) elAvg.textContent = avgTicket.toLocaleString();
+        const chartOptions = { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:true, position:'bottom' } } };
+        // create or update Chart instances and register them
+        const makeOrUpdate = (cid, cfg)=>{
+          const el = document.getElementById(cid); if(!el) return;
+          try{ const prev = chartRegistry.get(el.id); if(prev && prev.destroy) prev.destroy(); }catch(e){}
+          try{ const chart = new Chart(el, cfg); chartRegistry.set(el.id, chart); }catch(e){}
+        };
+
+        makeOrUpdate('chart-sales-trend', { type:'line', data:{ labels:dates, datasets:[{ data:trendData, borderColor:'#2196F3', backgroundColor:'rgba(33,150,243,0.08)', tension:0.4 }] }, options:{ ...chartOptions, plugins:{ ...chartOptions.plugins, legend:{ display:false } }, scales:{ x:{display:false}, y:{display:false} } } });
+        makeOrUpdate('chart-store-sales', { type:'bar', data:{ labels:Object.keys(storeTotals), datasets:[{ data:Object.values(storeTotals), backgroundColor:'#36A2EB' }] }, options:{ ...chartOptions, plugins:{ ...chartOptions.plugins, legend:{ display:false } }, scales:{ x:{display:false}, y:{display:false} } } });
+        makeOrUpdate('chart-product-share', { type:'doughnut', data:{ labels:Object.keys(productTotals), datasets:[{ data:Object.values(productTotals), backgroundColor:['#FF6384','#36A2EB','#FFCE56','#4BC0C0'] }] }, options:{ ...chartOptions, plugins:{ ...chartOptions.plugins, legend:{ display:false } } } });
+        makeOrUpdate('chart-pay-share', { type:'pie', data:{ labels:Object.keys(payTotals), datasets:[{ data:Object.values(payTotals), backgroundColor:['#8AC926','#FF9F40','#9966FF'] }] }, options:{ ...chartOptions, plugins:{ ...chartOptions.plugins, legend:{ display:false } } } });
+        // render into any canvases inside modules (including cloned ones) and populate KPI clones
+        try{
+          document.querySelectorAll('.module').forEach(mod=>{
+            const canvases = mod.querySelectorAll('canvas');
+            canvases.forEach(c => { try{ renderChartForModuleCanvas(c.id, mod.id, lastLoadData); }catch(e){} });
+            // populate KPI clones if applicable
+            if(mod.dataset.templateId){ try{ setKpiValuesForModule(mod, mod.dataset.templateId, lastLoadData); }catch(e){} }
+          });
+        }catch(e){ console.warn('rendering into cloned modules failed', e); }
+        // Additionally, aggregate per-store/per-product sales for the last 30 days
+        try{
+          if(Array.isArray(data)){
+            // attach parsed jsDate to each item for consistency
+            data.forEach(d=>{ if(d.date && typeof d.date === 'string'){ const dt=new Date(d.date); d.jsDate = isNaN(dt.getTime())?null:dt; } else d.jsDate = null; });
+            const recent = data.filter(d=> d.jsDate && d.jsDate >= start && d.jsDate <= end && parseFloat(d.amount) > 0);
+            const aggregatedSales = {};
+            recent.forEach(sale => {
+              if(!sale.shopName || !sale.product) return;
+              const shopName = String(sale.shopName).trim();
+              const productName = String(sale.product).trim();
+              if(!aggregatedSales[shopName]) aggregatedSales[shopName] = {};
+              if(!aggregatedSales[shopName][productName]) aggregatedSales[shopName][productName] = { count:0, lastSoldDate: '1970-01-01' };
+              aggregatedSales[shopName][productName].count += 1;
+              aggregatedSales[shopName].totalSales = (aggregatedSales[shopName].totalSales||0) + (parseFloat(sale.amount)||0);
+              const saleDateStr = sale.jsDate.toISOString().split('T')[0];
+              if(saleDateStr > aggregatedSales[shopName][productName].lastSoldDate) aggregatedSales[shopName][productName].lastSoldDate = saleDateStr;
+            });
+            // expose for compatibility with presentation.js expectations
+            window.fullSalesData = data;
+            window.last30DaysSalesData = aggregatedSales;
+            // also make a convenience mapping used in V2 detail code
+            // structure: salesData[store][product] = { count, lastSoldDate }
+            const salesDataMap = {};
+            Object.keys(aggregatedSales).forEach(store => {
+              salesDataMap[store] = {};
+              Object.keys(aggregatedSales[store]).forEach(k=>{ if(k !== 'totalSales') salesDataMap[store][k] = { count: aggregatedSales[store][k].count, lastSoldDate: aggregatedSales[store][k].lastSoldDate }; });
+            });
+            window.salesData = salesDataMap;
+            log('presentationV2: salesData aggregated and exposed on window');
+          }
+        }catch(e){ console.warn('presentationV2: failed to aggregate sales data', e); }
+      }catch(e){ console.error('failed to load transactions',e); throw e; }
+    })();
+    // ensure salesLoadPromise cleared afterwards
+    salesLoadPromise = salesLoadPromise.finally(()=>{ salesLoadPromise = null; return null; });
+    return salesLoadPromise;
   }
+  // initial eager load (kept) but guarded
   loadLast30();
 
 })();
