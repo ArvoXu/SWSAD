@@ -1033,12 +1033,6 @@
       // top: re-show refill/lastUpdated if available; include address/note like V1; do not trigger loading here
   const infoRow = document.createElement('div'); infoRow.className = 'mlm-inline-info';
   let infoText = r.lastUpdated ? `補貨: ${r.lastUpdated}` : '';
-  if(!machineSalesData){
-    // Do not trigger network loads on click. If no sales data is present, show the friendly message.
-    infoText += (infoText? ' · ' : '') + '過去30天沒有訂單紀錄';
-    // remember this store has no recent sales to avoid future unnecessary checks
-    try{ noSalesStores.add(store); }catch(e){}
-  }
   infoRow.innerText = infoText;
   wrapper.appendChild(infoRow);
 
