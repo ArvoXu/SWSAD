@@ -935,18 +935,85 @@
 
     function renderMachineList(modal, rows){
   const list = modal.querySelector('.mlm-list'); if(!list) return; list.innerHTML = '';
-  // add a sticky header row: left = 機台名稱, right = 過去30天銷售
+  // add a sticky header row: left = 機台名稱, right = 過去30天銷售 + sort controls
   const header = document.createElement('div'); header.className = 'mlm-row mlm-header-row';
   const htop = document.createElement('div'); htop.className = 'mlm-top';
   const hleft = document.createElement('div'); hleft.className = 'mlm-left';
   const htitle = document.createElement('div'); htitle.className = 'mlm-title'; htitle.innerText = '機台名稱';
   hleft.appendChild(htitle);
   htop.appendChild(hleft);
-  const hright = document.createElement('div'); hright.className = 'mlm-top-right'; hright.innerText = '過去30天銷售';
+
+  // sort controls container (centered): each button shows a type icon + sort indicator
+  const sortControls = document.createElement('div'); sortControls.className = 'mlm-sort-controls';
+  sortControls.style.display = 'flex'; sortControls.style.gap = '6px'; sortControls.style.alignItems = 'center';
+  // helper to create a toggle button with two icons: type icon + indicator
+  const makeBtn = (key, label, typeIcon)=>{
+    const b = document.createElement('button'); b.type='button'; b.className='mlm-sort-btn'; b.dataset.key = key; b.title = label;
+    b.style.border='0'; b.style.background='transparent'; b.style.padding='4px 6px'; b.style.cursor='pointer'; b.style.display='inline-flex'; b.style.alignItems='center'; b.style.gap='6px';
+    const iconSpan = document.createElement('span'); iconSpan.className='mlm-type-icon'; iconSpan.textContent = typeIcon;
+    const indSpan = document.createElement('span'); indSpan.className='mlm-sort-indicator';
+    const curKey = modal.dataset.sortKey || '';
+    const curOrder = modal.dataset.sortOrder || 'desc';
+    if(curKey === key){ indSpan.textContent = (curOrder === 'asc') ? '▲' : '▼'; }
+    else { indSpan.textContent = '⇅'; }
+    b.appendChild(iconSpan); b.appendChild(indSpan);
+    b.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      const prevKey = modal.dataset.sortKey || '';
+      const prevOrder = modal.dataset.sortOrder || 'desc';
+      if(prevKey === key){
+        modal.dataset.sortOrder = (prevOrder === 'asc') ? 'desc' : 'asc';
+      } else {
+        modal.dataset.sortKey = key; modal.dataset.sortOrder = 'desc';
+      }
+      renderMachineList(modal, rows);
+    });
+    return b;
+  };
+  // three buttons: sales(💰), inventory(📦), machine(🔢)
+  const btnSales = makeBtn('sales', '依銷售額排序', '💰');
+  const btnInv = makeBtn('inventory', '依庫存量排序', '📦');
+  const btnMachine = makeBtn('machine', '依機台編號排序', '🔢');
+  sortControls.appendChild(btnSales); sortControls.appendChild(btnInv); sortControls.appendChild(btnMachine);
+
+  // assemble header: left title, center sortControls, right label
+  const hcenter = document.createElement('div'); hcenter.className = 'mlm-center';
+  hcenter.style.display = 'flex'; hcenter.style.flex = '1'; hcenter.style.justifyContent = 'center'; hcenter.appendChild(sortControls);
+  htop.appendChild(hcenter);
+  const hright = document.createElement('div'); hright.className = 'mlm-top-right'; hright.innerText = '過去30天銷售'; hright.style.marginLeft = '8px';
   htop.appendChild(hright);
   header.appendChild(htop);
   list.appendChild(header);
-      const sorted = rows.slice().sort((a,b)=> (a.store||'').localeCompare(b.store||'') || (a.machineId||'').localeCompare(b.machineId||''));
+  header.appendChild(htop);
+  list.appendChild(header);
+
+  // compute per-row metrics used for sorting
+  const salesAgg = window.last30DaysSalesData || {};
+  const salesMap = window.salesData || {};
+  const rowsWithMetrics = rows.map(r=>{
+    const msAgg = salesAgg[r.store] || null;
+    const machineSalesTotal = msAgg ? (msAgg.totalSales || 0) : 0;
+    let machineSalesCount = 0;
+    if(salesMap[r.store]){ machineSalesCount = Object.values(salesMap[r.store]).reduce((s,v)=>s + (v && v.count? v.count : 0), 0); }
+    const cap = (r.capacity && Number(r.capacity) > 0) ? Number(r.capacity) : DEFAULT_CAPACITY;
+    const totalInv = r.products && r.products.length ? r.products.reduce((s,p)=>s+(Number(p.qty||p.quantity||0)),0) : (Number(r.total_qty||0) || 0);
+    return Object.assign({}, r, { __salesTotal: machineSalesTotal, __salesCount: machineSalesCount, __invTotal: totalInv, __cap: cap });
+  });
+
+  // apply sorting if set on modal
+  const sortKey = modal.dataset.sortKey || ''; const sortOrder = modal.dataset.sortOrder || 'desc';
+  let sorted = rowsWithMetrics.slice();
+  if(sortKey === 'sales'){
+    sorted.sort((a,b)=> (a.__salesTotal||0) - (b.__salesTotal||0));
+  } else if(sortKey === 'inventory'){
+    sorted.sort((a,b)=> (a.__invTotal||0) - (b.__invTotal||0));
+  } else if(sortKey === 'machine'){
+    sorted.sort((a,b)=> String(a.machineId||'').localeCompare(String(b.machineId||'')) );
+  } else {
+    // default sort by store then machineId
+    sorted.sort((a,b)=> (a.store||'').localeCompare(b.store||'') || (a.machineId||'').localeCompare(b.machineId||''));
+  }
+  if(sortKey){ if(sortOrder === 'desc') sorted.reverse(); }
       sorted.forEach(r => {
         const item = document.createElement('div'); item.className = 'mlm-row';
         // top row: title + small id
@@ -958,18 +1025,12 @@
         top.appendChild(left);
         // right: show last 30 days sales amount / count similar to V1
         try{
-          const salesAgg = window.last30DaysSalesData || {};
-          const salesMap = window.salesData || {};
-          const msAgg = salesAgg[r.store] || null;
-          const machineSalesTotal = msAgg ? (msAgg.totalSales || 0) : 0;
-          let machineSalesCount = 0;
-          if(salesMap[r.store]){
-            machineSalesCount = Object.values(salesMap[r.store]).reduce((s,v)=>s + (v && v.count? v.count : 0), 0);
-          }
-          const right = document.createElement('div'); right.className = 'mlm-top-right';
-          if(machineSalesTotal > 0 || machineSalesCount > 0){ right.innerText = `${machineSalesTotal.toLocaleString()} 元 / ${machineSalesCount} 份`; }
-          else { right.innerText = '無'; }
-          top.appendChild(right);
+      const right = document.createElement('div'); right.className = 'mlm-top-right';
+      const machineSalesTotal = (r.__salesTotal !== undefined) ? r.__salesTotal : 0;
+      const machineSalesCount = (r.__salesCount !== undefined) ? r.__salesCount : 0;
+      if(machineSalesTotal > 0 || machineSalesCount > 0){ right.innerText = `${machineSalesTotal.toLocaleString()} 元 / ${machineSalesCount} 份`; }
+      else { right.innerText = '無'; }
+      top.appendChild(right);
         }catch(e){ /* ignore if globals not present */ }
 
         // bottom row: stats (xx / capacity) + stacked bar
