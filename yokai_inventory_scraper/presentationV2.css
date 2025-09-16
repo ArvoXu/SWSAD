@@ -214,12 +214,12 @@ body{font-family: 'Microsoft JhengHei',sans-serif; background:#eef6ff; margin:0;
 /* shared expand modal used by various modules */
 .module-expand-modal{position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:16000}
 .module-expand-modal.open{display:flex}
-.module-expand-modal .mem-overlay{position:absolute; inset:0; background:rgba(0,0,0,0.45)}
-.module-expand-modal .mem-dialog{position:relative; width:92%; max-width:520px; max-height:90vh; background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,0.28); z-index:2; display:flex; flex-direction:column}
-.module-expand-modal .mem-header{padding:12px 14px; font-weight:700; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #f3f6fb}
-.module-expand-modal .mem-body{padding:12px; overflow:auto}
-.module-expand-modal .mem-content{padding:6px}
-.module-expand-modal .mem-close{background:transparent;border:0;padding:6px 10px;cursor:pointer;font-size:16px}
+.module-expand-modal .mlm-overlay{position:absolute; inset:0; background:rgba(0,0,0,0.45)}
+.module-expand-modal .mlm-dialog{position:relative; width:92%; max-width:520px; max-height:90vh; background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,0.28); z-index:2; display:flex; flex-direction:column}
+.module-expand-modal .mlm-header{padding:12px 14px; font-weight:700; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #f3f6fb}
+.module-expand-modal .mlm-body{padding:12px; overflow:auto}
+.module-expand-modal .mlm-content{padding:6px}
+.module-expand-modal .mlm-close{background:transparent;border:0;padding:6px 10px;cursor:pointer;font-size:16px}
 
 /* machine detail modal */
 .machine-detail-modal{position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:15000}

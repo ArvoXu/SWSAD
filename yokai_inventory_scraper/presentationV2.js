@@ -661,13 +661,13 @@
     let modal = document.querySelector('.module-expand-modal');
     if(!modal){
       modal = document.createElement('div'); modal.className = 'module-expand-modal';
-      modal.innerHTML = '\n        <div class="mem-overlay"></div>\n        <div class="mem-dialog">\n          <div class="mem-header">詳細面板 <button class="mem-close" title="關閉">✕</button></div>\n          <div class="mem-body"><div class="mem-content"></div></div>\n        </div>';
+      modal.innerHTML = '\n        <div class="mlm-overlay"></div>\n        <div class="mlm-dialog">\n          <div class="mlm-header">詳細面板 <button class="mlm-close" title="關閉">✕</button></div>\n          <div class="mlm-body"><div class="mlm-content"></div></div>\n        </div>';
       document.body.appendChild(modal);
-      modal.querySelector('.mem-close').addEventListener('click', ()=>closeModuleExpandModal());
-      modal.querySelector('.mem-overlay').addEventListener('click', ()=>closeModuleExpandModal());
+      modal.querySelector('.mlm-close').addEventListener('click', ()=>closeModuleExpandModal());
+      modal.querySelector('.mlm-overlay').addEventListener('click', ()=>closeModuleExpandModal());
     }
     // populate placeholder content (module id and template)
-    const content = modal.querySelector('.mem-content');
+  const content = modal.querySelector('.mlm-content');
     if(content){
       const title = mod.dataset.templateId ? `${mod.dataset.templateId} — ${mod.id}` : mod.id;
       content.innerHTML = `<div style="font-weight:600;margin-bottom:8px">${escapeHtml(title)}</div><div>此處為擴充面板內容占位，之後會放入完整互動資訊。</div>`;
