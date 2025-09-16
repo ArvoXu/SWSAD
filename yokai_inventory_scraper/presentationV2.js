@@ -624,7 +624,60 @@
     });
   // initialize machine carousel if present
   try{ if(moduleEl.querySelector('.machine-carousel')){ initMachineCarouselForModule(moduleEl); } }catch(e){}
+  // inject generic module expand button for all modules
+  try{ injectModuleExpandButton(moduleEl); }catch(e){}
   }
+
+  // inject a three-dots expand button into module header (non-destructive)
+  function injectModuleExpandButton(mod){
+    if(!mod) return;
+    try{
+      const header = mod.querySelector('.module-header') || mod.querySelector('.module-title') || mod;
+      if(!header) return;
+      // Do not inject into modules that already have carousel button (inventory module)
+      if(header.querySelector('.carousel-open-btn')) return;
+      // Do not inject into KPI modules (those templates are mapped in setKpiValuesForModule)
+      const kpiTemplates = new Set(['m-kpi-total-sales','m-kpi-transactions','m-kpi-avg-value']);
+      if(mod.dataset && kpiTemplates.has(mod.dataset.templateId)) return;
+      // Only inject into the four sales chart modules (match by templateId or id pattern)
+      const allowPatterns = ['sales-trend','store-sales','product-share','pay-share'];
+      const idOrTpl = (mod.dataset && mod.dataset.templateId) ? String(mod.dataset.templateId) : String(mod.id || '');
+      const shouldInject = allowPatterns.some(p=> idOrTpl.includes(p) || (mod.id && mod.id.includes(p)));
+      if(!shouldInject) return;
+      if(header.querySelector('.module-expand-btn')) return; // already present
+      const ex = document.createElement('button');
+      ex.className = 'module-expand-btn'; ex.type = 'button'; ex.title = '\u66f4\u591a\u8cc7\u8a0a'; ex.innerText = '\u22ef';
+      ['pointerdown','mousedown','touchstart'].forEach(ev => {
+        ex.addEventListener(ev, function(e){ try{ e.stopPropagation(); }catch(err){} try{ if(e.pointerId && ex.setPointerCapture) ex.setPointerCapture(e.pointerId); }catch(err){} });
+      });
+      ex.addEventListener('click', (e)=>{ e.stopPropagation(); openModuleExpandModal(mod); });
+      header.appendChild(ex);
+    }catch(e){ /* ignore */ }
+  }
+
+  // module expand modal (shared across modules)
+  function openModuleExpandModal(mod){
+    if(!mod) return;
+    let modal = document.querySelector('.module-expand-modal');
+    if(!modal){
+      modal = document.createElement('div'); modal.className = 'module-expand-modal';
+      modal.innerHTML = '\n        <div class="mem-overlay"></div>\n        <div class="mem-dialog">\n          <div class="mem-header">詳細面板 <button class="mem-close" title="關閉">✕</button></div>\n          <div class="mem-body"><div class="mem-content"></div></div>\n        </div>';
+      document.body.appendChild(modal);
+      modal.querySelector('.mem-close').addEventListener('click', ()=>closeModuleExpandModal());
+      modal.querySelector('.mem-overlay').addEventListener('click', ()=>closeModuleExpandModal());
+    }
+    // populate placeholder content (module id and template)
+    const content = modal.querySelector('.mem-content');
+    if(content){
+      const title = mod.dataset.templateId ? `${mod.dataset.templateId} — ${mod.id}` : mod.id;
+      content.innerHTML = `<div style="font-weight:600;margin-bottom:8px">${escapeHtml(title)}</div><div>此處為擴充面板內容占位，之後會放入完整互動資訊。</div>`;
+    }
+    modal.classList.add('open');
+  }
+
+  function closeModuleExpandModal(){ const modal = document.querySelector('.module-expand-modal'); if(modal) modal.classList.remove('open'); }
+
+  function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
   // helper: render a chart canvas according to module id and lastLoadData
   function renderChartForModuleCanvas(canvasId, moduleId, data){
