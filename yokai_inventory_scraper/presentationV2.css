@@ -221,6 +221,80 @@ body{font-family: 'Microsoft JhengHei',sans-serif; background:#eef6ff; margin:0;
 .module-expand-modal .mlm-content{padding:6px}
 .module-expand-modal .mlm-close{background:transparent;border:0;padding:6px 10px;cursor:pointer;font-size:16px}
 
+/* sales-trend specific modal: mobile-first layout */
+.sales-trend-modal{position:fixed; inset:0; display:none; align-items:flex-end; justify-content:center; z-index:17000}
+.sales-trend-modal.open{display:flex}
+.sales-trend-modal .mlm-overlay{position:absolute; inset:0; background:rgba(0,0,0,0.45)}
+.sales-trend-modal .stm-dialog{position:relative; width:100%; height:100%; max-height:100%; background:#fff; border-radius:12px 12px 0 0; overflow:hidden; box-shadow:0 -10px 40px rgba(0,0,0,0.3); z-index:2; display:flex; flex-direction:column}
+
+/* allow datepicker popup to escape dialog bounds (prevent clipping) */
+.sales-trend-modal .stm-dialog{overflow:visible}
+
+/* ensure datepicker appears above overlays */
+.litepicker, .litepicker-container, .litepicker__container, .litepicker-root, .litepicker-calendar{z-index:30000 !important; position: absolute !important}
+.sales-trend-modal .stm-header{padding:12px 14px; font-weight:700; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #f3f6fb}
+.sales-trend-modal .stm-close{background:transparent;border:0;padding:6px 10px;cursor:pointer;font-size:18px}
+
+/* core layout: fixed chart area at top of dialog, controls scrollable below */
+.sales-trend-modal .stm-chart-wrap{flex:0 0 auto; background:#fff; padding:10px 12px; border-bottom:1px solid #f3f6fb}
+.sales-trend-modal .stm-chart{width:100%; height:200px; border-radius:8px; background:linear-gradient(180deg,#fff,#fbfdff); display:block}
+.sales-trend-modal .stm-controls{flex:1 1 auto; overflow:auto; -webkit-overflow-scrolling:touch; padding:12px; background:#f7fbff}
+
+/* groups: main + compare groups */
+.stm-groups{display:flex; flex-direction:column; gap:12px}
+.stm-group{background:#fff; padding:10px;border-radius:10px; box-shadow:0 6px 18px rgba(10,30,60,0.04)}
+.stm-group-header{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px}
+.stm-group-label{font-weight:700; font-size:14px}
+.stm-remove-group{background:transparent;border:0;color:#d32f2f;font-weight:700;padding:6px 8px;border-radius:6px;cursor:pointer}
+
+/* center the date input and its text */
+#sales-trend-date-input, .stm-date-input{
+  text-align:center; display:block; width:100%; box-sizing:border-box;
+}
+.stm-date-wrap{display:flex; justify-content:center; align-items:center}
+.stm-date-input{padding:10px 12px; border-radius:8px; border:1px solid #e6eef9; background:#fff; min-width:180px}
+
+/* arrange branch/product on same row inside group */
+.stm-group-controls{display:flex; gap:8px}
+.stm-multi-btn{padding:10px 12px; border-radius:8px; border:1px solid #e6eef9; background:#fff; text-align:left; font-weight:600; flex:1}
+
+/* add compare button */
+.stm-add-compare{margin-top:8px; display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:999px; background:#fff; border:1px dashed rgba(0,0,0,0.06); cursor:pointer}
+.stm-add-compare .plus{display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:#eaf6ff; color:#2196F3; font-weight:700}
+.stm-add-compare[disabled]{opacity:0.5; cursor:not-allowed}
+
+/* control elements (placeholders) */
+.stm-control-row{display:flex; gap:8px; margin-bottom:12px; align-items:center}
+.stm-label{font-size:13px; color:#333; font-weight:600; min-width:68px}
+.stm-input{flex:1; padding:8px 10px; border-radius:8px; border:1px solid #e6eef9; background:#fff}
+.stm-select{padding:8px 10px; border-radius:8px; border:1px solid #e6eef9; background:#fff}
+.stm-action{display:flex; gap:8px; margin-top:6px}
+.stm-btn{padding:10px 12px; border-radius:8px; border:0; background:#2196F3; color:#fff; font-weight:700}
+
+/* multi-select button inside controls */
+.stm-multi-btn{padding:10px 12px; border-radius:8px; border:1px solid #e6eef9; background:#fff; text-align:left; font-weight:600}
+.stm-multi-btn:after{content:'▾'; float:right; opacity:0.6}
+
+/* selector modal used for multi-select options */
+.selector-modal{position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:17500}
+.selector-modal.open{display:flex}
+.selector-modal .sel-overlay{position:absolute; inset:0; background:rgba(0,0,0,0.45)}
+.selector-modal .sel-dialog{position:relative; width:92%; max-width:420px; max-height:80vh; background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,0.28); z-index:2; display:flex; flex-direction:column}
+.selector-modal .sel-header{padding:12px 14px; font-weight:700; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #f3f6fb}
+.selector-modal .sel-body{padding:10px; overflow:auto; -webkit-overflow-scrolling:touch}
+.selector-modal .sel-item{padding:10px 12px; border-radius:8px; margin-bottom:8px; background:#fbfdff; display:flex; justify-content:space-between; align-items:center; cursor:pointer}
+.selector-modal .sel-item.selected{background:linear-gradient(90deg,#e8f3ff,#f7fbff); font-weight:700}
+.selector-modal .sel-footer{display:flex; gap:8px; padding:10px; border-top:1px solid #eef2f6}
+.selector-modal .sel-btn{flex:1;padding:10px;border-radius:8px;border:0}
+.sel-btn-apply{background:#2196F3;color:#fff}
+.sel-btn-cancel{background:#f3f6fb;color:#222}
+
+/* ensure chart remains visible and doesn't scroll with controls on larger screens too */
+@media(min-width:600px){
+  .sales-trend-modal .stm-dialog{width:92%; max-width:720px; height:auto; max-height:88vh; border-radius:10px}
+  .sales-trend-modal .stm-chart{height:260px}
+}
+
 /* machine detail modal */
 .machine-detail-modal{position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:15000}
 .machine-detail-modal.open{display:flex}

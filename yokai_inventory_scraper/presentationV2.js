@@ -327,6 +327,277 @@
     });
   }catch(e){ }
 
+  // --- sales-trend modal wiring (layout-only, mobile-first) ---
+  (function(){
+    // create modal DOM and append to body (keeps HTML tidy if not present)
+    const existing = document.querySelector('.sales-trend-modal');
+    if(!existing){
+      const modalHtml = document.createElement('div');
+      modalHtml.className = 'sales-trend-modal';
+      modalHtml.innerHTML = `
+        <div class="mlm-overlay"></div>
+        <div class="stm-dialog" role="dialog" aria-modal="true" aria-label="銷售趨勢">
+          <div class="stm-header"><div>銷售趨勢</div><button class="stm-close" title="關閉">✕</button></div>
+          <div class="stm-chart-wrap"><canvas id="sales-trend-modal-canvas" class="stm-chart"></canvas></div>
+          <div class="stm-controls">
+            <div class="stm-groups">
+              <div class="stm-group" data-group-id="main">
+                <div class="stm-group-header"><div class="stm-group-label">主線設定</div></div>
+                <div class="stm-date-wrap"><input id="sales-trend-date-input-main" class="stm-date-input" placeholder="點擊選擇日期範圍" readonly></div>
+                <div class="stm-group-controls" style="margin-top:8px">
+                  <button class="stm-multi-btn" data-selector="branch">分店: 所有分店</button>
+                  <button class="stm-multi-btn" data-selector="product">產品: 所有產品</button>
+                </div>
+              </div>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px">
+              <div class="stm-add-compare" id="stm-add-compare"><span class="plus">+</span><span>新增對比線</span></div>
+              <div><button class="stm-btn">套用 (示意)</button></div>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modalHtml);
+    }
+
+    const modal = document.querySelector('.sales-trend-modal');
+    const openButtons = document.querySelectorAll('[data-expand-target="sales-trend-modal"]');
+    // prevent expand buttons from being interpreted as module-drag starters
+    const expandBtnSelectors = '.module-expand-btn, [data-expand-target]';
+    const expandBtns = Array.from(document.querySelectorAll(expandBtnSelectors));
+    expandBtns.forEach(btn=>{
+      btn.addEventListener('pointerdown', e=>{ e.stopPropagation(); });
+      btn.addEventListener('pointerup', e=>{ e.stopPropagation(); });
+      // also prevent touchstart double-handling on some devices
+      btn.addEventListener('touchstart', e=>{ e.stopPropagation(); }, {passive:true});
+    });
+    const overlayEl = modal && modal.querySelector('.mlm-overlay');
+    const closeBtn = modal && modal.querySelector('.stm-close');
+    const canvasId = 'sales-trend-modal-canvas';
+
+    function openModal(){ if(!modal) return; modal.classList.add('open'); document.body.style.overflow = 'hidden'; ensureModalChart(); }
+    function closeModal(){ if(!modal) return; modal.classList.remove('open'); document.body.style.overflow = ''; }
+
+    openButtons.forEach(b=> b.addEventListener('click', e=>{ e.preventDefault(); openModal(); }));
+    if(overlayEl) overlayEl.addEventListener('click', closeModal);
+    if(closeBtn) closeBtn.addEventListener('click', closeModal);
+
+    // minimal Chart.js placeholder rendering so layout looks realistic
+    let modalChart = null;
+    function ensureModalChart(){
+      try{
+        const ctx = document.getElementById(canvasId);
+        if(!ctx) return;
+        if(window.Chart && (!modalChart || modalChart._destroyed)){
+          // create small placeholder if not exists
+          if(modalChart && modalChart.destroy) try{ modalChart.destroy(); }catch(e){}
+          modalChart = new Chart(ctx.getContext('2d'), {
+            type: 'line', data: { labels:['-6','-5','-4','-3','-2','-1','現在'], datasets:[{label:'銷售量', data:[12,18,9,24,16,20,22], borderColor:'#2196F3', backgroundColor:'rgba(33,150,243,0.08)', tension:0.35}] }, options: { maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{display:true}, y:{display:true}} }
+          });
+        }
+      }catch(e){ console.warn('sales-trend modal chart init failed', e); }
+    }
+
+    // if modal exists but Chart.js loads later, lazy init on open
+    // make sure modal closes on Escape
+    document.addEventListener('keydown', e=>{ if(e.key === 'Escape') closeModal(); });
+
+    // Initialize Litepicker for the date input (range selection by two clicks)
+    (function initLitepicker(){
+      const dateInput = document.getElementById('sales-trend-date-input');
+      if(!dateInput) return;
+
+      function formatDateObj(d){
+        if(!d) return '';
+        try{ if(typeof d.format === 'function') return d.format('YYYY-MM-DD'); }catch(e){}
+        try{ if(d instanceof Date) return d.toISOString().slice(0,10); }catch(e){}
+        try{ return String(d); }catch(e){ return ''; }
+      }
+
+      function createPicker(){
+        try{
+          const picker = new Litepicker({
+            element: dateInput,
+            singleMode: false,
+            numberOfMonths: 1,
+            dropdowns: { minYear: 2000, maxYear: 2030, months: true, years: true },
+            tooltipText: { one: '起始', two: '終點' }
+          });
+          // Try to move Litepicker root container to document.body to avoid modal clipping
+          try{
+            const root = document.querySelector('.litepicker-root') || document.querySelector('.litepicker');
+            if(root && root.parentNode && root.parentNode !== document.body){ document.body.appendChild(root); root.style.zIndex = 30000; root.style.position = 'absolute'; }
+          }catch(e){ /* ignore */ }
+          // handle selection events and update input text robustly
+          try{ picker.on('selected', (date1, date2)=>{
+            // Litepicker may pass Date-like objects or objects with format()
+            const a = formatDateObj(date1); const b = formatDateObj(date2);
+            if(a && b) dateInput.value = `${a} → ${b}`;
+            else if(a) dateInput.value = a;
+          }); }catch(e){ /* some versions may not support on('selected') the same way; fallback to available getters */
+            try{ // attempt polling on hide event
+              picker.on && picker.on('hide', ()=>{
+                const s = picker.getStartDate && picker.getStartDate(); const e = picker.getEndDate && picker.getEndDate();
+                const a = formatDateObj(s); const b = formatDateObj(e); if(a && b) dateInput.value = `${a} → ${b}`; else if(a) dateInput.value = a;
+              });
+            }catch(err){}
+          }
+        }catch(err){ console.warn('createPicker failed', err); }
+      }
+
+      // If Litepicker loaded, create immediately, otherwise dynamically load the bundle then create
+      if(window.Litepicker){ createPicker(); return; }
+
+      // dynamic load CSS/JS if not present (defensive):
+      const cssHref = 'https://cdn.jsdelivr.net/npm/litepicker/dist/css/litepicker.css';
+      const jsSrc = 'https://cdn.jsdelivr.net/npm/litepicker/dist/bundle.js';
+      // load CSS if not present
+      if(!Array.from(document.styleSheets).some(s=>s.href && s.href.includes('litepicker'))){
+        const lnk = document.createElement('link'); lnk.rel='stylesheet'; lnk.href = cssHref; document.head.appendChild(lnk);
+      }
+      // load script
+      const s = document.createElement('script'); s.src = jsSrc; s.async = true;
+      s.onload = ()=>{ setTimeout(()=>{ if(window.Litepicker) createPicker(); }, 20); };
+      s.onerror = ()=>{ console.warn('Failed to load Litepicker bundle'); };
+      document.head.appendChild(s);
+    })();
+
+    // --- selector modals for multi-select (branch & product) ---
+    const sampleBranches = ['所有分店','分店 A','分店 B','分店 C'];
+    const sampleProducts = ['所有產品','產品 1','產品 2','產品 3','產品 4'];
+
+    function createSelectorModal(id, title, items){
+      const existing = document.getElementById(id);
+      if(existing) return existing;
+      const container = document.createElement('div'); container.className='selector-modal'; container.id = id;
+      container.innerHTML = `
+        <div class="sel-overlay"></div>
+        <div class="sel-dialog" role="dialog" aria-modal="true">
+          <div class="sel-header"><div>${title}</div><button class="sel-close">✕</button></div>
+          <div class="sel-body"></div>
+          <div class="sel-footer"><button class="sel-btn sel-btn-cancel">取消</button><button class="sel-btn sel-btn-apply sel-btn-apply">套用</button></div>
+        </div>
+      `;
+      document.body.appendChild(container);
+      const body = container.querySelector('.sel-body');
+      items.forEach((it, idx)=>{
+        const el = document.createElement('div'); el.className='sel-item'; el.dataset.value = it; el.innerHTML = `<div>${it}</div><div class="sel-check">✓</div>`;
+        body.appendChild(el);
+      });
+      // attach single delegated click handler for toggling selection
+      body.addEventListener('click', (ev)=>{
+        const si = ev.target.closest('.sel-item'); if(!si) return; si.classList.toggle('selected');
+      });
+      // wire footer buttons only once
+      container.querySelector('.sel-btn-cancel').addEventListener('click', ()=>{ container.classList.remove('open'); document.body.style.overflow=''; });
+      container.querySelector('.sel-close').addEventListener('click', ()=>{ container.classList.remove('open'); document.body.style.overflow=''; });
+      return container;
+    }
+
+    const branchModal = createSelectorModal('selector-branch','選擇分店', sampleBranches);
+    const productModal = createSelectorModal('selector-product','選擇產品', sampleProducts);
+
+    // helper to open selector modal and return selected items (persist selection in dataset)
+    function openSelector(modalEl, triggerBtn){
+      if(!modalEl) return;
+      modalEl.classList.add('open');
+      document.body.style.overflow = 'hidden';
+      // mark existing selected from triggerBtn dataset
+      const prev = (triggerBtn && triggerBtn.dataset.selected) ? JSON.parse(triggerBtn.dataset.selected) : [];
+      modalEl.querySelectorAll('.sel-item').forEach(si=>{
+        const val = si.dataset.value; if(prev.includes(val)) si.classList.add('selected'); else si.classList.remove('selected');
+      });
+      // apply handler: use addEventListener but ensure we don't attach multiple times
+      const applyBtn = modalEl.querySelector('.sel-btn-apply');
+      const applyHandler = ()=>{
+        const sels = Array.from(modalEl.querySelectorAll('.sel-item.selected')).map(x=>x.dataset.value);
+        if(triggerBtn) triggerBtn.dataset.selected = JSON.stringify(sels);
+        updateMultiBtnLabel(triggerBtn, sels);
+        modalEl.classList.remove('open'); document.body.style.overflow='';
+      };
+      // remove previous if attached (defensive) then attach
+      applyBtn.removeEventListener('click', applyHandler);
+      applyBtn.addEventListener('click', applyHandler);
+    }
+
+    function updateMultiBtnLabel(btn, selectedArray){
+      if(!btn) return;
+      if(!selectedArray || selectedArray.length === 0) btn.textContent = btn.dataset.selector === 'branch' ? '分店: 所有分店' : '產品: 所有產品';
+      else if(selectedArray.length === 1) btn.textContent = (btn.dataset.selector === 'branch' ? '分店: ' : '產品: ') + selectedArray[0];
+      else btn.textContent = (btn.dataset.selector === 'branch' ? '分店: ' : '產品: ') + selectedArray.length + ' 項已選';
+    }
+
+    // wire the buttons inside the sales-trend modal
+    // helper: wire multi-select button to open selector modal for a given trigger button
+    function wireMultiBtns(root){
+      if(!root) return;
+      root.querySelectorAll('.stm-multi-btn').forEach(btn=>{
+        // avoid duplicating handlers
+        if(btn._wired) return; btn._wired = true;
+        btn.addEventListener('click', ()=>{
+          const which = btn.dataset.selector;
+          if(which === 'branch') openSelector(branchModal, btn);
+          else if(which === 'product') openSelector(productModal, btn);
+        });
+      });
+    }
+
+    // ensure main group buttons wired
+    wireMultiBtns(modal);
+
+    // group management: allow adding up to 4 compare groups
+    const groupsContainer = modal && modal.querySelector('.stm-groups');
+    const addBtn = document.getElementById('stm-add-compare');
+    let compareCount = 0; // tracks number of compare groups
+
+    function addCompareGroup(){
+      if(!groupsContainer) return; if(compareCount >= 4) return;
+      compareCount++;
+      const gid = 'compare-' + compareCount;
+      const div = document.createElement('div'); div.className = 'stm-group'; div.dataset.groupId = gid;
+      div.innerHTML = `<div class="stm-group-header"><div class="stm-group-label">對比線 ${compareCount} 設定</div><button class="stm-remove-group">移除</button></div>
+        <div class="stm-date-wrap"><input class="stm-date-input" id="sales-trend-date-input-${gid}" placeholder="點擊選擇日期範圍" readonly></div>
+        <div class="stm-group-controls" style="margin-top:8px">
+          <button class="stm-multi-btn" data-selector="branch">分店: 所有分店</button>
+          <button class="stm-multi-btn" data-selector="product">產品: 所有產品</button>
+        </div>`;
+      groupsContainer.appendChild(div);
+      // wire remove
+      div.querySelector('.stm-remove-group').addEventListener('click', ()=>{ div.remove(); compareCount--; addBtn.removeAttribute('disabled'); refreshCompareLabels(); });
+      // wire multi buttons
+      wireMultiBtns(div);
+      // init litepicker for this group's date input (reuse initLitepicker logic by creating a picker)
+      try{ const input = div.querySelector('.stm-date-input'); if(input) initLitepickerForInput(input); }catch(e){}
+      if(compareCount >= 4) addBtn.setAttribute('disabled','');
+      refreshCompareLabels();
+    }
+
+    function refreshCompareLabels(){
+      const comps = groupsContainer.querySelectorAll('.stm-group'); let i=0; comps.forEach(c=>{ i++; const lab = c.querySelector('.stm-group-label'); if(lab) lab.textContent = i===1 && c.dataset.groupId==='main' ? '主線設定' : `對比線 ${i- (c.dataset.groupId==='main'?0:1)} 設定`; });
+    }
+
+    if(addBtn) addBtn.addEventListener('click', ()=>{ addCompareGroup(); });
+
+    // expose a small helper to init litepicker for a specific input (used for groups)
+    function initLitepickerForInput(inputEl){
+      if(!inputEl) return;
+      // if global Litepicker exists, create directly; otherwise dynamic load already handled in initLitepicker outer IIFE
+      try{
+        if(window.Litepicker){ const p = new Litepicker({ element: inputEl, singleMode:false, numberOfMonths:1 });
+          // try relocate root
+          const root = document.querySelector('.litepicker-root') || document.querySelector('.litepicker'); if(root && root.parentNode !== document.body) document.body.appendChild(root);
+          p.on && p.on('selected', (a,b)=>{ try{ if(a && b) inputEl.value = (a.format? a.format('YYYY-MM-DD'):a.toISOString().slice(0,10)) + ' → ' + (b.format? b.format('YYYY-MM-DD'):b.toISOString().slice(0,10)); }catch(e){} });
+        } else {
+          // fallback: attempt to create after a short delay (litepicker may be loading)
+          setTimeout(()=>{ initLitepickerForInput(inputEl); },200);
+        }
+      }catch(e){ setTimeout(()=>{ initLitepickerForInput(inputEl); },200); }
+    }
+
+    // initialize litepicker for main group's date input
+    try{ const mainInput = document.getElementById('sales-trend-date-input-main'); if(mainInput) initLitepickerForInput(mainInput); }catch(e){}
+  })();
+
   // dragging / resizing (smooth, page-wide pointer movement with snap-on-release)
   let dragState = null;
   // toolbox & trash

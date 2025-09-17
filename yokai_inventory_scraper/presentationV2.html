@@ -5,7 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Presentation V2 - 儀表板</title>
   <link rel="stylesheet" href="presentationV2.css">
+  <!-- Litepicker for mobile-friendly date range picking -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litepicker/dist/css/litepicker.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/bundle.js"></script>
 </head>
 <body>
   <div class="page-wrap">
@@ -67,7 +70,9 @@
           </div>
 
           <div class="module" id="m-sales-trend" data-x="0" data-y="1" data-w="6" data-h="3">
-            <div class="module-header">銷售趨勢</div>
+            <div class="module-header">銷售趨勢
+              <button class="module-expand-btn" data-expand-target="sales-trend-modal" title="展開">⋯</button>
+            </div>
             <div class="module-body"><canvas id="chart-sales-trend"></canvas></div>
             <div class="resize-handle resize-se"></div>
           </div>
