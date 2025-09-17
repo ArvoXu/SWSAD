@@ -375,21 +375,38 @@
     const closeBtn = modal && modal.querySelector('.stm-close');
     const canvasId = 'sales-trend-modal-canvas';
 
-    function openModal(){ if(!modal) return; modal.classList.add('open'); document.body.style.overflow = 'hidden'; ensureModalChart(); }
+    async function openModal(){ if(!modal) return; modal.classList.add('open'); document.body.style.overflow = 'hidden';
+      try{ if(salesLoadPromise) await salesLoadPromise; }catch(e){}
+      ensureModalChart(); }
     function closeModal(){ if(!modal) return; modal.classList.remove('open'); document.body.style.overflow = ''; }
 
     openButtons.forEach(b=> b.addEventListener('click', e=>{ e.preventDefault(); openModal(); }));
     if(overlayEl) overlayEl.addEventListener('click', closeModal);
     if(closeBtn) closeBtn.addEventListener('click', closeModal);
 
-    // minimal Chart.js placeholder rendering so layout looks realistic
+    // minimal Chart.js placeholder rendering so layout looks realistic, but prefer real data when available
     let modalChart = null;
     function ensureModalChart(){
       try{
         const ctx = document.getElementById(canvasId);
         if(!ctx) return;
+        // if we have real sales data, use our aggregation/update flow
+        const hasReal = window && Array.isArray(window.fullSalesData) && window.fullSalesData.length > 0;
+        if(hasReal){
+          // collect current groups (or fallback to a single default group)
+          const groups = collectGroups();
+          // if no groups found, build a default main group using lastLoadData.dates as range
+          if(!groups || groups.length === 0){
+            const defRange = (lastLoadData && Array.isArray(lastLoadData.dates) && lastLoadData.dates.length>0) ? { start: new Date(lastLoadData.dates[0]), end: new Date(lastLoadData.dates[lastLoadData.dates.length-1]) } : null;
+            const main = { id:'main', range: defRange, branches: [], products: [] };
+            updateSalesTrendChart([main]);
+          } else {
+            updateSalesTrendChart(groups);
+          }
+          return;
+        }
+        // fallback: create lightweight placeholder chart so UI still looks reasonable
         if(window.Chart && (!modalChart || modalChart._destroyed)){
-          // create small placeholder if not exists
           if(modalChart && modalChart.destroy) try{ modalChart.destroy(); }catch(e){}
           modalChart = new Chart(ctx.getContext('2d'), {
             type: 'line', data: { labels:['-6','-5','-4','-3','-2','-1','現在'], datasets:[{label:'銷售量', data:[12,18,9,24,16,20,22], borderColor:'#2196F3', backgroundColor:'rgba(33,150,243,0.08)', tension:0.35}] }, options: { maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{display:true}, y:{display:true}} }
@@ -500,6 +517,34 @@
     // helper to open selector modal and return selected items (persist selection in dataset)
     function openSelector(modalEl, triggerBtn){
       if(!modalEl) return;
+      // dynamically populate options from window.fullSalesData when available
+      try{
+        const body = modalEl.querySelector('.sel-body');
+        body.innerHTML = '';
+        if(modalEl.id === 'selector-branch'){
+          const set = new Set();
+          if(window && Array.isArray(window.fullSalesData)){
+            window.fullSalesData.forEach(it=>{
+              const v = it.shopName || it.store_key || it.store || it.storeKey || it.storeKeyName || it.storeName;
+              if(v) set.add(String(v).trim());
+            });
+          }
+          // fallback: if none found, keep existing sample
+          const items = ['所有分店', ...Array.from(set).sort()];
+          items.forEach(it=>{ const el = document.createElement('div'); el.className='sel-item'; el.dataset.value = it; el.innerHTML = `<div>${it}</div><div class="sel-check">✓</div>`; body.appendChild(el); });
+        } else if(modalEl.id === 'selector-product'){
+          const set = new Set();
+          if(window && Array.isArray(window.fullSalesData)){
+            window.fullSalesData.forEach(it=>{
+              const v = it.product || it.product_name || it.productName || it.sku;
+              if(v) set.add(String(v).trim());
+            });
+          }
+          const items = ['所有產品', ...Array.from(set).sort()];
+          items.forEach(it=>{ const el = document.createElement('div'); el.className='sel-item'; el.dataset.value = it; el.innerHTML = `<div>${it}</div><div class="sel-check">✓</div>`; body.appendChild(el); });
+        }
+      }catch(e){ /* ignore populate errors and keep existing items */ }
+
       modalEl.classList.add('open');
       document.body.style.overflow = 'hidden';
       // mark existing selected from triggerBtn dataset
@@ -514,6 +559,8 @@
         if(triggerBtn) triggerBtn.dataset.selected = JSON.stringify(sels);
         updateMultiBtnLabel(triggerBtn, sels);
         modalEl.classList.remove('open'); document.body.style.overflow='';
+        // if sales-trend modal exists, immediately refresh chart with new selections
+        try{ if(document.querySelector('.sales-trend-modal')){ const gs = collectGroups(); if(gs && gs.length>0) updateSalesTrendChart(gs); } }catch(err){}
       };
       // remove previous if attached (defensive) then attach
       applyBtn.removeEventListener('click', applyHandler);
@@ -586,7 +633,10 @@
         if(window.Litepicker){ const p = new Litepicker({ element: inputEl, singleMode:false, numberOfMonths:1 });
           // try relocate root
           const root = document.querySelector('.litepicker-root') || document.querySelector('.litepicker'); if(root && root.parentNode !== document.body) document.body.appendChild(root);
-          p.on && p.on('selected', (a,b)=>{ try{ if(a && b) inputEl.value = (a.format? a.format('YYYY-MM-DD'):a.toISOString().slice(0,10)) + ' → ' + (b.format? b.format('YYYY-MM-DD'):b.toISOString().slice(0,10)); }catch(e){} });
+          p.on && p.on('selected', (a,b)=>{ try{ if(a && b) inputEl.value = (a.format? a.format('YYYY-MM-DD'):a.toISOString().slice(0,10)) + ' → ' + (b.format? b.format('YYYY-MM-DD'):b.toISOString().slice(0,10));
+              // after selecting a date range for this group's input, refresh chart
+              try{ const gs = collectGroups(); if(gs && gs.length>0) updateSalesTrendChart(gs); }catch(e){}
+            }catch(e){} });
         } else {
           // fallback: attempt to create after a short delay (litepicker may be loading)
           setTimeout(()=>{ initLitepickerForInput(inputEl); },200);
@@ -596,6 +646,128 @@
 
     // initialize litepicker for main group's date input
     try{ const mainInput = document.getElementById('sales-trend-date-input-main'); if(mainInput) initLitepickerForInput(mainInput); }catch(e){}
+  })();
+
+  // --- sales-trend aggregation and update helpers ---
+  function parseDateRange(text){
+    if(!text) return null;
+    const parts = text.split('→').map(s=>s.trim());
+    if(parts.length === 1){ const d = new Date(parts[0]); return isNaN(d.getTime()) ? null : { start: d, end: d }; }
+    if(parts.length >= 2){ const a = new Date(parts[0]); const b = new Date(parts[1]); if(isNaN(a.getTime())||isNaN(b.getTime())) return null; return { start: a, end: b }; }
+    return null;
+  }
+
+  function formatMmDd(dateObj){ try{ const m = dateObj.getMonth()+1; const d = dateObj.getDate(); return (m<10? '0'+m: m) + '-' + (d<10? '0'+d: d); }catch(e){ return ''; } }
+
+  // collect groups from DOM (.stm-group elements)
+  function collectGroups(){
+    const groups = []; const container = document.querySelector('.sales-trend-modal .stm-groups'); if(!container) return groups;
+    container.querySelectorAll('.stm-group').forEach(g=>{
+      try{
+        const gid = g.dataset.groupId || (g.querySelector('.stm-group-label') && g.querySelector('.stm-group-label').textContent) || 'group';
+        const input = g.querySelector('.stm-date-input'); const rangeText = input ? input.value : '';
+        const range = parseDateRange(rangeText);
+        const branchBtn = g.querySelector('.stm-multi-btn[data-selector="branch"]');
+        const productBtn = g.querySelector('.stm-multi-btn[data-selector="product"]');
+        const branches = branchBtn && branchBtn.dataset.selected ? JSON.parse(branchBtn.dataset.selected) : [];
+        const products = productBtn && productBtn.dataset.selected ? JSON.parse(productBtn.dataset.selected) : [];
+        groups.push({ id: gid, range, branches, products });
+      }catch(e){/* ignore group parse errors */}
+    });
+    return groups;
+  }
+
+  // aggregate by date (YYYY-MM-DD) for each group using fullSalesData (fallback to window.fullSalesData or lastLoadData)
+  function aggregateByGroup(group, fullData){
+    // fullData expected to be array of transactions with date/date string and amount and shopName/product
+    const out = {};
+    if(!group || !fullData || !Array.isArray(fullData)) return out;
+    const start = group.range && group.range.start ? new Date(group.range.start) : null;
+    const end = group.range && group.range.end ? new Date(group.range.end) : null;
+    fullData.forEach(t=>{
+      try{
+        const dateStr = t.date || (t.transaction_time ? new Date(t.transaction_time).toISOString() : null) || (t.jsDate ? t.jsDate.toISOString() : null);
+        if(!dateStr) return;
+        const d = new Date(dateStr);
+        if(isNaN(d.getTime())) return;
+        // range filter
+        if(start && d < start) return; if(end && d > end.setHours(23,59,59,999)) return;
+        // branch filter: if user selected specific branches (and not the sentinel '所有分店'), filter by them
+        if(group.branches && group.branches.length>0){
+          const hasAll = group.branches.includes('所有分店');
+          if(!hasAll){ const s = t.shopName || t.store_key || t.store || t.shop || t.shopName; if(!s) return; if(!group.branches.includes(String(s).trim())) return; }
+        }
+        // product filter: if user selected specific products (and not the sentinel '所有產品'), filter by them
+        if(group.products && group.products.length>0){
+          const hasAllP = group.products.includes('所有產品');
+          if(!hasAllP){ const p = t.product || t.product_name || t.productName; if(!p) return; if(!group.products.includes(String(p).trim())) return; }
+        }
+        const key = d.toISOString().split('T')[0];
+        out[key] = (out[key]||0) + (parseFloat(t.amount)||0);
+      }catch(e){ }
+    });
+    return out;
+  }
+
+  // update Chart.js on sales-trend-modal-canvas given groups
+  function updateSalesTrendChart(groups){
+    try{
+      // determine data source
+      const source = (window.fullSalesData && Array.isArray(window.fullSalesData)) ? window.fullSalesData : (lastLoadData && window.fullSalesData ? window.fullSalesData : null);
+      if(!source) return;
+      // find union of all dates across selected ranges (prefer group's own range if provided)
+      const allDatesSet = new Set();
+      groups.forEach(g=>{
+        if(g.range && g.range.start && g.range.end){
+          const s = new Date(g.range.start); s.setHours(0,0,0,0); const e = new Date(g.range.end); e.setHours(0,0,0,0);
+          for(let d = new Date(s); d<=e; d.setDate(d.getDate()+1)) allDatesSet.add(d.toISOString().split('T')[0]);
+        }
+      });
+      // fallback: if no group provides range, use lastLoadData.dates
+      let labels = [];
+      if(allDatesSet.size>0) labels = Array.from(allDatesSet).sort(); else if(lastLoadData && Array.isArray(lastLoadData.dates)) labels = lastLoadData.dates.slice();
+
+      // prepare datasets: main group first, then compares
+      const datasets = [];
+      const colors = ['#2196F3','#FF6384','#36A2EB','#FFCE56','#4BC0C0'];
+      groups.forEach((g, idx)=>{
+        const agg = aggregateByGroup(g, source);
+        const data = labels.map(ld=> agg[ld] || 0);
+        datasets.push({ label: (g.id||'線') , data, borderColor: colors[idx%colors.length], backgroundColor: 'rgba(0,0,0,0)', tension:0.35 });
+      });
+
+      // create or update chart
+      const cid = 'sales-trend-modal-canvas'; const el = document.getElementById(cid); if(!el) return;
+      const prev = chartRegistry.get(el.id);
+      const formattedLabels = labels.map(l=>{ const d = new Date(l); return isNaN(d.getTime())? l : formatMmDd(d); });
+      const cfg = { type:'line', data:{ labels: formattedLabels, datasets }, options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:true } }, scales:{ x:{ display:true }, y:{ display:true } } } };
+      if(prev && prev.destroy) try{ prev.destroy(); }catch(e){}
+      try{ const chart = new Chart(el, cfg); chartRegistry.set(el.id, chart); }catch(e){ console.warn('failed to create sales-trend modal chart', e); }
+    }catch(e){ console.warn('updateSalesTrendChart error', e); }
+  }
+
+  // bind apply button to collect current groups and update chart
+  (function bindApplyToSalesTrend(){
+    try{
+      const apply = document.querySelector('.sales-trend-modal .stm-btn'); if(!apply) return;
+      apply.addEventListener('click', ()=>{
+        let groups = collectGroups();
+        if(!groups || groups.length===0){
+          // build a default group from main DOM
+          try{
+            const main = document.querySelector('.sales-trend-modal .stm-group[data-group-id="main"]');
+            if(main){
+              const input = main.querySelector('.stm-date-input'); const range = input ? parseDateRange(input.value) : null;
+              const branchBtn = main.querySelector('.stm-multi-btn[data-selector="branch"]'); const productBtn = main.querySelector('.stm-multi-btn[data-selector="product"]');
+              const branches = branchBtn && branchBtn.dataset.selected ? JSON.parse(branchBtn.dataset.selected) : [];
+              const products = productBtn && productBtn.dataset.selected ? JSON.parse(productBtn.dataset.selected) : [];
+              groups = [{ id:'main', range, branches, products }];
+            }
+          }catch(e){ console.warn('failed to build default group', e); }
+        }
+        if(groups && groups.length>0) updateSalesTrendChart(groups);
+      });
+    }catch(e){ }
   })();
 
   // dragging / resizing (smooth, page-wide pointer movement with snap-on-release)
