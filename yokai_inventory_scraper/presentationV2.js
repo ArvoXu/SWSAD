@@ -501,9 +501,20 @@
         const el = document.createElement('div'); el.className='sel-item'; el.dataset.value = it; el.innerHTML = `<div>${it}</div><div class="sel-check">✓</div>`;
         body.appendChild(el);
       });
-      // attach single delegated click handler for toggling selection
+      // attach single delegated click handler for toggling selection with sentinel (select all / deselect all)
       body.addEventListener('click', (ev)=>{
-        const si = ev.target.closest('.sel-item'); if(!si) return; si.classList.toggle('selected');
+        const si = ev.target.closest('.sel-item'); if(!si) return;
+        const key = si.dataset.key || si.dataset.value;
+        // sentinel behavior: selecting '所有分店' or '所有產品' toggles all items
+        if(key === '所有分店' || key === '所有產品'){
+          const now = si.classList.toggle('selected');
+          body.querySelectorAll('.sel-item').forEach(it=>{ if(it===si) return; if(now) it.classList.add('selected'); else it.classList.remove('selected'); });
+          return;
+        }
+        // normal toggle: if sentinel currently selected, deselect sentinel
+        si.classList.toggle('selected');
+        const sentinel = body.querySelector('.sel-item[data-key="所有分店"], .sel-item[data-key="所有產品"]');
+        if(sentinel && sentinel.classList.contains('selected')) sentinel.classList.remove('selected');
       });
       // wire footer buttons only once
       container.querySelector('.sel-btn-cancel').addEventListener('click', ()=>{ container.classList.remove('open'); document.body.style.overflow=''; });
@@ -549,8 +560,10 @@
         }
       }catch(e){ /* ignore populate errors and keep existing items */ }
 
-      modalEl.classList.add('open');
+  modalEl.classList.add('open');
       document.body.style.overflow = 'hidden';
+  // remember which trigger opened this modal to avoid cross-updates
+  modalEl._currentTrigger = triggerBtn;
       // mark existing selected from triggerBtn dataset
       const prev = (triggerBtn && triggerBtn.dataset.selected) ? JSON.parse(triggerBtn.dataset.selected) : [];
       modalEl.querySelectorAll('.sel-item').forEach(si=>{
@@ -562,8 +575,9 @@
         const items = Array.from(modalEl.querySelectorAll('.sel-item.selected'));
         const sels = items.map(x=>x.dataset.value);
         const keys = items.map(x=>x.dataset.key || x.dataset.value);
-        if(triggerBtn){ triggerBtn.dataset.selected = JSON.stringify(sels); triggerBtn.dataset.selectedKeys = JSON.stringify(keys); }
-        updateMultiBtnLabel(triggerBtn, sels);
+        const tbtn = modalEl._currentTrigger || triggerBtn;
+        if(tbtn){ tbtn.dataset.selected = JSON.stringify(sels); tbtn.dataset.selectedKeys = JSON.stringify(keys); }
+        updateMultiBtnLabel(tbtn, sels);
         modalEl.classList.remove('open'); document.body.style.overflow='';
         // if sales-trend modal exists, refresh chart only when at least one group has an explicit date range
         try{
@@ -575,9 +589,8 @@
           }
         }catch(err){}
       };
-      // remove previous if attached (defensive) then attach
-      applyBtn.removeEventListener('click', applyHandler);
-      applyBtn.addEventListener('click', applyHandler);
+      // assign onclick to avoid stacking multiple listeners across different trigger buttons
+      if(applyBtn) applyBtn.onclick = applyHandler;
     }
 
     function updateMultiBtnLabel(btn, selectedArray){
@@ -685,6 +698,22 @@
     return null;
   }
 
+  // robust parser usable across modules (tries multiple formats)
+  function robustParseRangeFromString(text){
+    if(!text) return null;
+    // try YYYY-MM-DD pairs
+    const ymd = text.match(/(\d{4}-\d{1,2}-\d{1,2})/g);
+    if(ymd && ymd.length>=2){
+      try{ const a = new Date(ymd[0]); const b = new Date(ymd[1]); if(!isNaN(a.getTime()) && !isNaN(b.getTime())) return { start: a, end: b }; }catch(e){}
+    }
+    // try splitting by arrow-like separators and parse parts
+    const parts = text.split(/→|->|–|—|to|\u2192/gi).map(s=>s.trim()).filter(Boolean);
+    if(parts.length>=2){ const a = new Date(parts[0]); const b = new Date(parts[1]); if(!isNaN(a.getTime()) && !isNaN(b.getTime())) return { start: a, end: b }; }
+    // try more generic single-date handling
+    if(parts.length === 1){ const a = new Date(parts[0]); if(!isNaN(a.getTime())) return { start: a, end: a }; }
+    return null;
+  }
+
   function formatMmDd(dateObj){ try{ const m = dateObj.getMonth()+1; const d = dateObj.getDate(); return (m<10? '0'+m: m) + '-' + (d<10? '0'+d: d); }catch(e){ return ''; } }
 
   // collect groups from DOM (.stm-group elements)
@@ -694,14 +723,15 @@
       try{
         const gid = g.dataset.groupId || (g.querySelector('.stm-group-label') && g.querySelector('.stm-group-label').textContent) || 'group';
         const input = g.querySelector('.stm-date-input'); const rangeText = input ? input.value : '';
-        const range = parseDateRange(rangeText);
+        let range = parseDateRange(rangeText);
+        if(!range) range = robustParseRangeFromString(rangeText);
         const branchBtn = g.querySelector('.stm-multi-btn[data-selector="branch"]');
         const productBtn = g.querySelector('.stm-multi-btn[data-selector="product"]');
         const branches = branchBtn && branchBtn.dataset.selected ? JSON.parse(branchBtn.dataset.selected) : [];
         const products = productBtn && productBtn.dataset.selected ? JSON.parse(productBtn.dataset.selected) : [];
         const branchKeys = branchBtn && branchBtn.dataset.selectedKeys ? JSON.parse(branchBtn.dataset.selectedKeys) : [];
         const productKeys = productBtn && productBtn.dataset.selectedKeys ? JSON.parse(productBtn.dataset.selectedKeys) : [];
-        groups.push({ id: gid, range, branches, products, branchKeys, productKeys });
+        groups.push({ id: gid, range, rangeText, branches, products, branchKeys, productKeys });
       }catch(e){/* ignore group parse errors */}
     });
     try{ console.debug('[presentationV2] collectGroups ->', groups); }catch(e){}
@@ -797,7 +827,7 @@
       console.debug('[presentationV2] updateSalesTrendChart groups ->', groups);
       console.debug('[presentationV2] updateSalesTrendChart source length ->', source ? source.length : 0);
       if(!source){ console.warn('[presentationV2] updateSalesTrendChart: no source data available'); return; }
-      // find union of all dates across selected ranges (prefer group's own range if provided)
+      // find union of all dates across selected ranges (each group keeps its own range independently)
       const allDatesSet = new Set();
       groups.forEach(g=>{
         if(g.range && g.range.start && g.range.end){
@@ -860,7 +890,17 @@
         const total = data.reduce((a,b)=>a+(parseFloat(b)||0),0);
         console.debug('[presentationV2] updateSalesTrendChart group agg summary', { id: g.id, total, points: data.slice(0,5), labelCount: labels.length });
         if(total === 0){ console.warn('[presentationV2] updateSalesTrendChart group total is 0 for group', g.id, 'showing sample source rows', source.slice(0,5)); }
-        datasets.push({ label: (g.id||'線') , data, borderColor: colors[idx%colors.length], backgroundColor: 'rgba(0,0,0,0)', tension:0.35 });
+        // build a descriptive label: group id + range + branch/product summary
+        const descParts = [];
+        if(g.id) descParts.push(g.id);
+        if(g.rangeText) descParts.push(g.rangeText);
+        const sel = [];
+        if(g.branchKeys && g.branchKeys.length>0) sel.push('分店:' + (g.branchKeys.length === 1 ? g.branchKeys[0] : g.branchKeys.length+'項'));
+        else if(g.branches && g.branches.length>0) sel.push('分店:' + (g.branches.length === 1 ? g.branches[0] : g.branches.length+'項'));
+        if(g.productKeys && g.productKeys.length>0) sel.push('產品:' + (g.productKeys.length === 1 ? g.productKeys[0] : g.productKeys.length+'項'));
+        else if(g.products && g.products.length>0) sel.push('產品:' + (g.products.length === 1 ? g.products[0] : g.products.length+'項'));
+        const labelText = descParts.concat(sel).join(' | ');
+        datasets.push({ label: labelText || (g.id||'線') , data, borderColor: colors[idx%colors.length], backgroundColor: 'rgba(0,0,0,0)', tension:0.35 });
       });
 
       // create or update chart
