@@ -342,7 +342,7 @@
           <div class="stm-controls">
             <div class="stm-groups">
               <div class="stm-group" data-group-id="main">
-                <div class="stm-group-header"><div class="stm-group-label">主線設定</div></div>
+                <div class="stm-group-header"><div class="stm-group-label" contenteditable="true">主線設定</div></div>
                 <div class="stm-date-wrap"><input id="sales-trend-date-input-main" class="stm-date-input" placeholder="點擊選擇日期範圍" readonly></div>
                 <div class="stm-group-controls" style="margin-top:8px">
                   <button class="stm-multi-btn" data-selector="branch">分店: 所有分店</button>
@@ -358,6 +358,21 @@
         </div>
       `;
       document.body.appendChild(modalHtml);
+      // wire main group label: Enter commits (blur) and blur triggers chart update
+      try{
+        const mainLabel = modalHtml.querySelector('.stm-group[data-group-id="main"] .stm-group-label');
+        if(mainLabel){
+          mainLabel.addEventListener('keydown', (ev)=>{ if(ev.key === 'Enter'){ ev.preventDefault(); mainLabel.blur(); } });
+          mainLabel.addEventListener('blur', ()=>{
+            try{
+              const txt = (mainLabel.textContent||'').trim();
+              const grp = mainLabel.closest && mainLabel.closest('.stm-group');
+              if(grp){ if(txt) grp.dataset.customLabel = txt; else delete grp.dataset.customLabel; }
+              const gs = collectGroups(); if(gs && gs.length>0) updateSalesTrendChart(gs);
+            }catch(e){}
+          });
+        }
+      }catch(e){}
     }
 
     const modal = document.querySelector('.sales-trend-modal');
@@ -628,7 +643,7 @@
       compareCount++;
       const gid = 'compare-' + compareCount;
       const div = document.createElement('div'); div.className = 'stm-group'; div.dataset.groupId = gid;
-      div.innerHTML = `<div class="stm-group-header"><div class="stm-group-label">對比線 ${compareCount} 設定</div><button class="stm-remove-group">移除</button></div>
+  div.innerHTML = `<div class="stm-group-header"><div class="stm-group-label" contenteditable="true">對比線 ${compareCount} 設定</div><button class="stm-remove-group">移除</button></div>
         <div class="stm-date-wrap"><input class="stm-date-input" id="sales-trend-date-input-${gid}" placeholder="點擊選擇日期範圍" readonly></div>
         <div class="stm-group-controls" style="margin-top:8px">
           <button class="stm-multi-btn" data-selector="branch">分店: 所有分店</button>
@@ -639,6 +654,10 @@
       div.querySelector('.stm-remove-group').addEventListener('click', ()=>{ div.remove(); compareCount--; addBtn.removeAttribute('disabled'); refreshCompareLabels(); });
       // wire multi buttons
       wireMultiBtns(div);
+      // wire inline edits for label and align checkbox to trigger update
+      try{
+        const lab = div.querySelector('.stm-group-label'); if(lab){ lab.addEventListener('keydown', (ev)=>{ if(ev.key === 'Enter'){ ev.preventDefault(); lab.blur(); } }); lab.addEventListener('blur', ()=>{ try{ const txt = (lab.textContent||'').trim(); const grp = lab.closest && lab.closest('.stm-group'); if(grp){ if(txt) grp.dataset.customLabel = txt; else delete grp.dataset.customLabel; } const gs = collectGroups(); if(gs && gs.length>0) updateSalesTrendChart(gs); }catch(e){} }); }
+      }catch(e){}
       // init litepicker for this group's date input (reuse initLitepicker logic by creating a picker)
       try{ const input = div.querySelector('.stm-date-input'); if(input) initLitepickerForInput(input); }catch(e){}
       if(compareCount >= 4) addBtn.setAttribute('disabled','');
@@ -646,7 +665,19 @@
     }
 
     function refreshCompareLabels(){
-      const comps = groupsContainer.querySelectorAll('.stm-group'); let i=0; comps.forEach(c=>{ i++; const lab = c.querySelector('.stm-group-label'); if(lab) lab.textContent = i===1 && c.dataset.groupId==='main' ? '主線設定' : `對比線 ${i- (c.dataset.groupId==='main'?0:1)} 設定`; });
+      const comps = groupsContainer.querySelectorAll('.stm-group'); let i=0; comps.forEach(c=>{
+        i++; const lab = c.querySelector('.stm-group-label'); if(!lab) return;
+        // prefer persisted custom label stored in group's dataset
+        const custom = c.dataset && c.dataset.customLabel ? (c.dataset.customLabel||'').trim() : '';
+        if(custom){ lab.textContent = custom; }
+        else {
+          const defaultText = i===1 && c.dataset.groupId==='main' ? '主線設定' : `對比線 ${i- (c.dataset.groupId==='main'?0:1)} 設定`;
+          // only set default if label is empty or was previously a default
+          const isEmpty = !(lab.textContent && String(lab.textContent).trim());
+          if(isEmpty) lab.textContent = defaultText;
+          // if lab has some user-entered text but no custom dataset, keep it (don't overwrite)
+        }
+      });
     }
 
     if(addBtn) addBtn.addEventListener('click', ()=>{ addCompareGroup(); });
@@ -719,19 +750,23 @@
   // collect groups from DOM (.stm-group elements)
   function collectGroups(){
     const groups = []; const container = document.querySelector('.sales-trend-modal .stm-groups'); if(!container) return groups;
-    container.querySelectorAll('.stm-group').forEach(g=>{
+    container.querySelectorAll('.stm-group').forEach((g, idx)=>{
       try{
-        const gid = g.dataset.groupId || (g.querySelector('.stm-group-label') && g.querySelector('.stm-group-label').textContent) || 'group';
         const input = g.querySelector('.stm-date-input'); const rangeText = input ? input.value : '';
         let range = parseDateRange(rangeText);
         if(!range) range = robustParseRangeFromString(rangeText);
-        const branchBtn = g.querySelector('.stm-multi-btn[data-selector="branch"]');
-        const productBtn = g.querySelector('.stm-multi-btn[data-selector="product"]');
+  const branchBtn = g.querySelector('.stm-multi-btn[data-selector="branch"]');
+  const productBtn = g.querySelector('.stm-multi-btn[data-selector="product"]');
+  const labelEl = g.querySelector('.stm-group-label'); const labelText = labelEl ? (labelEl.textContent||'').trim() : '';
+  // default behavior: main group (index 0) is not a compare; all subsequent groups align to main by default
+  const gidEl = g.querySelector('.stm-group-id');
+  const gid = gidEl ? (gidEl.textContent || gidEl.innerText || '').trim() : (g.dataset.groupId || (g.querySelector('.stm-group-label') && g.querySelector('.stm-group-label').textContent) || ('g' + idx));
+  const alignToMain = (typeof idx === 'number' && idx>0) ? true : false;
         const branches = branchBtn && branchBtn.dataset.selected ? JSON.parse(branchBtn.dataset.selected) : [];
         const products = productBtn && productBtn.dataset.selected ? JSON.parse(productBtn.dataset.selected) : [];
         const branchKeys = branchBtn && branchBtn.dataset.selectedKeys ? JSON.parse(branchBtn.dataset.selectedKeys) : [];
         const productKeys = productBtn && productBtn.dataset.selectedKeys ? JSON.parse(productBtn.dataset.selectedKeys) : [];
-        groups.push({ id: gid, range, rangeText, branches, products, branchKeys, productKeys });
+  groups.push({ id: gid, range, rangeText, label: labelText, alignToMain, branches, products, branchKeys, productKeys });
       }catch(e){/* ignore group parse errors */}
     });
     try{ console.debug('[presentationV2] collectGroups ->', groups); }catch(e){}
@@ -739,10 +774,11 @@
   }
 
   // aggregate by date (YYYY-MM-DD) for each group using fullSalesData (fallback to window.fullSalesData or lastLoadData)
-  function aggregateByGroup(group, fullData){
+  function aggregateByGroup(group, fullData, options){
     // fullData expected to be array of transactions with date/date string and amount and shopName/product
     const out = {};
     if(!group || !fullData || !Array.isArray(fullData)) return out;
+  options = options || {};
   const start = group.range && group.range.start ? new Date(group.range.start) : null;
   const end = group.range && group.range.end ? new Date(group.range.end) : null;
   const startBound = start ? new Date(start) : null;
@@ -751,6 +787,9 @@
   if(endBound) endBound.setHours(23,59,59,999);
   try{ console.debug('[presentationV2] aggregateByGroup start', { id: group.id, start: startBound, end: endBound, branchKeys: group.branchKeys, productKeys: group.productKeys, branches: group.branches, products: group.products, fullDataLen: fullData.length }); }catch(e){}
     let matchedCount = 0;
+    // helper: format a Date to local YYYY-MM-DD (avoid toISOString timezone issues)
+    function localIsoDate(d){ if(!d || isNaN(d.getTime())) return null; const y = d.getFullYear(); const m = d.getMonth()+1; const dd = d.getDate(); return y + '-' + (m<10? '0'+m: m) + '-' + (dd<10? '0'+dd: dd); }
+    const originalKeyMap = {}; // shiftedKey -> originalKey
     fullData.forEach((t, idx)=>{
       try{
         // build Date object from available fields without converting to ISO string to avoid timezone shifts
@@ -803,8 +842,15 @@
             else { const p = t.product || t.product_name || t.productName; if(!p) return; if(!group.products.includes(String(p).trim())) return; }
           }
         }
-        const key = d.toISOString().split('T')[0];
+        // compute local key and apply optional shiftDays if requested (aligning compare groups)
+        const origKeyDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        const origKey = localIsoDate(origKeyDate);
+        let keyDate = new Date(origKeyDate);
+        if(options.shiftDays && typeof options.shiftDays === 'number' && options.shiftDays !== 0){ keyDate.setDate(keyDate.getDate() + options.shiftDays); }
+        const key = localIsoDate(keyDate);
         out[key] = (out[key]||0) + (parseFloat(t.amount)||0);
+        // record original -> shifted mapping for tooltip use
+        if(key && origKey){ originalKeyMap[key] = origKey; }
         matchedCount++;
       }catch(e){ }
     });
@@ -816,7 +862,8 @@
         }catch(e){}
       }
     }catch(e){}
-    return out;
+    // return both the aggregated map and the shifted->original key map for tooltip reference
+    return { map: out, originalKeyMap, matchedCount };
   }
 
   // update Chart.js on sales-trend-modal-canvas given groups
@@ -884,8 +931,30 @@
       // prepare datasets: main group first, then compares
       const datasets = [];
       const colors = ['#2196F3','#FF6384','#36A2EB','#FFCE56','#4BC0C0'];
+      // if any compare group requests alignment and main group has a range, use main group's range as x-axis
+      const anyAlign = Array.isArray(groups) && groups.length>0 && groups.slice(1).some(g=>g && g.alignToMain) && groups[0] && groups[0].range && groups[0].range.start && groups[0].range.end;
+      if(anyAlign && groups[0] && groups[0].range && groups[0].range.start && groups[0].range.end){
+        // build labels from main group's range only (local ISO strings)
+        labels = [];
+        const s = new Date(groups[0].range.start); s.setHours(0,0,0,0); const e = new Date(groups[0].range.end); e.setHours(0,0,0,0);
+        for(let d = new Date(s); d<=e; d.setDate(d.getDate()+1)){
+          const y = d.getFullYear(); const m = d.getMonth()+1; const dd = d.getDate(); const iso = y + '-' + (m<10? '0'+m: m) + '-' + (dd<10? '0'+dd: dd);
+          labels.push(iso);
+        }
+      }
+
       groups.forEach((g, idx)=>{
-        const agg = aggregateByGroup(g, source);
+        // compute shiftDays relative to main group's start when alignToMain is requested
+        let shiftDays = 0;
+        if(g && g.alignToMain && idx>0 && groups[0] && groups[0].range && groups[0].range.start && g.range && g.range.start){
+          const mainStart = new Date(groups[0].range.start); mainStart.setHours(0,0,0,0);
+          const cmpStart = new Date(g.range.start); cmpStart.setHours(0,0,0,0);
+          const msPerDay = 24*60*60*1000;
+          shiftDays = Math.round((mainStart.getTime() - cmpStart.getTime())/msPerDay);
+        }
+        const aggRes = aggregateByGroup(g, source, { shiftDays });
+        const agg = aggRes && aggRes.map ? aggRes.map : {};
+        const origMap = aggRes && aggRes.originalKeyMap ? aggRes.originalKeyMap : {};
         const data = labels.map(ld=> { const v = agg[ld]; return (typeof v === 'number') ? v : (v ? Number(v) : 0); });
         const total = data.reduce((a,b)=>a+(parseFloat(b)||0),0);
         console.debug('[presentationV2] updateSalesTrendChart group agg summary', { id: g.id, total, points: data.slice(0,5), labelCount: labels.length });
@@ -900,7 +969,10 @@
         if(g.productKeys && g.productKeys.length>0) sel.push('產品:' + (g.productKeys.length === 1 ? g.productKeys[0] : g.productKeys.length+'項'));
         else if(g.products && g.products.length>0) sel.push('產品:' + (g.products.length === 1 ? g.products[0] : g.products.length+'項'));
         const labelText = descParts.concat(sel).join(' | ');
-        datasets.push({ label: labelText || (g.id||'線') , data, borderColor: colors[idx%colors.length], backgroundColor: 'rgba(0,0,0,0)', tension:0.35 });
+        const ds = { label: (g.label && g.label.trim()) ? g.label.trim() : (labelText || (g.id||'線')), data, borderColor: colors[idx%colors.length], backgroundColor: 'rgba(0,0,0,0)', tension:0.35 };
+        // attach original date map for tooltip callback (shiftedKey -> originalKey)
+        ds.__originalDateMap = origMap;
+        datasets.push(ds);
       });
 
       // create or update chart
@@ -912,9 +984,39 @@
         const d2 = new Date(l); return isNaN(d2.getTime())? l : formatMmDd(d2);
       });
   console.debug('[presentationV2] updateSalesTrendChart final labels count:', formattedLabels.length);
-      const cfg = { type:'line', data:{ labels: formattedLabels, datasets }, options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:true } }, scales:{ x:{ display:true }, y:{ display:true } } } };
-      if(prev && prev.destroy) try{ prev.destroy(); }catch(e){}
-      try{ const chart = new Chart(el, cfg); chartRegistry.set(el.id, chart); }catch(e){ console.warn('failed to create sales-trend modal chart', e); }
+        // build Chart.js options separately for clarity
+        const options = {
+          responsive: true,
+          maintainAspectRatio: false,
+          // keep ISO labels for tooltip mapping
+          _labelsIso: labels,
+          plugins: {
+            legend: { display: true },
+            tooltip: {
+              callbacks: {
+                label: function(context){
+                  try{
+                    const ds = context.dataset || {};
+                    const val = (context.parsed && context.parsed.y !== undefined) ? context.parsed.y : context.raw;
+                    const iso = (context.chart && context.chart.options && context.chart.options._labelsIso) ? context.chart.options._labelsIso[context.dataIndex] : null;
+                    const orig = iso && ds.__originalDateMap && ds.__originalDateMap[iso] ? ds.__originalDateMap[iso] : null;
+                    const valStr = (typeof val === 'number') ? val.toLocaleString() : String(val);
+                    if(orig) return (ds.label||'') + ': ' + valStr + ' (原: ' + orig + ')';
+                    return (ds.label||'') + ': ' + valStr;
+                  }catch(e){
+                    return context.dataset && context.dataset.label ? context.dataset.label + ': ' + (context.parsed && context.parsed.y) : String((context.parsed && context.parsed.y) || '');
+                  }
+                }
+              }
+            }
+          },
+          scales: { x: { display: true }, y: { display: true } }
+        };
+
+        const cfg = { type: 'line', data: { labels: formattedLabels, datasets }, options };
+
+        if(prev && prev.destroy){ try{ prev.destroy(); }catch(e){} }
+        try{ const chart = new Chart(el, cfg); chartRegistry.set(el.id, chart); }catch(e){ console.warn('failed to create sales-trend modal chart', e); }
     }catch(e){ console.warn('updateSalesTrendChart error', e); }
   }
 
