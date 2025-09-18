@@ -238,7 +238,32 @@ body{font-family: 'Microsoft JhengHei',sans-serif; background:#eef6ff; margin:0;
 /* core layout: fixed chart area at top of dialog, controls scrollable below */
 .sales-trend-modal .stm-chart-wrap{flex:0 0 auto; background:#fff; padding:10px 12px; border-bottom:1px solid #f3f6fb}
 .sales-trend-modal .stm-chart{width:100%; height:200px; border-radius:8px; background:linear-gradient(180deg,#fff,#fbfdff); display:block}
-.sales-trend-modal .stm-controls{flex:1 1 auto; overflow:auto; -webkit-overflow-scrolling:touch; padding:12px; background:#f7fbff}
+.sales-trend-modal .stm-controls{
+  flex:1 1 auto;
+  /* try overlay scrollbars in Blink-based browsers so scrollbar doesn't push layout */
+  overflow: overlay;
+  -webkit-overflow-scrolling: touch;
+  padding:12px;
+  background:#f7fbff;
+  /* fallback/friendly: reserve gutter to avoid sudden layout shift when scrollbar appears */
+  scrollbar-gutter: stable both-edges;
+  position: relative;
+}
+/* subtle thin scrollbar visuals */
+.sales-trend-modal .stm-controls::-webkit-scrollbar{width:8px;height:8px}
+.sales-trend-modal .stm-controls::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.08);border-radius:8px}
+.sales-trend-modal .stm-controls::-webkit-scrollbar-track{background:transparent}
+.sales-trend-modal .stm-controls{scrollbar-width:thin; scrollbar-color: rgba(0,0,0,0.08) transparent}
+/* make scrollbar less obtrusive: thin and subtle */
+.sales-trend-modal .stm-controls::-webkit-scrollbar{width:8px;height:8px}
+.sales-trend-modal .stm-controls::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.08);border-radius:8px}
+.sales-trend-modal .stm-controls::-webkit-scrollbar-track{background:transparent}
+/* Firefox thin scrollbar */
+.sales-trend-modal .stm-controls{scrollbar-width:thin; scrollbar-color: rgba(0,0,0,0.08) transparent}
+/* optionally hide scrollbar until hover on desktop to reduce visual noise */
+.sales-trend-modal .stm-controls{--stm-scroll-opacity:0}
+.sales-trend-modal .stm-controls:hover{--stm-scroll-opacity:1}
+.sales-trend-modal .stm-controls::-webkit-scrollbar-thumb{background:rgba(0,0,0,calc(var(--stm-scroll-opacity) * 0.08));}
 
 /* groups: main + compare groups */
 .stm-groups{display:flex; flex-direction:column; gap:12px}
