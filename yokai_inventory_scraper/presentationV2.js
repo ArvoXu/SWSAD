@@ -1010,7 +1010,29 @@
               }
             }
           },
-          scales: { x: { display: true }, y: { display: true } }
+          scales: {
+            x: { display: true },
+            y: {
+              display: true,
+              ticks: {
+                callback: function(value){
+                  try{
+                    // value is number; show thousands as 'k' (e.g., 4000 -> 4k)
+                    var v = (typeof value === 'number') ? value : Number(value);
+                    if(!isNaN(v) && Math.abs(v) >= 1000){
+                      // remove trailing .0 if divisible by 1000
+                      var k = v/1000;
+                      var ks = (Math.round(k*10)/10).toString();
+                      // if integer, show without decimal
+                      if(ks.indexOf('.') !== -1){ ks = ks.replace(/\.0+$/,''); }
+                      return ks + 'k';
+                    }
+                    return v;
+                  }catch(e){ return value; }
+                }
+              }
+            }
+          }
         };
 
         const cfg = { type: 'line', data: { labels: formattedLabels, datasets }, options };

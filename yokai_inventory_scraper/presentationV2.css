@@ -307,6 +307,23 @@ body{font-family: 'Microsoft JhengHei',sans-serif; background:#eef6ff; margin:0;
 .selector-modal .sel-dialog{position:relative; width:92%; max-width:420px; max-height:80vh; background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,0.28); z-index:2; display:flex; flex-direction:column}
 .selector-modal .sel-header{padding:12px 14px; font-weight:700; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #f3f6fb}
 .selector-modal .sel-body{padding:10px; overflow:auto; -webkit-overflow-scrolling:touch}
+/* make selector modal body use overlay/thin scrollbar as well (avoid pushing layout) */
+.selector-modal .sel-body{
+  /* overlay scrollbars in supporting browsers so scrollbar doesn't push layout */
+  overflow: overlay;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable both-edges;
+  position: relative;
+}
+/* subtle thin scrollbar visuals for selector body */
+.selector-modal .sel-body::-webkit-scrollbar{width:8px;height:8px}
+.selector-modal .sel-body::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.08);border-radius:8px}
+.selector-modal .sel-body::-webkit-scrollbar-track{background:transparent}
+.selector-modal .sel-body{scrollbar-width:thin; scrollbar-color: rgba(0,0,0,0.08) transparent}
+/* fade mechanic: less obtrusive until hover */
+.selector-modal .sel-body{--sel-scroll-opacity:0}
+.selector-modal .sel-body:hover{--sel-scroll-opacity:1}
+.selector-modal .sel-body::-webkit-scrollbar-thumb{background:rgba(0,0,0,calc(var(--sel-scroll-opacity) * 0.08));}
 .selector-modal .sel-item{padding:10px 12px; border-radius:8px; margin-bottom:8px; background:#fbfdff; display:flex; justify-content:space-between; align-items:center; cursor:pointer}
 .selector-modal .sel-item.selected{background:linear-gradient(90deg,#e8f3ff,#f7fbff); font-weight:700}
 .selector-modal .sel-footer{display:flex; gap:8px; padding:10px; border-top:1px solid #eef2f6}
