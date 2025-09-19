@@ -308,7 +308,19 @@
   }
 
   // expose a small API for manual debugging from DevTools
-  try{ window.presentationV2 = window.presentationV2 || {}; window.presentationV2.clearDefaults = clearDefaultsAndSave; window.presentationV2.saveLayout = saveLayout; window.presentationV2.loadLayout = loadLayout; console.log('[presentationV2] API exposed: presentationV2.clearDefaults(), .saveLayout(), .loadLayout()'); }catch(e){}
+  try{ window.presentationV2 = window.presentationV2 || {}; window.presentationV2.clearDefaults = clearDefaultsAndSave; window.presentationV2.saveLayout = saveLayout; window.presentationV2.loadLayout = loadLayout; 
+    // small modal registry to allow per-module init/teardown without changing core logic
+    window.presentationV2.modalRegistry = window.presentationV2.modalRegistry || (function(){
+      const map = new Map();
+      return {
+        register: (key, obj)=>{ map.set(key, obj); },
+        get: (key)=> map.get(key),
+        unregister: (key)=> map.delete(key),
+        _map: map
+      };
+    })();
+    console.log('[presentationV2] API exposed: presentationV2.clearDefaults(), .saveLayout(), .loadLayout(), modalRegistry');
+  }catch(e){}
 
   // try to load saved layout for current orientation (will recreate clones if needed)
   try{ 
@@ -375,6 +387,25 @@
       }catch(e){}
     }
 
+    // Demonstration: register a small init/teardown for pay-share modules so devs can follow pattern
+    try{
+      const regKey = 'm-pay-share';
+      if(window.presentationV2 && window.presentationV2.modalRegistry && !window.presentationV2.modalRegistry.get(regKey)){
+        window.presentationV2.modalRegistry.register(regKey, {
+          init: (modalRoot, triggerModule)=>{
+            // example: inject a specific container and wire any event handlers scoped to modalRoot
+            try{
+              const c = modalRoot.querySelector('.mlm-content'); if(!c) return; const div = document.createElement('div'); div.className = 'pay-share-extended'; div.innerHTML = '<div style="font-weight:600">pay-share 擴展示例</div><div>可在此注入互動元件</div>'; c.appendChild(div);
+              // store a reference for teardown
+              modalRoot._payShareExample = div;
+            }catch(e){}
+          },
+          teardown: (modalRoot)=>{
+            try{ if(modalRoot && modalRoot._payShareExample){ modalRoot._payShareExample.remove(); delete modalRoot._payShareExample; } }catch(e){}
+          }
+        });
+      }
+    }catch(e){}
   const modal = document.querySelector('.module-expand-modal.module-sales-trend');
   const openButtons = document.querySelectorAll('[data-expand-target="sales-trend-modal"], [data-expand-target="module-sales-trend"]');
     // prevent expand buttons from being interpreted as module-drag starters
@@ -1436,16 +1467,37 @@
       modal.querySelector('.mlm-close').addEventListener('click', ()=>closeModuleExpandModal());
       modal.querySelector('.mlm-overlay').addEventListener('click', ()=>closeModuleExpandModal());
     }
-    // populate placeholder content (module id and template)
-  const content = modal.querySelector('.mlm-content');
-    if(content){
-      const title = mod.dataset.templateId ? `${mod.dataset.templateId} — ${mod.id}` : mod.id;
-      content.innerHTML = `<div style="font-weight:600;margin-bottom:8px">${escapeHtml(title)}</div><div>此處為擴充面板內容占位，之後會放入完整互動資訊。</div>`;
-    }
-    modal.classList.add('open');
+    // standardize modal with module identification so CSS/JS can target per-module behavior
+    try{
+      const tpl = (mod.dataset && mod.dataset.templateId) ? String(mod.dataset.templateId) : String(mod.id || '').replace(/[^a-z0-9\-]/gi,'').toLowerCase();
+      // remove any previous module- modifiers
+      Array.from(modal.classList).filter(c=>c.startsWith('module-') && c !== 'module-expand-modal').forEach(c=> modal.classList.remove(c));
+      if(tpl) modal.classList.add('module-' + tpl);
+      modal.dataset.module = tpl || '';
+      // populate placeholder content (module id and template)
+      const content = modal.querySelector('.mlm-content');
+      if(content){
+        const title = mod.dataset.templateId ? `${mod.dataset.templateId} — ${mod.id}` : mod.id;
+        content.innerHTML = `<div style="font-weight:600;margin-bottom:8px">${escapeHtml(title)}</div><div>此處為擴充面板內容占位，之後會放入完整互動資訊。</div>`;
+      }
+      modal.classList.add('open');
+      // if a module-specific init is registered, call it
+      try{ const reg = window.presentationV2 && window.presentationV2.modalRegistry && window.presentationV2.modalRegistry.get && window.presentationV2.modalRegistry.get(tpl); if(reg && typeof reg.init === 'function'){ reg.init(modal, mod); } }catch(e){}
+    }catch(e){ /* ignore */ }
   }
 
-  function closeModuleExpandModal(){ const modal = document.querySelector('.module-expand-modal:not(.module-sales-trend)'); if(modal) modal.classList.remove('open'); }
+  function closeModuleExpandModal(){ 
+    const modal = document.querySelector('.module-expand-modal:not(.module-sales-trend)'); 
+    if(!modal) return;
+    try{
+      // call teardown if registered
+      const tpl = modal.dataset && modal.dataset.module ? modal.dataset.module : null;
+      try{ const reg = window.presentationV2 && window.presentationV2.modalRegistry && window.presentationV2.modalRegistry.get && window.presentationV2.modalRegistry.get(tpl); if(reg && typeof reg.teardown === 'function'){ reg.teardown(modal); } }catch(e){}
+    }catch(e){}
+    modal.classList.remove('open');
+    // cleanup modifier class and data-module to return to neutral state
+    try{ if(modal.dataset) delete modal.dataset.module; Array.from(modal.classList).filter(c=>c.startsWith('module-') && c !== 'module-expand-modal').forEach(c=> modal.classList.remove(c)); }catch(e){}
+  }
 
   function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
