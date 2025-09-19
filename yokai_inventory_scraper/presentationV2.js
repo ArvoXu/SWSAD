@@ -392,6 +392,8 @@
 
     async function openModal(){ if(!modal) return; modal.classList.add('open'); document.body.style.overflow = 'hidden';
       try{ if(salesLoadPromise) await salesLoadPromise; }catch(e){}
+      // allow layout to settle so Chart.js can measure the canvas correctly
+      try{ await new Promise(r=> requestAnimationFrame(r)); }catch(e){}
       ensureModalChart(); }
     function closeModal(){ if(!modal) return; modal.classList.remove('open'); document.body.style.overflow = ''; }
 
@@ -1425,7 +1427,8 @@
   // module expand modal (shared across modules)
   function openModuleExpandModal(mod){
     if(!mod) return;
-    let modal = document.querySelector('.module-expand-modal');
+    // prefer a generic module-expand-modal that is NOT the specialized sales-trend modal
+    let modal = document.querySelector('.module-expand-modal:not(.module-sales-trend)');
     if(!modal){
       modal = document.createElement('div'); modal.className = 'module-expand-modal';
       modal.innerHTML = '\n        <div class="mlm-overlay"></div>\n        <div class="mlm-dialog">\n          <div class="mlm-header">詳細面板 <button class="mlm-close" title="關閉">✕</button></div>\n          <div class="mlm-body"><div class="mlm-content"></div></div>\n        </div>';
@@ -1442,7 +1445,7 @@
     modal.classList.add('open');
   }
 
-  function closeModuleExpandModal(){ const modal = document.querySelector('.module-expand-modal'); if(modal) modal.classList.remove('open'); }
+  function closeModuleExpandModal(){ const modal = document.querySelector('.module-expand-modal:not(.module-sales-trend)'); if(modal) modal.classList.remove('open'); }
 
   function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
