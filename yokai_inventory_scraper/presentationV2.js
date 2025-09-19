@@ -330,10 +330,10 @@
   // --- sales-trend modal wiring (layout-only, mobile-first) ---
   (function(){
     // create modal DOM and append to body (keeps HTML tidy if not present)
-    const existing = document.querySelector('.sales-trend-modal');
+    const existing = document.querySelector('.module-expand-modal.module-sales-trend');
     if(!existing){
       const modalHtml = document.createElement('div');
-      modalHtml.className = 'sales-trend-modal';
+      modalHtml.className = 'module-expand-modal module-sales-trend';
       modalHtml.innerHTML = `
         <div class="mlm-overlay"></div>
         <div class="stm-dialog" role="dialog" aria-modal="true" aria-label="銷售趨勢">
@@ -375,8 +375,8 @@
       }catch(e){}
     }
 
-    const modal = document.querySelector('.sales-trend-modal');
-    const openButtons = document.querySelectorAll('[data-expand-target="sales-trend-modal"]');
+  const modal = document.querySelector('.module-expand-modal.module-sales-trend');
+  const openButtons = document.querySelectorAll('[data-expand-target="sales-trend-modal"], [data-expand-target="module-sales-trend"]');
     // prevent expand buttons from being interpreted as module-drag starters
     const expandBtnSelectors = '.module-expand-btn, [data-expand-target]';
     const expandBtns = Array.from(document.querySelectorAll(expandBtnSelectors));
@@ -395,7 +395,7 @@
       ensureModalChart(); }
     function closeModal(){ if(!modal) return; modal.classList.remove('open'); document.body.style.overflow = ''; }
 
-    openButtons.forEach(b=> b.addEventListener('click', e=>{ e.preventDefault(); openModal(); }));
+  openButtons.forEach(b=> b.addEventListener('click', e=>{ e.preventDefault(); openModal(); }));
     if(overlayEl) overlayEl.addEventListener('click', closeModal);
     if(closeBtn) closeBtn.addEventListener('click', closeModal);
 
@@ -596,7 +596,7 @@
         modalEl.classList.remove('open'); document.body.style.overflow='';
         // if sales-trend modal exists, refresh chart only when at least one group has an explicit date range
         try{
-          if(document.querySelector('.sales-trend-modal')){
+          if(document.querySelector('.module-expand-modal.module-sales-trend')){
             const gs = collectGroups();
             const hasRange = Array.isArray(gs) && gs.some(g=> g && g.range && g.range.start && g.range.end);
             if(hasRange){ updateSalesTrendChart(gs); }
@@ -615,7 +615,7 @@
       else btn.textContent = (btn.dataset.selector === 'branch' ? '分店: ' : '產品: ') + selectedArray.length + ' 項已選';
     }
 
-    // wire the buttons inside the sales-trend modal
+  // wire the buttons inside the sales-trend modal (now unified under module-expand-modal.module-sales-trend)
     // helper: wire multi-select button to open selector modal for a given trigger button
     function wireMultiBtns(root){
       if(!root) return;
@@ -634,7 +634,7 @@
     wireMultiBtns(modal);
 
     // group management: allow adding up to 4 compare groups
-    const groupsContainer = modal && modal.querySelector('.stm-groups');
+  const groupsContainer = modal && modal.querySelector('.stm-groups');
     const addBtn = document.getElementById('stm-add-compare');
     let compareCount = 0; // tracks number of compare groups
 
@@ -749,7 +749,7 @@
 
   // collect groups from DOM (.stm-group elements)
   function collectGroups(){
-    const groups = []; const container = document.querySelector('.sales-trend-modal .stm-groups'); if(!container) return groups;
+    const groups = []; const container = document.querySelector('.module-expand-modal.module-sales-trend .stm-groups'); if(!container) return groups;
     container.querySelectorAll('.stm-group').forEach((g, idx)=>{
       try{
         const input = g.querySelector('.stm-date-input'); const rangeText = input ? input.value : '';
@@ -908,7 +908,7 @@
       // If no ranges were discovered from groups, but date inputs display values, try to read visible inputs and build date set from them
       if(allDatesSet.size === 0){
         try{
-          const inputs = Array.from(document.querySelectorAll('.sales-trend-modal .stm-date-input'));
+          const inputs = Array.from(document.querySelectorAll('.module-expand-modal.module-sales-trend .stm-date-input'));
           inputs.forEach(inp=>{
             const v = inp && inp.value ? inp.value.trim() : '';
             if(!v) return;
@@ -1045,7 +1045,7 @@
   // Auto-refresh chart when any control changes (date inputs or selector apply)
   (function wireAutoRefresh(){
     // remove explicit apply button if exists
-    try{ const apply = document.querySelector('.sales-trend-modal .stm-btn'); if(apply) apply.remove(); }catch(e){}
+  try{ const apply = document.querySelector('.module-expand-modal.module-sales-trend .stm-btn'); if(apply) apply.remove(); }catch(e){}
 
     // whenever a date input changes (litepicker selection), refresh chart
     function onControlChange(){
@@ -1090,7 +1090,7 @@
           });
         });
       });
-      const container = document.querySelector('.sales-trend-modal .stm-groups'); if(container) obs.observe(container, { childList:true, subtree:true });
+  const container = document.querySelector('.module-expand-modal.module-sales-trend .stm-groups'); if(container) obs.observe(container, { childList:true, subtree:true });
     }catch(e){}
   })();
 

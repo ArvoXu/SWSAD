@@ -4,10 +4,12 @@
   --gutter: 12px;
   --panel-padding: 16px;
   --card-radius: 12px;
+  --page-wrap-padding: 48px; /* distance the dashboard keeps from page edge (default) */
+  --modal-edge-gap: 12px; /* extra gap between dashboard edge and modal */
 }
 *{box-sizing:border-box}
 body{font-family: 'Microsoft JhengHei',sans-serif; background:#eef6ff; margin:0;}
-.page-wrap{display:flex; padding:48px; justify-content:center;}
+.page-wrap{display:flex; padding:var(--page-wrap-padding); justify-content:center;}
 
 .content-wrapper{
     display:flex;
@@ -211,34 +213,49 @@ body{font-family: 'Microsoft JhengHei',sans-serif; background:#eef6ff; margin:0;
 .module-expand-btn{background:transparent;border:0;padding:6px 8px;border-radius:6px;cursor:pointer;font-weight:700;margin-left:6px}
 .module-expand-btn:hover{background:rgba(0,0,0,0.03)}
 
-/* shared expand modal used by various modules */
-.module-expand-modal{position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:16000}
+/* shared expand modal used by various modules (unified style)
+   - Mobile-first: full-screen sheet anchored to bottom for narrow viewports
+   - Desktop: centered dialog with constrained max-width and max-height
+   Use a modifier class `.module-sales-trend` for sales-trend specific sizing when needed.
+*/
+.module-expand-modal{position:fixed; inset:0; display:none; align-items:flex-end; justify-content:center; z-index:16000}
 .module-expand-modal.open{display:flex}
 .module-expand-modal .mlm-overlay{position:absolute; inset:0; background:rgba(0,0,0,0.45)}
-.module-expand-modal .mlm-dialog{position:relative; width:92%; max-width:520px; max-height:90vh; background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,0.28); z-index:2; display:flex; flex-direction:column}
+.module-expand-modal .mlm-dialog{position:relative; width:100%; height:100%; max-height:100%; background:#fff; border-radius:12px 12px 0 0; overflow:hidden; box-shadow:0 -10px 40px rgba(0,0,0,0.28); z-index:2; display:flex; flex-direction:column}
 .module-expand-modal .mlm-header{padding:12px 14px; font-weight:700; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #f3f6fb}
 .module-expand-modal .mlm-body{padding:12px; overflow:auto}
 .module-expand-modal .mlm-content{padding:6px}
 .module-expand-modal .mlm-close{background:transparent;border:0;padding:6px 10px;cursor:pointer;font-size:16px}
 
-/* sales-trend specific modal: mobile-first layout */
-.sales-trend-modal{position:fixed; inset:0; display:none; align-items:flex-end; justify-content:center; z-index:17000}
-.sales-trend-modal.open{display:flex}
-.sales-trend-modal .mlm-overlay{position:absolute; inset:0; background:rgba(0,0,0,0.45)}
-.sales-trend-modal .stm-dialog{position:relative; width:100%; height:100%; max-height:100%; background:#fff; border-radius:12px 12px 0 0; overflow:hidden; box-shadow:0 -10px 40px rgba(0,0,0,0.3); z-index:2; display:flex; flex-direction:column}
+/* Sales-trend specific modifier: adjust chart height and allow desktop to show as centered modal */
+.module-expand-modal.module-sales-trend .stm-dialog, .module-expand-modal.module-sales-trend .mlm-dialog{ /* ensure selectors work regardless of original naming */ overflow:visible }
+.module-expand-modal.module-sales-trend .stm-chart{width:100%; height:100%; border-radius:8px; background:linear-gradient(180deg,#fff,#fbfdff); display:block}
+.module-expand-modal.module-sales-trend .stm-chart-wrap{flex:0 0 auto; height:40vh; min-height:200px; max-height:65vh}
 
-/* allow datepicker popup to escape dialog bounds (prevent clipping) */
-.sales-trend-modal .stm-dialog{overflow:visible}
+/* On larger screens show centered dialog instead of bottom sheet */
+@media(min-width:600px){
+  /* On larger screens, keep bottom anchored (sheet feel). Left/top/right inset follow dashboard padding + small gap. */
+  .module-expand-modal{align-items:center; justify-content:flex-end; top: calc(var(--page-wrap-padding) + var(--modal-edge-gap)); left: calc(var(--page-wrap-padding) + var(--modal-edge-gap)); right: calc(var(--page-wrap-padding) + var(--modal-edge-gap)); bottom: 0;}
+  /* Dialog fills available width between left/right insets but is capped by max-width */
+  .module-expand-modal .mlm-dialog{width:100%; max-width:720px; height:auto; max-height:88vh; border-radius:10px; margin:0 auto}
+  .module-expand-modal.module-sales-trend .stm-chart{height:100%}
+  .module-expand-modal.module-sales-trend .stm-chart-wrap{height:45vh}
+}
+
+/* sales-trend specific: use module-expand-modal modifier selectors for same effect */
+.module-expand-modal.module-sales-trend .mlm-overlay{position:absolute; inset:0; background:rgba(0,0,0,0.45)}
+.module-expand-modal.module-sales-trend .stm-dialog{position:relative; width:100%; height:100%; max-height:100%; background:#fff; border-radius:12px 12px 0 0; overflow:hidden; box-shadow:0 -10px 40px rgba(0,0,0,0.3); z-index:2; display:flex; flex-direction:column}
+.module-expand-modal.module-sales-trend .stm-dialog{overflow:visible}
 
 /* ensure datepicker appears above overlays */
 .litepicker, .litepicker-container, .litepicker__container, .litepicker-root, .litepicker-calendar{z-index:30000 !important; position: absolute !important}
-.sales-trend-modal .stm-header{padding:12px 14px; font-weight:700; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #f3f6fb}
-.sales-trend-modal .stm-close{background:transparent;border:0;padding:6px 10px;cursor:pointer;font-size:18px}
+.module-expand-modal.module-sales-trend .stm-header{padding:12px 14px; font-weight:700; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #f3f6fb}
+.module-expand-modal.module-sales-trend .stm-close{background:transparent;border:0;padding:6px 10px;cursor:pointer;font-size:18px}
 
 /* core layout: fixed chart area at top of dialog, controls scrollable below */
-.sales-trend-modal .stm-chart-wrap{flex:0 0 auto; background:#fff; padding:10px 12px; border-bottom:1px solid #f3f6fb}
-.sales-trend-modal .stm-chart{width:100%; height:200px; border-radius:8px; background:linear-gradient(180deg,#fff,#fbfdff); display:block}
-.sales-trend-modal .stm-controls{
+.module-expand-modal.module-sales-trend .stm-chart-wrap{flex:0 0 auto; background:#fff; padding:10px 12px; border-bottom:1px solid #f3f6fb}
+.module-expand-modal.module-sales-trend .stm-chart{width:100%; height:200px; border-radius:8px; background:linear-gradient(180deg,#fff,#fbfdff); display:block}
+.module-expand-modal.module-sales-trend .stm-controls{
   flex:1 1 auto;
   /* try overlay scrollbars in Blink-based browsers so scrollbar doesn't push layout */
   overflow: overlay;
@@ -250,20 +267,20 @@ body{font-family: 'Microsoft JhengHei',sans-serif; background:#eef6ff; margin:0;
   position: relative;
 }
 /* subtle thin scrollbar visuals */
-.sales-trend-modal .stm-controls::-webkit-scrollbar{width:8px;height:8px}
-.sales-trend-modal .stm-controls::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.08);border-radius:8px}
-.sales-trend-modal .stm-controls::-webkit-scrollbar-track{background:transparent}
-.sales-trend-modal .stm-controls{scrollbar-width:thin; scrollbar-color: rgba(0,0,0,0.08) transparent}
+.module-expand-modal.module-sales-trend .stm-controls::-webkit-scrollbar{width:8px;height:8px}
+.module-expand-modal.module-sales-trend .stm-controls::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.08);border-radius:8px}
+.module-expand-modal.module-sales-trend .stm-controls::-webkit-scrollbar-track{background:transparent}
+.module-expand-modal.module-sales-trend .stm-controls{scrollbar-width:thin; scrollbar-color: rgba(0,0,0,0.08) transparent}
 /* make scrollbar less obtrusive: thin and subtle */
-.sales-trend-modal .stm-controls::-webkit-scrollbar{width:8px;height:8px}
-.sales-trend-modal .stm-controls::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.08);border-radius:8px}
-.sales-trend-modal .stm-controls::-webkit-scrollbar-track{background:transparent}
+.module-expand-modal.module-sales-trend .stm-controls::-webkit-scrollbar{width:8px;height:8px}
+.module-expand-modal.module-sales-trend .stm-controls::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.08);border-radius:8px}
+.module-expand-modal.module-sales-trend .stm-controls::-webkit-scrollbar-track{background:transparent}
 /* Firefox thin scrollbar */
-.sales-trend-modal .stm-controls{scrollbar-width:thin; scrollbar-color: rgba(0,0,0,0.08) transparent}
+.module-expand-modal.module-sales-trend .stm-controls{scrollbar-width:thin; scrollbar-color: rgba(0,0,0,0.08) transparent}
 /* optionally hide scrollbar until hover on desktop to reduce visual noise */
-.sales-trend-modal .stm-controls{--stm-scroll-opacity:0}
-.sales-trend-modal .stm-controls:hover{--stm-scroll-opacity:1}
-.sales-trend-modal .stm-controls::-webkit-scrollbar-thumb{background:rgba(0,0,0,calc(var(--stm-scroll-opacity) * 0.08));}
+.module-expand-modal.module-sales-trend .stm-controls{--stm-scroll-opacity:0}
+.module-expand-modal.module-sales-trend .stm-controls:hover{--stm-scroll-opacity:1}
+.module-expand-modal.module-sales-trend .stm-controls::-webkit-scrollbar-thumb{background:rgba(0,0,0,calc(var(--stm-scroll-opacity) * 0.08));}
 
 /* groups: main + compare groups */
 .stm-groups{display:flex; flex-direction:column; gap:12px}
@@ -332,10 +349,7 @@ body{font-family: 'Microsoft JhengHei',sans-serif; background:#eef6ff; margin:0;
 .sel-btn-cancel{background:#f3f6fb;color:#222}
 
 /* ensure chart remains visible and doesn't scroll with controls on larger screens too */
-@media(min-width:600px){
-  .sales-trend-modal .stm-dialog{width:92%; max-width:720px; height:auto; max-height:88vh; border-radius:10px}
-  .sales-trend-modal .stm-chart{height:260px}
-}
+/* keep responsive override: on desktop, the unified modal becomes centered -- handled above when editing base .module-expand-modal rules */
 
 /* machine detail modal */
 .machine-detail-modal{position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:15000}
