@@ -1458,32 +1458,68 @@
   // module expand modal (shared across modules)
   function openModuleExpandModal(mod){
     if(!mod) return;
-    // prefer a generic module-expand-modal that is NOT the specialized sales-trend modal
-    let modal = document.querySelector('.module-expand-modal:not(.module-sales-trend)');
+    // canonical chart-like templates that should use the stm-dialog wrapper
+    const chartTemplates = ['sales-trend','store-sales','product-share','pay-share'];
+    const tplRaw = (mod.dataset && mod.dataset.templateId) ? String(mod.dataset.templateId) : String(mod.id || '');
+    const tpl = tplRaw.replace(/[^a-z0-9\-]/gi,'').toLowerCase();
+
+    // find or create a modal specific to this template (keeps per-template DOM separate)
+    let modal = document.querySelector('.module-expand-modal.module-' + tpl);
+    const isChartTpl = chartTemplates.some(p=> tpl.includes(p));
+
     if(!modal){
-      modal = document.createElement('div'); modal.className = 'module-expand-modal';
-      modal.innerHTML = '\n        <div class="mlm-overlay"></div>\n        <div class="mlm-dialog">\n          <div class="mlm-header">詳細面板 <button class="mlm-close" title="關閉">✕</button></div>\n          <div class="mlm-body"><div class="mlm-content"></div></div>\n        </div>';
-      document.body.appendChild(modal);
-      modal.querySelector('.mlm-close').addEventListener('click', ()=>closeModuleExpandModal());
-      modal.querySelector('.mlm-overlay').addEventListener('click', ()=>closeModuleExpandModal());
-    }
-    // standardize modal with module identification so CSS/JS can target per-module behavior
-    try{
-      const tpl = (mod.dataset && mod.dataset.templateId) ? String(mod.dataset.templateId) : String(mod.id || '').replace(/[^a-z0-9\-]/gi,'').toLowerCase();
-      // remove any previous module- modifiers
-      Array.from(modal.classList).filter(c=>c.startsWith('module-') && c !== 'module-expand-modal').forEach(c=> modal.classList.remove(c));
-      if(tpl) modal.classList.add('module-' + tpl);
-      modal.dataset.module = tpl || '';
-      // populate placeholder content (module id and template)
-      const content = modal.querySelector('.mlm-content');
-      if(content){
-        const title = mod.dataset.templateId ? `${mod.dataset.templateId} — ${mod.id}` : mod.id;
-        content.innerHTML = `<div style="font-weight:600;margin-bottom:8px">${escapeHtml(title)}</div><div>此處為擴充面板內容占位，之後會放入完整互動資訊。</div>`;
+      modal = document.createElement('div'); modal.className = 'module-expand-modal module-' + tpl;
+      modal.dataset.module = tpl;
+      if(isChartTpl){
+        // canonical stm-dialog structure: header, chart-wrap (with canvas), controls
+        const title = (mod.dataset && mod.dataset.templateId) ? mod.dataset.templateId : (mod.id || tpl);
+        const canvasId = tpl + '-modal-canvas';
+        modal.innerHTML = `
+          <div class="mlm-overlay"></div>
+          <div class="stm-dialog" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}">
+            <div class="stm-header"><div>${escapeHtml(title)}</div><button class="stm-close" title="關閉">✕</button></div>
+            <div class="stm-chart-wrap"><canvas id="${canvasId}" class="stm-chart"></canvas></div>
+            <div class="stm-controls"><div class="stm-groups"><!-- groups injected by init if needed --></div></div>
+          </div>
+        `;
+      } else {
+        // fallback generic mlm dialog for non-chart modules
+        modal.innerHTML = `
+          <div class="mlm-overlay"></div>
+          <div class="mlm-dialog">
+            <div class="mlm-header">詳細面板 <button class="mlm-close" title="關閉">✕</button></div>
+            <div class="mlm-body"><div class="mlm-content"></div></div>
+          </div>
+        `;
       }
+      document.body.appendChild(modal);
+      // wire overlay/close
+      try{
+        const overlay = modal.querySelector('.mlm-overlay'); if(overlay) overlay.addEventListener('click', ()=>{ modal.classList.remove('open'); });
+        const closeBtn = modal.querySelector('.mlm-close') || modal.querySelector('.stm-close'); if(closeBtn) closeBtn.addEventListener('click', ()=>{ modal.classList.remove('open'); });
+      }catch(e){}
+    }
+
+    // populate content or call registry init
+    try{
+      // set dataset and modifier class (idempotent)
+      modal.dataset.module = tpl;
+      // open
       modal.classList.add('open');
-      // if a module-specific init is registered, call it
-      try{ const reg = window.presentationV2 && window.presentationV2.modalRegistry && window.presentationV2.modalRegistry.get && window.presentationV2.modalRegistry.get(tpl); if(reg && typeof reg.init === 'function'){ reg.init(modal, mod); } }catch(e){}
-    }catch(e){ /* ignore */ }
+      // if chart template, ensure canvas is present and call registered init
+      if(isChartTpl){
+        const reg = window.presentationV2 && window.presentationV2.modalRegistry && window.presentationV2.modalRegistry.get && window.presentationV2.modalRegistry.get(tpl);
+        if(reg && typeof reg.init === 'function'){
+          try{ reg.init(modal, mod); }catch(e){}
+        }
+      } else {
+        // generic: fill placeholder
+        const content = modal.querySelector('.mlm-content');
+        if(content){ const title = mod.dataset.templateId ? `${mod.dataset.templateId} — ${mod.id}` : mod.id; content.innerHTML = `<div style="font-weight:600;margin-bottom:8px">${escapeHtml(title)}</div><div>此處為擴充面板內容占位，之後會放入完整互動資訊。</div>`; }
+        const reg = window.presentationV2 && window.presentationV2.modalRegistry && window.presentationV2.modalRegistry.get && window.presentationV2.modalRegistry.get(tpl);
+        if(reg && typeof reg.init === 'function'){ try{ reg.init(modal, mod); }catch(e){} }
+      }
+    }catch(e){ }
   }
 
   function closeModuleExpandModal(){ 

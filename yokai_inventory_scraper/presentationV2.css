@@ -228,7 +228,7 @@ body{font-family: 'Microsoft JhengHei',sans-serif; background:#eef6ff; margin:0;
 .module-expand-modal .mlm-close{background:transparent;border:0;padding:6px 10px;cursor:pointer;font-size:16px}
 
 /* Sales-trend specific modifier: adjust chart height and allow desktop to show as centered modal */
-.module-expand-modal.module-sales-trend .stm-dialog, .module-expand-modal.module-sales-trend .mlm-dialog{ /* ensure selectors work regardless of original naming */ overflow:visible }
+  .module-expand-modal .stm-dialog, .module-expand-modal .mlm-dialog{ /* ensure chart-like dialogs use same base overflow */ overflow:visible }
 .module-expand-modal.module-sales-trend .stm-chart{width:100%; height:100%; border-radius:8px; background:linear-gradient(180deg,#fff,#fbfdff); display:block}
 .module-expand-modal.module-sales-trend .stm-chart-wrap{flex:0 0 auto; height:40vh; min-height:200px; max-height:65vh}
 
@@ -244,18 +244,21 @@ body{font-family: 'Microsoft JhengHei',sans-serif; background:#eef6ff; margin:0;
 
 /* sales-trend specific: use module-expand-modal modifier selectors for same effect */
 .module-expand-modal.module-sales-trend .mlm-overlay{position:absolute; inset:0; background:rgba(0,0,0,0.45)}
-.module-expand-modal.module-sales-trend .stm-dialog{position:relative; width:100%; height:100%; max-height:100%; background:#fff; border-radius:12px 12px 0 0; overflow:hidden; box-shadow:0 -10px 40px rgba(0,0,0,0.3); z-index:2; display:flex; flex-direction:column}
+  .module-expand-modal .mlm-overlay{position:absolute; inset:0; background:rgba(0,0,0,0.45)}
+  .module-expand-modal .stm-dialog{position:relative; width:100%; height:100%; max-height:100%; background:#fff; border-radius:12px 12px 0 0; overflow:hidden; box-shadow:0 -10px 40px rgba(0,0,0,0.3); z-index:2; display:flex; flex-direction:column}
 .module-expand-modal.module-sales-trend .stm-dialog{overflow:visible}
 
 /* ensure datepicker appears above overlays */
 .litepicker, .litepicker-container, .litepicker__container, .litepicker-root, .litepicker-calendar{z-index:30000 !important; position: absolute !important}
 .module-expand-modal.module-sales-trend .stm-header{padding:12px 14px; font-weight:700; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #f3f6fb}
-.module-expand-modal.module-sales-trend .stm-close{background:transparent;border:0;padding:6px 10px;cursor:pointer;font-size:18px}
+  .module-expand-modal .stm-header{padding:12px 14px; font-weight:700; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #f3f6fb}
+  .module-expand-modal .stm-close{background:transparent;border:0;padding:6px 10px;cursor:pointer;font-size:18px}
 
 /* core layout: fixed chart area at top of dialog, controls scrollable below */
 .module-expand-modal.module-sales-trend .stm-chart-wrap{flex:0 0 auto; background:#fff; padding:10px 12px; border-bottom:1px solid #f3f6fb}
-.module-expand-modal.module-sales-trend .stm-chart{width:100%; height:200px; border-radius:8px; background:linear-gradient(180deg,#fff,#fbfdff); display:block}
-.module-expand-modal.module-sales-trend .stm-controls{
+  .module-expand-modal .stm-chart-wrap{flex:0 0 auto; background:#fff; padding:10px 12px; border-bottom:1px solid #f3f6fb}
+  .module-expand-modal .stm-chart{width:100%; height:200px; border-radius:8px; background:linear-gradient(180deg,#fff,#fbfdff); display:block}
+.module-expand-modal .stm-controls{
   flex:1 1 auto;
   /* try overlay scrollbars in Blink-based browsers so scrollbar doesn't push layout */
   overflow: overlay;
@@ -267,20 +270,20 @@ body{font-family: 'Microsoft JhengHei',sans-serif; background:#eef6ff; margin:0;
   position: relative;
 }
 /* subtle thin scrollbar visuals */
-.module-expand-modal.module-sales-trend .stm-controls::-webkit-scrollbar{width:8px;height:8px}
-.module-expand-modal.module-sales-trend .stm-controls::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.08);border-radius:8px}
-.module-expand-modal.module-sales-trend .stm-controls::-webkit-scrollbar-track{background:transparent}
-.module-expand-modal.module-sales-trend .stm-controls{scrollbar-width:thin; scrollbar-color: rgba(0,0,0,0.08) transparent}
+.module-expand-modal .stm-controls::-webkit-scrollbar{width:8px;height:8px}
+.module-expand-modal .stm-controls::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.08);border-radius:8px}
+.module-expand-modal .stm-controls::-webkit-scrollbar-track{background:transparent}
+.module-expand-modal .stm-controls{scrollbar-width:thin; scrollbar-color: rgba(0,0,0,0.08) transparent}
 /* make scrollbar less obtrusive: thin and subtle */
-.module-expand-modal.module-sales-trend .stm-controls::-webkit-scrollbar{width:8px;height:8px}
-.module-expand-modal.module-sales-trend .stm-controls::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.08);border-radius:8px}
-.module-expand-modal.module-sales-trend .stm-controls::-webkit-scrollbar-track{background:transparent}
+.module-expand-modal .stm-controls::-webkit-scrollbar{width:8px;height:8px}
+.module-expand-modal .stm-controls::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.08);border-radius:8px}
+.module-expand-modal .stm-controls::-webkit-scrollbar-track{background:transparent}
 /* Firefox thin scrollbar */
-.module-expand-modal.module-sales-trend .stm-controls{scrollbar-width:thin; scrollbar-color: rgba(0,0,0,0.08) transparent}
+.module-expand-modal .stm-controls{scrollbar-width:thin; scrollbar-color: rgba(0,0,0,0.08) transparent}
 /* optionally hide scrollbar until hover on desktop to reduce visual noise */
-.module-expand-modal.module-sales-trend .stm-controls{--stm-scroll-opacity:0}
-.module-expand-modal.module-sales-trend .stm-controls:hover{--stm-scroll-opacity:1}
-.module-expand-modal.module-sales-trend .stm-controls::-webkit-scrollbar-thumb{background:rgba(0,0,0,calc(var(--stm-scroll-opacity) * 0.08));}
+.module-expand-modal .stm-controls{--stm-scroll-opacity:0}
+.module-expand-modal .stm-controls:hover{--stm-scroll-opacity:1}
+.module-expand-modal .stm-controls::-webkit-scrollbar-thumb{background:rgba(0,0,0,calc(var(--stm-scroll-opacity) * 0.08));}
 
 /* groups: main + compare groups */
 .stm-groups{display:flex; flex-direction:column; gap:12px}
