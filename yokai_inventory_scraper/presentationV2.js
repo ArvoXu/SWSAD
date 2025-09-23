@@ -354,7 +354,7 @@
           <div class="stm-controls">
             <div class="stm-groups">
               <div class="stm-group" data-group-id="main">
-                <div class="stm-group-header"><div class="stm-group-label" contenteditable="true">主線設定</div></div>
+                <div class="stm-group-header"><div class="stm-group-label" contenteditable="true">主要設定</div></div>
                 <div class="stm-date-wrap"><input id="sales-trend-date-input-main" class="stm-date-input" placeholder="點擊選擇日期範圍" readonly></div>
                 <div class="stm-group-controls" style="margin-top:8px">
                   <button class="stm-multi-btn" data-selector="branch">分店: 所有分店</button>
@@ -363,7 +363,7 @@
               </div>
             </div>
             <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px">
-              <div class="stm-add-compare" id="stm-add-compare"><span class="plus">+</span><span>新增對比線</span></div>
+              <div class="stm-add-compare" id="stm-add-compare"><span class="plus">+</span><span>新增對比</span></div>
               <div><button class="stm-btn">套用 (示意)</button></div>
             </div>
           </div>
