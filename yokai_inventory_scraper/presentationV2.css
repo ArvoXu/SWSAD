@@ -229,8 +229,8 @@ body{font-family: 'Microsoft JhengHei',sans-serif; background:#eef6ff; margin:0;
 
 /* Sales-trend specific modifier: adjust chart height and allow desktop to show as centered modal */
   .module-expand-modal .stm-dialog, .module-expand-modal .mlm-dialog{ /* ensure chart-like dialogs use same base overflow */ overflow:visible }
-.module-expand-modal.module-sales-trend .stm-chart{width:100%; height:100%; border-radius:8px; background:linear-gradient(180deg,#fff,#fbfdff); display:block}
-.module-expand-modal.module-sales-trend .stm-chart-wrap{flex:0 0 auto; height:40vh; min-height:200px; max-height:65vh}
+.module-expand-modal .stm-chart{width:100%; height:100%; border-radius:8px; background:linear-gradient(180deg,#fff,#fbfdff); display:block}
+.module-expand-modal .stm-chart-wrap{flex:0 0 auto; height:40vh; min-height:200px; max-height:65vh}
 
 /* On larger screens show centered dialog instead of bottom sheet */
 @media(min-width:600px){

@@ -322,6 +322,55 @@
     console.log('[presentationV2] API exposed: presentationV2.clearDefaults(), .saveLayout(), .loadLayout(), modalRegistry');
   }catch(e){}
 
+    // helper: create or return a canonical "stm" modal used by chart modules
+    // usage: window.presentationV2.ensureStmModal(key, { ariaLabel:'...', title:'...', canvasId:'my-canvas-id', mainDateInputId:'...'} )
+    try{
+      window.presentationV2.ensureStmModal = window.presentationV2.ensureStmModal || function(key, opts){
+        opts = opts || {};
+        const aria = opts.ariaLabel || opts.title || '';
+        const title = opts.title || aria || '';
+  const canvasId = opts.canvasId || (key + '-modal-canvas');
+  const mainDateInputId = opts.mainDateInputId || (key + '-date-input-main');
+  // default add-compare id to legacy sentinel so existing add-compare logic can find it
+  const addCompareId = opts.addCompareId || 'stm-add-compare';
+        const selector = `.module-expand-modal.module-${key}`;
+        let existing = document.querySelector(selector);
+        if(existing) return existing;
+        const modalHtml = document.createElement('div');
+        modalHtml.className = `module-expand-modal module-${key}`;
+        modalHtml.innerHTML = `
+          <div class="mlm-overlay"></div>
+          <div class="stm-dialog" role="dialog" aria-modal="true" aria-label="${aria}">
+            <div class="stm-header"><div>${title}</div><button class="stm-close" title="關閉">✕</button></div>
+            <div class="stm-chart-wrap"><canvas id="${canvasId}" class="stm-chart"></canvas></div>
+            <div class="stm-controls">
+              <div class="stm-groups">
+                <div class="stm-group" data-group-id="main">
+                  <div class="stm-group-header"><div class="stm-group-label" contenteditable="true">主線設定</div></div>
+                  <div class="stm-date-wrap"><input id="${mainDateInputId}" class="stm-date-input" placeholder="點擊選擇日期範圍" readonly></div>
+                  <div class="stm-group-controls" style="margin-top:8px">
+                    <button class="stm-multi-btn" data-selector="branch">分店: 所有分店</button>
+                    <button class="stm-multi-btn" data-selector="product">產品: 所有產品</button>
+                  </div>
+                </div>
+              </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px">
+                <div class="stm-add-compare" id="${addCompareId}"><span class="plus">+</span><span>新增對比線</span></div>
+              </div>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modalHtml);
+        // basic wiring: overlay and close button should close this modal
+        try{
+          const root = modalHtml;
+          const overlay = root.querySelector('.mlm-overlay'); if(overlay && !overlay._wired){ overlay.addEventListener('click', ()=>{ root.classList.remove('open'); document.body.style.overflow=''; }); overlay._wired = true; }
+          const closeBtn = root.querySelector('.stm-close'); if(closeBtn && !closeBtn._wired){ closeBtn.addEventListener('click', ()=>{ root.classList.remove('open'); document.body.style.overflow=''; }); closeBtn._wired = true; }
+        }catch(e){}
+        return modalHtml;
+      };
+    }catch(e){}
+
   // try to load saved layout for current orientation (will recreate clones if needed)
   try{ 
     loadLayout();
@@ -342,50 +391,10 @@
   // --- sales-trend modal wiring (layout-only, mobile-first) ---
   (function(){
     // create modal DOM and append to body (keeps HTML tidy if not present)
-    const existing = document.querySelector('.module-expand-modal.module-sales-trend');
-    if(!existing){
-      const modalHtml = document.createElement('div');
-      modalHtml.className = 'module-expand-modal module-sales-trend';
-      modalHtml.innerHTML = `
-        <div class="mlm-overlay"></div>
-        <div class="stm-dialog" role="dialog" aria-modal="true" aria-label="銷售趨勢">
-          <div class="stm-header"><div>銷售趨勢</div><button class="stm-close" title="關閉">✕</button></div>
-          <div class="stm-chart-wrap"><canvas id="sales-trend-modal-canvas" class="stm-chart"></canvas></div>
-          <div class="stm-controls">
-            <div class="stm-groups">
-              <div class="stm-group" data-group-id="main">
-                <div class="stm-group-header"><div class="stm-group-label" contenteditable="true">主要設定</div></div>
-                <div class="stm-date-wrap"><input id="sales-trend-date-input-main" class="stm-date-input" placeholder="點擊選擇日期範圍" readonly></div>
-                <div class="stm-group-controls" style="margin-top:8px">
-                  <button class="stm-multi-btn" data-selector="branch">分店: 所有分店</button>
-                  <button class="stm-multi-btn" data-selector="product">產品: 所有產品</button>
-                </div>
-              </div>
-            </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px">
-              <div class="stm-add-compare" id="stm-add-compare"><span class="plus">+</span><span>新增對比</span></div>
-              <div><button class="stm-btn">套用 (示意)</button></div>
-            </div>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(modalHtml);
-      // wire main group label: Enter commits (blur) and blur triggers chart update
-      try{
-        const mainLabel = modalHtml.querySelector('.stm-group[data-group-id="main"] .stm-group-label');
-        if(mainLabel){
-          mainLabel.addEventListener('keydown', (ev)=>{ if(ev.key === 'Enter'){ ev.preventDefault(); mainLabel.blur(); } });
-          mainLabel.addEventListener('blur', ()=>{
-            try{
-              const txt = (mainLabel.textContent||'').trim();
-              const grp = mainLabel.closest && mainLabel.closest('.stm-group');
-              if(grp){ if(txt) grp.dataset.customLabel = txt; else delete grp.dataset.customLabel; }
-              const gs = collectGroups(); if(gs && gs.length>0) updateSalesTrendChart(gs);
-            }catch(e){}
-          });
-        }
-      }catch(e){}
-    }
+    try{
+      // use the canonical stm modal factory so other modules can reuse the structure
+      const modalHtml = (window.presentationV2 && window.presentationV2.ensureStmModal) ? window.presentationV2.ensureStmModal('sales-trend', { ariaLabel: '銷售趨勢', title: '銷售趨勢', canvasId: 'sales-trend-modal-canvas', mainDateInputId: 'sales-trend-date-input-main' }) : document.querySelector('.module-expand-modal.module-sales-trend');
+    }catch(e){}
 
     // Demonstration: register a small init/teardown for pay-share modules so devs can follow pattern
     try{
@@ -402,6 +411,119 @@
           },
           teardown: (modalRoot)=>{
             try{ if(modalRoot && modalRoot._payShareExample){ modalRoot._payShareExample.remove(); delete modalRoot._payShareExample; } }catch(e){}
+          }
+        });
+      }
+    }catch(e){}
+    // register m-store-sales: 各分店銷售額 (長條圖)
+    try{
+      const key = 'm-store-sales';
+      // ensure modal DOM exists so we can observe open/close
+      if(window.presentationV2 && window.presentationV2.ensureStmModal){
+        window.presentationV2.ensureStmModal(key, { ariaLabel: '各分店銷售額', title: '各分店銷售額', canvasId: key + '-modal-canvas', mainDateInputId: key + '-date-input-main' });
+      }
+      if(window.presentationV2 && window.presentationV2.modalRegistry && !window.presentationV2.modalRegistry.get(key)){
+        window.presentationV2.modalRegistry.register(key, {
+          init: (modalRoot, triggerModule)=>{
+            try{
+              if(!modalRoot) modalRoot = document.querySelector('.module-expand-modal.module-' + key);
+              if(!modalRoot) return;
+              // helper to create/destroy the bar chart
+              const canvas = modalRoot.querySelector('canvas'); if(!canvas) return;
+              const ctx = canvas.getContext && canvas.getContext('2d'); if(!ctx) return;
+
+              function buildChart(){
+                try{
+                  // wait for data if loader in progress
+                  const create = ()=>{
+                    try{ buildStoreSalesBarChart(modalRoot); }catch(e){ console.warn('m-store-sales buildChart create failed', e); }
+                  };
+                  if(typeof salesLoadPromise !== 'undefined' && salesLoadPromise) { salesLoadPromise.then(()=>create()).catch(()=>create()); }
+                  else { create(); }
+                }catch(e){ console.warn('m-store-sales buildChart failed', e); }
+              }
+
+              function destroyChart(){ if(modalRoot._storeSalesChart && modalRoot._storeSalesChart.destroy) try{ modalRoot._storeSalesChart.destroy(); }catch(e){} modalRoot._storeSalesChart = null; }
+
+              // observe modal open/close via class changes so we build chart when visible (so Chart.js can size)
+              if(modalRoot._storeSalesObserver) modalRoot._storeSalesObserver.disconnect();
+              const mo = new MutationObserver((mut)=>{
+                try{ const isOpen = modalRoot.classList && modalRoot.classList.contains('open'); if(isOpen) buildChart(); else destroyChart(); }catch(e){}
+              });
+              mo.observe(modalRoot, { attributes:true, attributeFilter:['class'] });
+              modalRoot._storeSalesObserver = mo;
+              // if already open, build immediately
+              if(modalRoot.classList && modalRoot.classList.contains('open')) buildChart();
+              // initialize litepicker for main input inside this modal (if available)
+              try{
+                const mainInput = modalRoot.querySelector('.stm-date-input'); if(mainInput) initLitepickerForInput(mainInput, ()=>{ try{ buildStoreSalesBarChart(modalRoot); }catch(e){} });
+              }catch(e){}
+              // add-compare local implementation for this modal (independent of sales-trend scope)
+              try{
+                const groupsContainer = modalRoot.querySelector('.stm-groups');
+                let localCompareCount = modalRoot._compareCount || 0;
+                function localAddCompareGroup(){
+                  if(!groupsContainer) return; if(localCompareCount >= 4) return;
+                  localCompareCount++;
+                  modalRoot._compareCount = localCompareCount;
+                  const gid = 'compare-' + localCompareCount;
+                  const div = document.createElement('div'); div.className = 'stm-group'; div.dataset.groupId = gid;
+                  const inputId = `${key}-date-input-${gid}`;
+                  div.innerHTML = `<div class="stm-group-header"><div class="stm-group-label" contenteditable="true">對比線 ${localCompareCount} 設定</div><button class="stm-remove-group">移除</button></div>
+                        <div class="stm-date-wrap"><input class="stm-date-input" id="${inputId}" placeholder="點擊選擇日期範圍" readonly></div>
+                        <div class="stm-group-controls" style="margin-top:8px">
+                          <button class="stm-multi-btn" data-selector="branch">分店: 所有分店</button>
+                          <button class="stm-multi-btn" data-selector="product">產品: 所有產品</button>
+                        </div>`;
+                  groupsContainer.appendChild(div);
+                  // wire remove
+                  const rem = div.querySelector('.stm-remove-group'); if(rem) rem.addEventListener('click', ()=>{ div.remove(); localCompareCount--; modalRoot._compareCount = Math.max(0, localCompareCount); const addBtn = modalRoot.querySelector('.stm-add-compare'); if(addBtn) addBtn.removeAttribute('disabled'); try{ buildStoreSalesBarChart(modalRoot); }catch(e){} });
+                  // wire multi buttons
+                  try{ if(typeof wireMultiBtns === 'function') wireMultiBtns(div); }catch(e){}
+                  // inherit main group's branch selection and disable branch selection to avoid conflict
+                  try{
+                    const mainGroup = groupsContainer.querySelector('.stm-group');
+                    if(mainGroup){
+                      const mainBranchBtn = mainGroup.querySelector('.stm-multi-btn[data-selector="branch"]');
+                      const newBranchBtn = div.querySelector('.stm-multi-btn[data-selector="branch"]');
+                      if(mainBranchBtn && newBranchBtn){
+                        if(mainBranchBtn.dataset.selected) newBranchBtn.dataset.selected = mainBranchBtn.dataset.selected;
+                        if(mainBranchBtn.dataset.selectedKeys) newBranchBtn.dataset.selectedKeys = mainBranchBtn.dataset.selectedKeys;
+                        // reflect label
+                        try{ updateMultiBtnLabel(newBranchBtn, JSON.parse(newBranchBtn.dataset.selected || '[]')); }catch(e){}
+                        // prevent changing branches in compare groups by disabling button
+                        newBranchBtn.setAttribute('disabled','');
+                      }
+                    }
+                  }catch(e){}
+                  // init datepicker for this group's input and rebuild chart only on commit
+                  try{ const input = div.querySelector('.stm-date-input'); if(input) { initLitepickerForInput(input, ()=>{ try{ buildStoreSalesBarChart(modalRoot); }catch(e){} }); } }catch(e){}
+                  if(localCompareCount >= 4){ const addBtn = modalRoot.querySelector('.stm-add-compare'); if(addBtn) addBtn.setAttribute('disabled',''); }
+                }
+                // wire add button inside this modal (find by class inside modalRoot)
+                try{ const addBtn = modalRoot.querySelector('.stm-add-compare'); if(addBtn && !addBtn._wired){ addBtn.addEventListener('click', localAddCompareGroup); addBtn._wired = true; } }catch(e){}
+              }catch(e){}
+              // observe changes to multi-btn dataset or date inputs to rebuild chart automatically
+              try{
+                if(modalRoot._storeSalesFilterObserver) modalRoot._storeSalesFilterObserver.disconnect();
+                const fobs = new MutationObserver((muts)=>{ try{ buildChart(); }catch(e){} });
+                fobs.observe(modalRoot, { attributes:true, subtree:true, attributeFilter:['data-selected','value'] });
+                modalRoot._storeSalesFilterObserver = fobs;
+              }catch(e){}
+              // wire overlay and close button so they respond to clicks
+              try{
+                const overlay = modalRoot.querySelector('.mlm-overlay'); if(overlay && !overlay._wired){ overlay.addEventListener('click', ()=>{ modalRoot.classList.remove('open'); document.body.style.overflow=''; }); overlay._wired = true; }
+                const closeBtn = modalRoot.querySelector('.stm-close'); if(closeBtn && !closeBtn._wired){ closeBtn.addEventListener('click', ()=>{ modalRoot.classList.remove('open'); document.body.style.overflow=''; }); closeBtn._wired = true; }
+              }catch(e){}
+              // wire multi-select buttons inside this modal so branch/product selectors work
+              try{ if(typeof wireMultiBtns === 'function') wireMultiBtns(modalRoot); }catch(e){}
+            }catch(e){ console.warn('m-store-sales init failed', e); }
+          },
+          teardown: (modalRoot)=>{
+            try{
+              if(!modalRoot) modalRoot = document.querySelector('.module-expand-modal.module-' + key);
+              if(modalRoot){ if(modalRoot._storeSalesObserver) try{ modalRoot._storeSalesObserver.disconnect(); }catch(e){} delete modalRoot._storeSalesObserver; if(modalRoot._storeSalesChart) try{ modalRoot._storeSalesChart.destroy(); }catch(e){} delete modalRoot._storeSalesChart; }
+            }catch(e){}
           }
         });
       }
@@ -683,16 +805,30 @@
           <button class="stm-multi-btn" data-selector="product">產品: 所有產品</button>
         </div>`;
       groupsContainer.appendChild(div);
-      // wire remove
-      div.querySelector('.stm-remove-group').addEventListener('click', ()=>{ div.remove(); compareCount--; addBtn.removeAttribute('disabled'); refreshCompareLabels(); });
+  // wire remove
+  div.querySelector('.stm-remove-group').addEventListener('click', ()=>{ div.remove(); compareCount--; addBtn.removeAttribute('disabled'); refreshCompareLabels(); try{ const gs = collectGroups(); if(gs && gs.length>0) updateSalesTrendChart(gs); else updateSalesTrendChart([]); }catch(e){} });
       // wire multi buttons
       wireMultiBtns(div);
+      // inherit main group's branch selection and disable branch button in compare group
+      try{
+        const mainGroup = groupsContainer.querySelector('.stm-group');
+        if(mainGroup){
+          const mainBranchBtn = mainGroup.querySelector('.stm-multi-btn[data-selector="branch"]');
+          const newBranchBtn = div.querySelector('.stm-multi-btn[data-selector="branch"]');
+          if(mainBranchBtn && newBranchBtn){
+            if(mainBranchBtn.dataset.selected) newBranchBtn.dataset.selected = mainBranchBtn.dataset.selected;
+            if(mainBranchBtn.dataset.selectedKeys) newBranchBtn.dataset.selectedKeys = mainBranchBtn.dataset.selectedKeys;
+            try{ updateMultiBtnLabel(newBranchBtn, JSON.parse(newBranchBtn.dataset.selected || '[]')); }catch(e){}
+            newBranchBtn.setAttribute('disabled','');
+          }
+        }
+      }catch(e){}
       // wire inline edits for label and align checkbox to trigger update
       try{
         const lab = div.querySelector('.stm-group-label'); if(lab){ lab.addEventListener('keydown', (ev)=>{ if(ev.key === 'Enter'){ ev.preventDefault(); lab.blur(); } }); lab.addEventListener('blur', ()=>{ try{ const txt = (lab.textContent||'').trim(); const grp = lab.closest && lab.closest('.stm-group'); if(grp){ if(txt) grp.dataset.customLabel = txt; else delete grp.dataset.customLabel; } const gs = collectGroups(); if(gs && gs.length>0) updateSalesTrendChart(gs); }catch(e){} }); }
       }catch(e){}
       // init litepicker for this group's date input (reuse initLitepicker logic by creating a picker)
-      try{ const input = div.querySelector('.stm-date-input'); if(input) initLitepickerForInput(input); }catch(e){}
+  try{ const input = div.querySelector('.stm-date-input'); if(input) initLitepickerForInput(input, ()=>{ try{ const gs = collectGroups(); if(gs && gs.length>0) updateSalesTrendChart(gs); }catch(e){} }); }catch(e){}
       if(compareCount >= 4) addBtn.setAttribute('disabled','');
       refreshCompareLabels();
     }
@@ -716,7 +852,9 @@
     if(addBtn) addBtn.addEventListener('click', ()=>{ addCompareGroup(); });
 
     // expose a small helper to init litepicker for a specific input (used for groups)
-    function initLitepickerForInput(inputEl){
+    // initLitepickerForInput: initialize Litepicker on an input and call onCommit when user completes a range selection
+    // signature: initLitepickerForInput(inputEl, onCommit)
+    function initLitepickerForInput(inputEl, onCommit){
       if(!inputEl) return;
       try{
         if(window.Litepicker){
@@ -727,21 +865,39 @@
             if(existing && existing.length>=2){ const sd = new Date(existing[0]); const ed = new Date(existing[1]); if(!isNaN(sd.getTime()) && !isNaN(ed.getTime())){ opts.startDate = sd; opts.endDate = ed; } }
           }catch(e){}
           const p = new Litepicker(opts);
-          // try relocate root
+          // try relocate root to avoid clipping
           const root = document.querySelector('.litepicker-root') || document.querySelector('.litepicker'); if(root && root.parentNode !== document.body) document.body.appendChild(root);
-          p.on && p.on('selected', (a,b)=>{ try{ if(a && b) inputEl.value = (a.format? a.format('YYYY-MM-DD'):a.toISOString().slice(0,10)) + ' → ' + (b.format? b.format('YYYY-MM-DD'):b.toISOString().slice(0,10));
-              // after selecting, refresh chart
-              try{ const gs = collectGroups(); if(gs && gs.length>0) updateSalesTrendChart(gs); }catch(e){}
-            }catch(e){} });
+          // Commit selection only when picker hides (user finished selection via second click or close)
+          try{
+            if(p && typeof p.on === 'function'){
+              p.on('hide', ()=>{
+                try{
+                  const a = p.getStartDate && p.getStartDate();
+                  const b = p.getEndDate && p.getEndDate();
+                  if(a && b){
+                    const sa = (a.format? a.format('YYYY-MM-DD') : (a.toISOString ? a.toISOString().slice(0,10) : String(a)));
+                    const sb = (b.format? b.format('YYYY-MM-DD') : (b.toISOString ? b.toISOString().slice(0,10) : String(b)));
+                    inputEl.value = sa + ' → ' + sb;
+                    if(typeof onCommit === 'function'){
+                      try{ onCommit(); }catch(err){}
+                    } else {
+                      // fallback for sales-trend: update using collectGroups
+                      try{ const gs = collectGroups(); if(gs && gs.length>0) updateSalesTrendChart(gs); }catch(err){}
+                    }
+                  }
+                }catch(e){}
+              });
+            }
+          }catch(e){ /* ignore event binding errors */ }
         } else {
           // fallback: attempt to create after a short delay (litepicker may be loading)
-          setTimeout(()=>{ initLitepickerForInput(inputEl); },200);
+          setTimeout(()=>{ initLitepickerForInput(inputEl, onCommit); },200);
         }
-      }catch(e){ setTimeout(()=>{ initLitepickerForInput(inputEl); },200); }
+      }catch(e){ setTimeout(()=>{ initLitepickerForInput(inputEl, onCommit); },200); }
     }
 
     // initialize litepicker for main group's date input
-    try{ const mainInput = document.getElementById('sales-trend-date-input-main'); if(mainInput) initLitepickerForInput(mainInput); }catch(e){}
+  try{ const mainInput = document.getElementById('sales-trend-date-input-main'); if(mainInput) initLitepickerForInput(mainInput, ()=>{ try{ const gs = collectGroups(); if(gs && gs.length>0) updateSalesTrendChart(gs); }catch(e){} }); }catch(e){}
   })();
 
   // --- sales-trend aggregation and update helpers ---
@@ -1073,6 +1229,162 @@
         if(prev && prev.destroy){ try{ prev.destroy(); }catch(e){} }
         try{ const chart = new Chart(el, cfg); chartRegistry.set(el.id, chart); }catch(e){ console.warn('failed to create sales-trend modal chart', e); }
     }catch(e){ console.warn('updateSalesTrendChart error', e); }
+  }
+
+  // --- store-aggregation helpers for m-store-sales (grouped bar comparisons) ---
+  // aggregate a single group into store -> total map using the same robust filters as aggregateByGroup
+  function aggregateByGroupToStoreTotals(group, fullData){
+    const out = {};
+    let matchedCount = 0;
+    if(!group || !Array.isArray(fullData)) return { map: out, matchedCount: 0 };
+    const start = group.range && group.range.start ? new Date(group.range.start) : null;
+    const end = group.range && group.range.end ? new Date(group.range.end) : null;
+    const startBound = start ? new Date(start) : null;
+    const endBound = end ? new Date(end) : null;
+    if(startBound) startBound.setHours(0,0,0,0);
+    if(endBound) endBound.setHours(23,59,59,999);
+
+    fullData.forEach(t=>{
+      try{
+        let d = null;
+        if(t.jsDate && t.jsDate instanceof Date) d = t.jsDate;
+        else if(t.transaction_time) d = new Date(t.transaction_time);
+        else if(t.date) d = new Date(t.date);
+        else if(t.created_at) d = new Date(t.created_at);
+        if(!d || isNaN(d.getTime())) return;
+        if(startBound && d < startBound) return; if(endBound && d > endBound) return;
+
+        // branch filter (prefer canonical keys)
+        if((group.branchKeys && group.branchKeys.length>0) || (group.branches && group.branches.length>0)){
+          const hasAll = (group.branchKeys && group.branchKeys.includes('所有分店')) || (group.branches && group.branches.includes('所有分店'));
+          if(!hasAll){
+            const canonical = t.store_key || t.storeKey || t.store || t.shopId || t.shopKey || null;
+            if(group.branchKeys && group.branchKeys.length>0){
+              if(canonical){ if(!group.branchKeys.includes(String(canonical).trim())) return; }
+              else { const s = t.shopName || t.store_name || t.store || t.shop || t.shopName; if(!s) return; if(!group.branchKeys.includes(String(s).trim())) return; }
+            } else { const s = t.shopName || t.store_name || t.store || t.shop || t.shopName; if(!s) return; if(!group.branches.includes(String(s).trim())) return; }
+          }
+        }
+
+        // product filter
+        if((group.productKeys && group.productKeys.length>0) || (group.products && group.products.length>0)){
+          const hasAllP = (group.productKeys && group.productKeys.includes('所有產品')) || (group.products && group.products.includes('所有產品'));
+          if(!hasAllP){
+            const canonicalP = t.product_name || t.productName || t.product || t.sku || null;
+            if(group.productKeys && group.productKeys.length>0){
+              if(canonicalP){ if(!group.productKeys.includes(String(canonicalP).trim())) return; }
+              else { const p = t.product || t.product_name || t.productName; if(!p) return; if(!group.productKeys.includes(String(p).trim())) return; }
+            } else { const p = t.product || t.product_name || t.productName; if(!p) return; if(!group.products.includes(String(p).trim())) return; }
+          }
+        }
+
+        const storeLabel = (t.shopName || t.store_name || t.store || t.store_key || t.storeKey) ? String(t.shopName || t.store_name || t.store || t.store_key || t.storeKey).trim() : 'Unknown';
+        const amt = Number(t.amount || t.total || t.total_amount || t.value || 0) || 0;
+        out[storeLabel] = (out[storeLabel] || 0) + amt;
+        matchedCount++;
+      }catch(e){}
+    });
+    return { map: out, matchedCount };
+  }
+
+  // build grouped bar chart for store sales given a modalRoot and optional groups array
+  function buildStoreSalesBarChart(modalRoot, groups){
+    try{
+      if(!modalRoot) modalRoot = document.querySelector('.module-expand-modal.module-m-store-sales');
+      if(!modalRoot) return;
+      const canvas = modalRoot.querySelector('canvas'); if(!canvas) return;
+      const ctx = canvas.getContext && canvas.getContext('2d'); if(!ctx) return;
+
+      const source = (window.fullSalesData && Array.isArray(window.fullSalesData)) ? window.fullSalesData : (lastLoadData && Array.isArray(lastLoadData.raw) ? lastLoadData.raw : null);
+      if(!groups){
+        // collect groups scoped to this modal (similar to collectGroups but within modalRoot)
+        groups = [];
+        const container = modalRoot.querySelector('.stm-groups');
+        if(container){
+          container.querySelectorAll('.stm-group').forEach((g, idx)=>{
+            try{
+              const input = g.querySelector('.stm-date-input'); const rangeText = input ? input.value : '';
+              let range = parseDateRange(rangeText); if(!range) range = robustParseRangeFromString(rangeText);
+              const branchBtn = g.querySelector('.stm-multi-btn[data-selector="branch"]');
+              const productBtn = g.querySelector('.stm-multi-btn[data-selector="product"]');
+              const labelEl = g.querySelector('.stm-group-label'); const labelText = labelEl ? (labelEl.textContent||'').trim() : '';
+              const gid = g.dataset.groupId || ('g' + idx);
+              const branches = branchBtn && branchBtn.dataset.selected ? JSON.parse(branchBtn.dataset.selected) : [];
+              const products = productBtn && productBtn.dataset.selected ? JSON.parse(productBtn.dataset.selected) : [];
+              const branchKeys = branchBtn && branchBtn.dataset.selectedKeys ? JSON.parse(branchBtn.dataset.selectedKeys) : [];
+              const productKeys = productBtn && productBtn.dataset.selectedKeys ? JSON.parse(productBtn.dataset.selectedKeys) : [];
+              const alignToMain = (idx>0);
+              groups.push({ id: gid, range, rangeText, label: labelText, alignToMain, branches, products, branchKeys, productKeys });
+            }catch(e){}
+          });
+        }
+      }
+
+      // fallback: if no source array, try lastLoadData.storeTotals
+      if(!source || !Array.isArray(source)){
+        if(lastLoadData && lastLoadData.storeTotals){
+          const labels = Object.keys(lastLoadData.storeTotals);
+          const data = Object.values(lastLoadData.storeTotals);
+          if(modalRoot._storeSalesChart && modalRoot._storeSalesChart.destroy) try{ modalRoot._storeSalesChart.destroy(); }catch(e){}
+          modalRoot._storeSalesChart = new Chart(ctx, { type:'bar', data:{ labels, datasets:[{ label:'銷售額', data, backgroundColor:'#4CAF50' }] }, options:{ maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{display:true}, y:{display:true}} } });
+        }
+        return;
+      }
+
+      // aggregate each group to store totals
+      const groupMaps = groups.map(g=> aggregateByGroupToStoreTotals(g, source).map || {});
+      const allStoresSet = new Set(); groupMaps.forEach(m=> Object.keys(m).forEach(s=> allStoresSet.add(s)));
+      let labels = Array.from(allStoresSet).sort((a,b)=> a.localeCompare(b,'zh-Hant'));
+
+      // optional: if main group exists, sort labels by main group's totals desc to highlight top stores
+      if(groups && groups.length>0 && groupMaps[0]){
+        const mainMap = groupMaps[0];
+        labels.sort((a,b)=> (mainMap[b]||0) - (mainMap[a]||0));
+      }
+
+      const colorBase = ['#4CAF50','#FF6384','#36A2EB','#FFCE56','#9C27B0','#4BC0C0'];
+      const datasets = groupMaps.map((gm, idx)=>{
+        const data = labels.map(l=> (typeof gm[l] === 'number' ? gm[l] : 0));
+        const label = groups[idx] && (groups[idx].label || groups[idx].id) ? (groups[idx].label || groups[idx].id) : ('群組 ' + (idx+1));
+        const bg = colorBase[idx % colorBase.length];
+        return { label, data, backgroundColor: bg, borderColor: bg, borderWidth:1 };
+      });
+
+      if(modalRoot._storeSalesChart && modalRoot._storeSalesChart.destroy) try{ modalRoot._storeSalesChart.destroy(); }catch(e){}
+      modalRoot._storeSalesChart = new Chart(ctx, {
+        type: 'bar',
+        data: { labels, datasets },
+        options: {
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: true, position: 'bottom' },
+            tooltip: {
+              callbacks: {
+                label: function(context){
+                  const val = context.parsed && context.parsed.y !== undefined ? context.parsed.y : context.raw;
+                  return (context.dataset.label || '') + ': ' + (typeof val === 'number' ? val.toLocaleString() : val);
+                }
+              }
+            }
+          },
+          scales: {
+            x: { stacked: false },
+            y: {
+              stacked: false,
+              ticks: {
+                callback: function(v){
+                  if(typeof v === 'number' && Math.abs(v) >= 1000){
+                    const k = v/1000;
+                    return (Math.round(k*10)/10).toString().replace(/\.0$/,'') + 'k';
+                  }
+                  return v;
+                }
+              }
+            }
+          }
+        }
+      });
+    }catch(e){ console.warn('buildStoreSalesBarChart failed', e); }
   }
 
   // Auto-refresh chart when any control changes (date inputs or selector apply)
