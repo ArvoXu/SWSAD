@@ -529,7 +529,7 @@
                   try{ const input = div.querySelector('.stm-date-input'); if(input) { initLitepickerForInput(input, ()=>{ try{ buildStoreSalesBarChart(modalRoot); }catch(e){} }); } }catch(e){}
                   if(localCompareCount >= 4){ const addBtn = modalRoot.querySelector('.stm-add-compare'); if(addBtn) addBtn.setAttribute('disabled',''); }
                   // after adding a compare group, rebuild chart so new group's defaults are reflected
-                  try{ buildStoreSalesBarChart(modalRoot); }catch(e){}
+                  try{ setTimeout(function(){ try{ buildStoreSalesBarChart(modalRoot); }catch(e){} }, 20); }catch(e){}
                 }
                 // wire add button inside this modal (find by class inside modalRoot)
                 try{ const addBtn = modalRoot.querySelector('.stm-add-compare'); if(addBtn && !addBtn._wired){ addBtn.addEventListener('click', localAddCompareGroup); addBtn._wired = true; } }catch(e){}
@@ -840,20 +840,7 @@
   div.querySelector('.stm-remove-group').addEventListener('click', ()=>{ div.remove(); compareCount--; addBtn.removeAttribute('disabled'); refreshCompareLabels(); try{ const gs = collectGroups(); if(gs && gs.length>0) updateSalesTrendChart(gs); else updateSalesTrendChart([]); }catch(e){} });
       // wire multi buttons
       wireMultiBtns(div);
-      // inherit main group's branch selection and disable branch button in compare group
-      try{
-        const mainGroup = groupsContainer.querySelector('.stm-group');
-        if(mainGroup){
-          const mainBranchBtn = mainGroup.querySelector('.stm-multi-btn[data-selector="branch"]');
-          const newBranchBtn = div.querySelector('.stm-multi-btn[data-selector="branch"]');
-          if(mainBranchBtn && newBranchBtn){
-            if(mainBranchBtn.dataset.selected) newBranchBtn.dataset.selected = mainBranchBtn.dataset.selected;
-            if(mainBranchBtn.dataset.selectedKeys) newBranchBtn.dataset.selectedKeys = mainBranchBtn.dataset.selectedKeys;
-            try{ updateMultiBtnLabel(newBranchBtn, JSON.parse(newBranchBtn.dataset.selected || '[]')); }catch(e){}
-            newBranchBtn.setAttribute('disabled','');
-          }
-        }
-      }catch(e){}
+      // (no automatic inheritance of branch selection here - each modal controls its own selector behavior)
       // wire inline edits for label and align checkbox to trigger update
       try{
         const lab = div.querySelector('.stm-group-label'); if(lab){
@@ -881,8 +868,8 @@
   try{ const input = div.querySelector('.stm-date-input'); if(input) initLitepickerForInput(input, ()=>{ try{ const gs = collectGroups(); if(gs && gs.length>0) updateSalesTrendChart(gs); }catch(e){} }); }catch(e){}
       if(compareCount >= 4) addBtn.setAttribute('disabled','');
       refreshCompareLabels();
-      // after adding a compare group, rebuild the sales-trend chart to include the new group
-      try{ const gs = collectGroups(); if(gs && gs.length>0) updateSalesTrendChart(gs); else updateSalesTrendChart([]); }catch(e){}
+  // after adding a compare group, rebuild the sales-trend chart to include the new group (delay briefly to allow DOM wiring)
+  try{ setTimeout(function(){ try{ const gs = collectGroups(); if(gs && gs.length>0) updateSalesTrendChart(gs); else updateSalesTrendChart([]); }catch(e){} }, 20); }catch(e){}
     }
 
     function refreshCompareLabels(){
