@@ -9,6 +9,241 @@
     return;
   }
 
+  // aggregate a single group into product -> total map (new helper for m-product-share)
+  function aggregateByGroupToProductTotals(group, fullData){
+    const out = {};
+    let matchedCount = 0;
+    if(!group || !Array.isArray(fullData)) return { map: out, matchedCount: 0 };
+    const start = group.range && group.range.start ? new Date(group.range.start) : null;
+    const end = group.range && group.range.end ? new Date(group.range.end) : null;
+    const startBound = start ? new Date(start) : null; if(startBound) startBound.setHours(0,0,0,0);
+    const endBound = end ? new Date(end) : null; if(endBound) endBound.setHours(23,59,59,999);
+
+    fullData.forEach(t=>{
+      try{
+        let d = null;
+        if(t.jsDate && t.jsDate instanceof Date) d = t.jsDate;
+        else if(t.transaction_time) d = new Date(t.transaction_time);
+        else if(t.date) d = new Date(t.date);
+        else if(t.created_at) d = new Date(t.created_at);
+        if(!d || isNaN(d.getTime())) return;
+        if(startBound && d < startBound) return; if(endBound && d > endBound) return;
+
+        // branch filter (reuse same logic as store totals)
+        if((group.branchKeys && group.branchKeys.length>0) || (group.branches && group.branches.length>0)){
+          const hasAll = (group.branchKeys && group.branchKeys.includes('所有分店')) || (group.branches && group.branches.includes('所有分店'));
+          if(!hasAll){
+            const canonical = t.store_key || t.storeKey || t.store || t.shopId || t.shopKey || null;
+            if(group.branchKeys && group.branchKeys.length>0){
+              if(canonical){ if(!group.branchKeys.includes(String(canonical).trim())) return; }
+              else { const s = t.shopName || t.store_name || t.store || t.shop || t.shopName; if(!s) return; if(!group.branchKeys.includes(String(s).trim())) return; }
+            } else { const s = t.shopName || t.store_name || t.store || t.shop || t.shopName; if(!s) return; if(!group.branches.includes(String(s).trim())) return; }
+          }
+        }
+
+        // product filter
+        if((group.productKeys && group.productKeys.length>0) || (group.products && group.products.length>0)){
+          const hasAllP = (group.productKeys && group.productKeys.includes('所有產品')) || (group.products && group.products.includes('所有產品'));
+          if(!hasAllP){
+            const canonicalP = t.product_name || t.productName || t.product || t.sku || null;
+            if(group.productKeys && group.productKeys.length>0){
+              if(canonicalP){ if(!group.productKeys.includes(String(canonicalP).trim())) return; }
+              else { const p = t.product || t.product_name || t.productName; if(!p) return; if(!group.productKeys.includes(String(p).trim())) return; }
+            } else { const p = t.product || t.product_name || t.productName; if(!p) return; if(!group.products.includes(String(p).trim())) return; }
+          }
+        }
+
+        const prodLabel = (t.product || t.product_name || t.productName || t.sku) ? String(t.product || t.product_name || t.productName || t.sku).trim() : 'Unknown';
+        const amt = Number(t.amount || t.total || t.total_amount || t.value || 0) || 0;
+        out[prodLabel] = (out[prodLabel] || 0) + amt;
+        matchedCount++;
+      }catch(e){}
+    });
+    return { map: out, matchedCount };
+  }
+
+  // build product-share chart: donut when only main group, 100% stacked bar when compares exist
+  function buildProductShareChart(modalRoot, groups){
+    try{
+      if(!modalRoot) modalRoot = document.querySelector('.module-expand-modal.module-m-product-share');
+      if(!modalRoot) return;
+      const canvas = modalRoot.querySelector('canvas'); if(!canvas) return;
+      const ctx = canvas.getContext && canvas.getContext('2d'); if(!ctx) return;
+
+      const source = (window.fullSalesData && Array.isArray(window.fullSalesData)) ? window.fullSalesData : (lastLoadData && Array.isArray(lastLoadData.raw) ? lastLoadData.raw : null);
+      if(!groups){
+        groups = [];
+        const container = modalRoot.querySelector('.stm-groups');
+        if(container){
+          container.querySelectorAll('.stm-group').forEach((g, idx)=>{
+            try{
+              const input = g.querySelector('.stm-date-input'); const rangeText = input ? input.value : '';
+              let range = parseDateRange(rangeText); if(!range) range = robustParseRangeFromString(rangeText);
+              const branchBtn = g.querySelector('.stm-multi-btn[data-selector="branch"]');
+              const productBtn = g.querySelector('.stm-multi-btn[data-selector="product"]');
+              const labelEl = g.querySelector('.stm-group-label'); const labelText = labelEl ? (labelEl.textContent||'').trim() : '';
+              const gid = g.dataset.groupId || ('g' + idx);
+              const branches = branchBtn && branchBtn.dataset.selected ? JSON.parse(branchBtn.dataset.selected) : [];
+              const products = productBtn && productBtn.dataset.selected ? JSON.parse(productBtn.dataset.selected) : [];
+              const branchKeys = branchBtn && branchBtn.dataset.selectedKeys ? JSON.parse(branchBtn.dataset.selectedKeys) : [];
+              const productKeys = productBtn && productBtn.dataset.selectedKeys ? JSON.parse(productBtn.dataset.selectedKeys) : [];
+              const alignToMain = (idx>0);
+              groups.push({ id: gid, range, rangeText, label: labelText || (gid), alignToMain, branches, products, branchKeys, productKeys });
+            }catch(e){}
+          });
+        }
+      }
+
+      if(!source || !Array.isArray(source)){
+        if(modalRoot._productChart && modalRoot._productChart.destroy) try{ modalRoot._productChart.destroy(); }catch(e){}
+        modalRoot._productChart = null;
+        return;
+      }
+
+      // helper: build per-group product totals
+      const groupMaps = groups.map(g=> aggregateByGroupToProductTotals(g, source).map || {});
+
+      // single group -> doughnut (limit top 10 + other)
+      if(groups.length <= 1){
+        const map = groupMaps[0] || {};
+        // sort products by amount desc and keep top 10
+        const entries = Object.entries(map).sort((a,b)=> (b[1]||0) - (a[1]||0));
+        const top = entries.slice(0,10);
+        const other = entries.slice(10).reduce((s,[k,v])=> s + (v||0), 0);
+        const labels = top.map(e=> e[0]).concat(other>0 ? ['其他'] : []);
+        const data = top.map(e=> e[1]||0).concat(other>0 ? [other] : []);
+        const palette = ['#FF6384','#36A2EB','#FFCE56','#4BC0C0','#9C27B0','#4CAF50','#8E44AD','#FF9F40','#7ED321','#50E3C2'];
+        if(modalRoot._productChart && modalRoot._productChart.destroy) try{ modalRoot._productChart.destroy(); }catch(e){}
+        // ensure '其他' slice, if present, is gray
+        const bgColors = labels.map((_,i)=> palette[i%palette.length]);
+        if(labels.indexOf('其他') !== -1){ const idx = labels.indexOf('其他'); bgColors[idx] = '#9B9B9B'; }
+        const doughnutCfg = {
+          type: 'doughnut',
+          data: {
+            labels: labels,
+            datasets: [{
+              data: data,
+              backgroundColor: bgColors
+            }]
+          },
+          options: {
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { position: 'right' },
+              tooltip: {
+                callbacks: {
+                  label: function(ctx){
+                    const val = ctx.raw || 0;
+                    // compute percent for doughnut
+                    const ds = ctx.dataset || {};
+                    const total = (ds.data || []).reduce ? ds.data.reduce((a,b)=> a + (Number(b)||0), 0) : 0;
+                    const pct = total ? Math.round((Number(val||0) / total) * 10000)/100 : 0;
+                    return (ctx.label||'') + ': ' + (typeof val === 'number' ? val.toLocaleString() : val) + ' , ' + pct + '%';
+                  }
+                }
+              }
+            }
+          }
+        };
+        modalRoot._productChart = new Chart(ctx, doughnutCfg);
+        return;
+      }
+
+      // multiple groups -> each group is a 100% stacked bar (bars = groups, stacks = products)
+      // compute global product totals (across all groups) and choose top 10 products, rest => '其他'
+      const globalTotals = {};
+      groupMaps.forEach(m=> { Object.keys(m).forEach(p=> { globalTotals[p] = (globalTotals[p]||0) + (m[p]||0); }); });
+      const sortedGlobal = Object.entries(globalTotals).sort((a,b)=> (b[1]||0) - (a[1]||0));
+      const topProducts = sortedGlobal.slice(0,10).map(e=> e[0]);
+      const othersSet = new Set(sortedGlobal.slice(10).map(e=> e[0]));
+
+      // build per-product datasets (one dataset per product in topProducts + '其他') where data array length == groups.length
+      const productLabels = topProducts.concat(sortedGlobal.length > 10 ? ['其他'] : []);
+      const palette = ['#4CAF50','#FF6384','#36A2EB','#FFCE56','#9C27B0','#4BC0C0','#8E44AD','#FF9F40','#7ED321','#50E3C2','#9B9B9B'];
+
+      // prepare raw amounts per group per product (with '其他' collapsing)
+      const rawPerGroup = groups.map((g, gi)=>{
+        const m = groupMaps[gi] || {};
+        const obj = {};
+        let otherSum = 0;
+        Object.keys(m).forEach(p=>{
+          if(topProducts.includes(p)) obj[p] = m[p] || 0;
+          else otherSum += m[p] || 0;
+        });
+        if(othersSet.size > 0) obj['其他'] = otherSum;
+        return obj;
+      });
+
+      // compute percent per group for each product label
+      const datasets = productLabels.map((prod, pi)=>{
+        const data = rawPerGroup.map(gmap=>{
+          const sum = Object.values(gmap).reduce((s,v)=> s + (v||0), 0);
+          if(sum === 0) return 0;
+          const v = gmap[prod] || 0;
+          return Math.round((v / sum) * 10000) / 100; // percent with 2 decimals
+        });
+        return { label: prod, data, backgroundColor: palette[pi % palette.length] };
+      });
+
+      // group labels are the group names (main label or id)
+      const groupNames = groups.map((g,gi)=> g.label || ('群組 ' + (gi+1)));
+
+      if(modalRoot._productChart && modalRoot._productChart.destroy) try{ modalRoot._productChart.destroy(); }catch(e){}
+      modalRoot._productChart = new Chart(ctx, {
+        type: 'bar',
+        data: { labels: groupNames, datasets },
+        options: {
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'top' },
+            tooltip: { callbacks: { label: function(ctx){
+                // ctx.dataset.label = product name, ctx.dataIndex = group index
+                const dataset = ctx.dataset || {};
+                const label = dataset.label || '';
+                const pct = ctx.parsed && ctx.parsed.y !== undefined ? ctx.parsed.y : ctx.raw;
+                // find raw amount for this product in this group by reconstructing from rawPerGroup if available
+                try{
+                  const gIndex = ctx.dataIndex;
+                  const prod = label;
+                  // rawPerGroup is not in chart options; compute by re-aggregating groups from DOM quickly
+                  const modalRootLocal = ctx.chart && ctx.chart.canvas && ctx.chart.canvas.closest ? ctx.chart.canvas.closest('.module-expand-modal') : null;
+                  let rawAmt = null;
+                  if(modalRootLocal && typeof aggregateByGroupToProductTotals === 'function'){
+                    // rebuild groups for this modal
+                    const localGroups = [];
+                    const container = modalRootLocal.querySelector('.stm-groups');
+                    if(container){ container.querySelectorAll('.stm-group').forEach((g, idx)=>{
+                      try{
+                        const input = g.querySelector('.stm-date-input'); const rangeText = input ? input.value : '';
+                        let range = parseDateRange(rangeText); if(!range) range = robustParseRangeFromString(rangeText);
+                        const branchBtn = g.querySelector('.stm-multi-btn[data-selector="branch"]');
+                        const productBtn = g.querySelector('.stm-multi-btn[data-selector="product"]');
+                        const labelEl = g.querySelector('.stm-group-label'); const labelText = labelEl ? (labelEl.textContent||'').trim() : '';
+                        const gid = g.dataset.groupId || ('g' + idx);
+                        const branchKeys = branchBtn && branchBtn.dataset.selectedKeys ? JSON.parse(branchBtn.dataset.selectedKeys) : [];
+                        const productKeys = productBtn && productBtn.dataset.selectedKeys ? JSON.parse(productBtn.dataset.selectedKeys) : [];
+                        localGroups.push({ id: gid, range, rangeText, label: labelText || gid, branchKeys, productKeys });
+                      }catch(e){}
+                    }); }
+                    if(localGroups[gIndex]){
+                      const map = aggregateByGroupToProductTotals(localGroups[gIndex], source || (lastLoadData && lastLoadData.raw) || []).map || {};
+                      // map may not have '其他', attempt to find matching key
+                      rawAmt = map[prod] || map['其他'] || 0;
+                    }
+                  }
+                }catch(e){ }
+                // show both rawAmt (if found) and pct
+                const rawStr = (typeof rawAmt === 'number' && rawAmt !== null) ? (rawAmt.toLocaleString() + ' , ') : '';
+                return (ctx.dataset.label || '') + ': ' + rawStr + pct + '%';
+              } } }
+          },
+          scales: { x: { stacked: true }, y: { stacked: true, ticks: { callback: function(v){ return (typeof v === 'number') ? v + '%' : v; } }, max: 100 } }
+        }
+      });
+
+    }catch(e){ console.warn('buildProductShareChart failed', e); }
+  }
+
   let cols = 9, rows = 5;
   // computed pixel size for a single grid cell (square) and gutter between cells
   let cellSize = 100;
@@ -436,6 +671,66 @@
         });
       }
     }catch(e){}
+    // register m-product-share: 產品銷售佔比 (pie -> stacked bar when compares exist)
+    try{
+      const key = 'm-product-share';
+      if(window.presentationV2 && window.presentationV2.ensureStmModal){
+        window.presentationV2.ensureStmModal(key, { ariaLabel: '產品銷售佔比', title: '產品銷售佔比', canvasId: key + '-modal-canvas', mainDateInputId: key + '-date-input-main' });
+      }
+      if(window.presentationV2 && window.presentationV2.modalRegistry && !window.presentationV2.modalRegistry.get(key)){
+        window.presentationV2.modalRegistry.register(key, {
+          init: (modalRoot, triggerModule)=>{
+            try{
+              if(!modalRoot) modalRoot = document.querySelector('.module-expand-modal.module-' + key);
+              if(!modalRoot) return;
+              // setup observer to build/destroy chart on open/close
+              const canvas = modalRoot.querySelector('canvas'); if(!canvas) return;
+              function build(){ try{ buildProductShareChart(modalRoot); }catch(e){ console.warn('m-product-share build failed', e); } }
+              function destroy(){ try{ if(modalRoot._productChart && modalRoot._productChart.destroy) modalRoot._productChart.destroy(); }catch(e){} modalRoot._productChart = null; }
+              if(modalRoot._productShareObserver) modalRoot._productShareObserver.disconnect();
+              const mo = new MutationObserver((mut)=>{ try{ const isOpen = modalRoot.classList && modalRoot.classList.contains('open'); if(isOpen) build(); else destroy(); }catch(e){} });
+              mo.observe(modalRoot, { attributes:true, attributeFilter:['class'] }); modalRoot._productShareObserver = mo;
+              if(modalRoot.classList && modalRoot.classList.contains('open')) build();
+              // wire litepicker on main input
+              try{ const mainInput = modalRoot.querySelector('.stm-date-input'); if(mainInput) initLitepickerForInput(mainInput, ()=>{ try{ buildProductShareChart(modalRoot); }catch(e){} }); }catch(e){}
+              // wire compare add behaviour scoped to this modal: copies main branch selection and disables branch button for compares
+              try{
+                const groupsContainer = modalRoot.querySelector('.stm-groups'); if(!groupsContainer) return;
+                let localCompareCount = modalRoot._compareCount || 0;
+                function localAddCompareGroup(){
+                  if(!groupsContainer) return; if(localCompareCount >= 4) return; localCompareCount++; modalRoot._compareCount = localCompareCount;
+                  const gid = 'compare-' + localCompareCount; const div = document.createElement('div'); div.className='stm-group'; div.dataset.groupId = gid;
+                  const inputId = `${key}-date-input-${gid}`;
+                  div.innerHTML = `<div class="stm-group-header"><div class="stm-group-label" contenteditable="true">對比${localCompareCount} 設定</div><button class="stm-remove-group">移除</button></div>
+                        <div class="stm-date-wrap"><input class="stm-date-input" id="${inputId}" placeholder="點擊選擇日期範圍" readonly></div>
+                        <div class="stm-group-controls" style="margin-top:8px">
+                          <button class="stm-multi-btn" data-selector="branch">分店: 所有分店</button>
+                          <button class="stm-multi-btn" data-selector="product">產品: 所有產品</button>
+                        </div>`;
+                  groupsContainer.appendChild(div);
+                  // inherit main group's branch selection and disable branch button to avoid conflict
+                  // note: m-product-share should NOT inherit/lock branch selection — allow independent branch selection
+                  // wire multi buttons and litepicker for this group's inputs
+                  try{ if(typeof wireMultiBtns === 'function') wireMultiBtns(div); }catch(e){}
+                  try{ const input = div.querySelector('.stm-date-input'); if(input) initLitepickerForInput(input, ()=>{ try{ buildProductShareChart(modalRoot); }catch(e){} }); }catch(e){}
+                  // wire remove
+                  const rem = div.querySelector('.stm-remove-group'); if(rem) rem.addEventListener('click', ()=>{ div.remove(); localCompareCount--; modalRoot._compareCount = Math.max(0, localCompareCount); const addBtn = modalRoot.querySelector('.stm-add-compare'); if(addBtn) addBtn.removeAttribute('disabled'); try{ setTimeout(()=>{ buildProductShareChart(modalRoot); },20); }catch(e){} });
+                  if(localCompareCount >= 4){ const addBtn = modalRoot.querySelector('.stm-add-compare'); if(addBtn) addBtn.setAttribute('disabled',''); }
+                  // rebuild after adding (allow DOM wiring to settle)
+                  try{ setTimeout(()=>{ buildProductShareChart(modalRoot); },20); }catch(e){}
+                }
+                try{ const addBtn = modalRoot.querySelector('.stm-add-compare'); if(addBtn && !addBtn._wired){ addBtn.addEventListener('click', localAddCompareGroup); addBtn._wired = true; } }catch(e){}
+              }catch(e){}
+              // wire multi-select buttons at modal level (main group) so branch/product selectors are usable
+              try{ if(typeof wireMultiBtns === 'function') wireMultiBtns(modalRoot); }catch(e){}
+            }catch(e){ console.warn('m-product-share init failed', e); }
+          },
+          teardown: (modalRoot)=>{
+            try{ if(modalRoot && modalRoot._productShareObserver){ modalRoot._productShareObserver.disconnect(); delete modalRoot._productShareObserver; } if(modalRoot && modalRoot._storeSalesChart){ try{ modalRoot._storeSalesChart.destroy(); }catch(e){} modalRoot._storeSalesChart = null; } }catch(e){}
+          }
+        });
+      }
+    }catch(e){}
     // register m-store-sales: 各分店銷售額 (長條圖)
     try{
       const key = 'm-store-sales';
@@ -780,13 +1075,23 @@
         if(tbtn){ tbtn.dataset.selected = JSON.stringify(sels); tbtn.dataset.selectedKeys = JSON.stringify(keys); }
         updateMultiBtnLabel(tbtn, sels);
         modalEl.classList.remove('open'); document.body.style.overflow='';
-        // if sales-trend modal exists, refresh chart only when at least one group has an explicit date range
+        // refresh appropriate modal chart depending on which modal triggered the selector
         try{
-          if(document.querySelector('.module-expand-modal.module-sales-trend')){
-            const gs = collectGroups();
-            const hasRange = Array.isArray(gs) && gs.some(g=> g && g.range && g.range.start && g.range.end);
-            if(hasRange){ updateSalesTrendChart(gs); }
-            else { console.debug('[presentationV2] openSelector.apply: groups have no explicit date ranges, skipping auto-refresh to avoid overwriting existing selection'); }
+          const triggerRoot = tbtn && tbtn.closest ? tbtn.closest('.module-expand-modal') : null;
+          if(triggerRoot){
+            if(triggerRoot.classList.contains('module-m-product-share')){
+              setTimeout(()=>{ try{ buildProductShareChart(triggerRoot); }catch(e){} }, 10);
+            } else if(triggerRoot.classList.contains('module-m-store-sales')){
+              setTimeout(()=>{ try{ buildStoreSalesBarChart(triggerRoot); }catch(e){} }, 10);
+            } else if(triggerRoot.classList.contains('module-sales-trend')){
+              setTimeout(()=>{ try{ const gs = collectGroups(); if(gs && gs.length>0) updateSalesTrendChart(gs); }catch(e){} }, 10);
+            }
+          } else {
+            // fallback: if sales-trend modal exists, try to refresh it
+            if(document.querySelector('.module-expand-modal.module-sales-trend')){
+              const gs = collectGroups(); const hasRange = Array.isArray(gs) && gs.some(g=> g && g.range && g.range.start && g.range.end);
+              if(hasRange) updateSalesTrendChart(gs);
+            }
           }
         }catch(err){}
       };
