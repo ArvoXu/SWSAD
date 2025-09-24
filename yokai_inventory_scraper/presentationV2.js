@@ -345,8 +345,8 @@
             <div class="stm-chart-wrap"><canvas id="${canvasId}" class="stm-chart"></canvas></div>
             <div class="stm-controls">
               <div class="stm-groups">
-                <div class="stm-group" data-group-id="main">
-                  <div class="stm-group-header"><div class="stm-group-label" contenteditable="true">主線設定</div></div>
+                  <div class="stm-group" data-group-id="main">
+                  <div class="stm-group-header"><div class="stm-group-label" contenteditable="true">主要設定</div></div>
                   <div class="stm-date-wrap"><input id="${mainDateInputId}" class="stm-date-input" placeholder="點擊選擇日期範圍" readonly></div>
                   <div class="stm-group-controls" style="margin-top:8px">
                     <button class="stm-multi-btn" data-selector="branch">分店: 所有分店</button>
@@ -355,12 +355,33 @@
                 </div>
               </div>
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px">
-                <div class="stm-add-compare" id="${addCompareId}"><span class="plus">+</span><span>新增對比線</span></div>
+                <div class="stm-add-compare" id="${addCompareId}"><span class="plus">+</span><span>新增對比</span></div>
               </div>
             </div>
           </div>
         `;
         document.body.appendChild(modalHtml);
+        // wire main group's editable label so Enter commits and blur triggers chart update
+        try{
+          const mainLabel = modalHtml.querySelector('.stm-group[data-group-id="main"] .stm-group-label');
+          if(mainLabel && !mainLabel._wired){
+            mainLabel._wired = true;
+            mainLabel.addEventListener('keydown', (ev)=>{ if(ev.key === 'Enter'){ ev.preventDefault(); mainLabel.blur(); } });
+            mainLabel.addEventListener('blur', ()=>{
+              try{
+                const txt = (mainLabel.textContent||'').trim();
+                const mainGrp = modalHtml.querySelector('.stm-group[data-group-id="main"]');
+                if(mainGrp){ if(txt) mainGrp.dataset.customLabel = txt; else delete mainGrp.dataset.customLabel; }
+                // call appropriate chart rebuild depending on modal key
+                try{
+                  if(key === 'sales-trend'){ const gs = (typeof collectGroups === 'function') ? collectGroups() : []; if(typeof updateSalesTrendChart === 'function') updateSalesTrendChart(gs || []); }
+                  else if(key === 'm-store-sales'){ try{ buildStoreSalesBarChart(modalHtml); }catch(e){} }
+                  else { /* fallback: try updateSalesTrendChart if available */ try{ const gs = (typeof collectGroups === 'function') ? collectGroups() : []; if(typeof updateSalesTrendChart === 'function') updateSalesTrendChart(gs || []); }catch(e){} }
+                }catch(e){}
+              }catch(e){}
+            });
+          }
+        }catch(e){}
         // basic wiring: overlay and close button should close this modal
         try{
           const root = modalHtml;
@@ -469,13 +490,21 @@
                   const gid = 'compare-' + localCompareCount;
                   const div = document.createElement('div'); div.className = 'stm-group'; div.dataset.groupId = gid;
                   const inputId = `${key}-date-input-${gid}`;
-                  div.innerHTML = `<div class="stm-group-header"><div class="stm-group-label" contenteditable="true">對比線 ${localCompareCount} 設定</div><button class="stm-remove-group">移除</button></div>
+                  div.innerHTML = `<div class="stm-group-header"><div class="stm-group-label" contenteditable="true">對比${localCompareCount} 設定</div><button class="stm-remove-group">移除</button></div>
                         <div class="stm-date-wrap"><input class="stm-date-input" id="${inputId}" placeholder="點擊選擇日期範圍" readonly></div>
                         <div class="stm-group-controls" style="margin-top:8px">
                           <button class="stm-multi-btn" data-selector="branch">分店: 所有分店</button>
                           <button class="stm-multi-btn" data-selector="product">產品: 所有產品</button>
                         </div>`;
                   groupsContainer.appendChild(div);
+                  // wire editable label to commit on Enter and trigger chart rebuild
+                  try{
+                    const labelEl = div.querySelector('.stm-group-label');
+                    if(labelEl){
+                      labelEl.addEventListener('keydown', (ev)=>{ if(ev.key === 'Enter'){ ev.preventDefault(); labelEl.blur(); } });
+                      labelEl.addEventListener('blur', ()=>{ try{ const txt = (labelEl.textContent||'').trim(); if(div){ if(txt) div.dataset.customLabel = txt; else delete div.dataset.customLabel; } try{ buildStoreSalesBarChart(modalRoot); }catch(e){} }catch(e){} });
+                    }
+                  }catch(e){}
                   // wire remove
                   const rem = div.querySelector('.stm-remove-group'); if(rem) rem.addEventListener('click', ()=>{ div.remove(); localCompareCount--; modalRoot._compareCount = Math.max(0, localCompareCount); const addBtn = modalRoot.querySelector('.stm-add-compare'); if(addBtn) addBtn.removeAttribute('disabled'); try{ buildStoreSalesBarChart(modalRoot); }catch(e){} });
                   // wire multi buttons
@@ -499,6 +528,8 @@
                   // init datepicker for this group's input and rebuild chart only on commit
                   try{ const input = div.querySelector('.stm-date-input'); if(input) { initLitepickerForInput(input, ()=>{ try{ buildStoreSalesBarChart(modalRoot); }catch(e){} }); } }catch(e){}
                   if(localCompareCount >= 4){ const addBtn = modalRoot.querySelector('.stm-add-compare'); if(addBtn) addBtn.setAttribute('disabled',''); }
+                  // after adding a compare group, rebuild chart so new group's defaults are reflected
+                  try{ buildStoreSalesBarChart(modalRoot); }catch(e){}
                 }
                 // wire add button inside this modal (find by class inside modalRoot)
                 try{ const addBtn = modalRoot.querySelector('.stm-add-compare'); if(addBtn && !addBtn._wired){ addBtn.addEventListener('click', localAddCompareGroup); addBtn._wired = true; } }catch(e){}
@@ -655,7 +686,7 @@
 
     function createSelectorModal(id, title, items){
       const existing = document.getElementById(id);
-      if(existing) return existing;
+    if(existing) return existing; // Return existing modal if found
       const container = document.createElement('div'); container.className='selector-modal'; container.id = id;
       container.innerHTML = `
         <div class="sel-overlay"></div>
@@ -698,7 +729,7 @@
     // helper to open selector modal and return selected items (persist selection in dataset)
     function openSelector(modalEl, triggerBtn){
       if(!modalEl) return;
-      // dynamically populate options from window.fullSalesData when available
+        // Dynamically populate options from window.fullSalesData when available
       try{
         const body = modalEl.querySelector('.sel-body');
         body.innerHTML = '';
@@ -798,7 +829,7 @@
       compareCount++;
       const gid = 'compare-' + compareCount;
       const div = document.createElement('div'); div.className = 'stm-group'; div.dataset.groupId = gid;
-  div.innerHTML = `<div class="stm-group-header"><div class="stm-group-label" contenteditable="true">對比線 ${compareCount} 設定</div><button class="stm-remove-group">移除</button></div>
+  div.innerHTML = `<div class="stm-group-header"><div class="stm-group-label" contenteditable="true">對比${compareCount} 設定</div><button class="stm-remove-group">移除</button></div>
         <div class="stm-date-wrap"><input class="stm-date-input" id="sales-trend-date-input-${gid}" placeholder="點擊選擇日期範圍" readonly></div>
         <div class="stm-group-controls" style="margin-top:8px">
           <button class="stm-multi-btn" data-selector="branch">分店: 所有分店</button>
@@ -825,12 +856,33 @@
       }catch(e){}
       // wire inline edits for label and align checkbox to trigger update
       try{
-        const lab = div.querySelector('.stm-group-label'); if(lab){ lab.addEventListener('keydown', (ev)=>{ if(ev.key === 'Enter'){ ev.preventDefault(); lab.blur(); } }); lab.addEventListener('blur', ()=>{ try{ const txt = (lab.textContent||'').trim(); const grp = lab.closest && lab.closest('.stm-group'); if(grp){ if(txt) grp.dataset.customLabel = txt; else delete grp.dataset.customLabel; } const gs = collectGroups(); if(gs && gs.length>0) updateSalesTrendChart(gs); }catch(e){} }); }
+        const lab = div.querySelector('.stm-group-label'); if(lab){
+          // prevent Enter from inserting a newline; treat Enter as commit + blur
+          lab.addEventListener('keydown', (ev)=>{
+            if(ev.key === 'Enter'){
+              ev.preventDefault();
+              lab.blur();
+            }
+          });
+          // on blur, persist custom label and trigger immediate chart update
+          lab.addEventListener('blur', ()=>{
+            try{
+              const txt = (lab.textContent||'').trim();
+              const grp = lab.closest && lab.closest('.stm-group');
+              if(grp){ if(txt) grp.dataset.customLabel = txt; else delete grp.dataset.customLabel; }
+              const gs = collectGroups();
+              // always call update even if no groups to refresh labels/state
+              try{ updateSalesTrendChart(gs || []); }catch(e){}
+            }catch(e){}
+          });
+        }
       }catch(e){}
       // init litepicker for this group's date input (reuse initLitepicker logic by creating a picker)
   try{ const input = div.querySelector('.stm-date-input'); if(input) initLitepickerForInput(input, ()=>{ try{ const gs = collectGroups(); if(gs && gs.length>0) updateSalesTrendChart(gs); }catch(e){} }); }catch(e){}
       if(compareCount >= 4) addBtn.setAttribute('disabled','');
       refreshCompareLabels();
+      // after adding a compare group, rebuild the sales-trend chart to include the new group
+      try{ const gs = collectGroups(); if(gs && gs.length>0) updateSalesTrendChart(gs); else updateSalesTrendChart([]); }catch(e){}
     }
 
     function refreshCompareLabels(){
@@ -1357,7 +1409,7 @@
         options: {
           maintainAspectRatio: false,
           plugins: {
-            legend: { display: true, position: 'bottom' },
+            legend: { display: true, position: 'top' },
             tooltip: {
               callbacks: {
                 label: function(context){
