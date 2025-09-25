@@ -2768,22 +2768,34 @@
 
     function openMachineListModal(){
       const data = (Array.isArray(lastInventoryData) && lastInventoryData.length) ? lastInventoryData : [];
-      let modal = document.querySelector('.machine-list-modal');
+      // prefer the new unified factory modal, but fall back to legacy selector for compatibility
+      let modal = document.querySelector('.module-expand-modal.module-machine-list') || document.querySelector('.machine-list-modal');
       if(!modal){
-        modal = document.createElement('div'); modal.className = 'machine-list-modal';
-        modal.innerHTML = '\n          <div class="mlm-overlay"></div>\n          <div class="mlm-dialog">\n            <div class="mlm-header">機台清單 <button class="mlm-close" title="關閉">✕</button></div>\n            <div class="mlm-body"><div class="mlm-list"></div></div>\n          </div>';
+        // create a module-expand-modal using stm- structure for consistency with other modals
+        // keep legacy 'machine-list-modal' class for any stylesheet compatibility
+        modal = document.createElement('div'); modal.className = 'module-expand-modal module-machine-list machine-list-modal';
+  modal.innerHTML = '\n          <div class="mlm-overlay"></div>\n          <div class="stm-dialog" role="dialog" aria-modal="true" aria-label="機台清單">\n            <div class="stm-header">機台清單 <button class="stm-close" title="關閉">✕</button></div>\n            <div class="stm-chart-wrap" style="display:none"></div>\n            <div class="stm-controls"><div class="stm-list"></div></div>\n          </div>';
         document.body.appendChild(modal);
-        modal.querySelector('.mlm-close').addEventListener('click', ()=>closeMachineListModal());
-        modal.querySelector('.mlm-overlay').addEventListener('click', ()=>closeMachineListModal());
+  // wire close handlers (support both mlm- and stm- prefixed elements for compatibility)
+  try{ const closeBtn = modal.querySelector('.stm-close') || modal.querySelector('.mlm-close'); if(closeBtn) closeBtn.addEventListener('click', ()=>closeMachineListModal()); }catch(e){}
+  try{ const overlay = modal.querySelector('.mlm-overlay') || modal.querySelector('.stm-overlay'); if(overlay) overlay.addEventListener('click', ()=>closeMachineListModal()); }catch(e){}
       }
       renderMachineList(modal, data);
       modal.classList.add('open');
+      try{ document.body.style.overflow = 'hidden'; }catch(e){}
     }
 
-    function closeMachineListModal(){ const modal = document.querySelector('.machine-list-modal'); if(modal) modal.classList.remove('open'); }
+    function closeMachineListModal(){
+      // close either the unified factory modal or the legacy modal
+      const modal = document.querySelector('.module-expand-modal.module-machine-list') || document.querySelector('.machine-list-modal');
+      if(!modal) return;
+      try{ modal.classList.remove('open'); }catch(e){}
+      try{ document.body.style.overflow = ''; }catch(e){}
+    }
 
     function renderMachineList(modal, rows){
-  const list = modal.querySelector('.mlm-list'); if(!list) return; list.innerHTML = '';
+  // prefer new stm-list but fall back to legacy mlm-list
+  const list = modal.querySelector('.stm-list') || modal.querySelector('.mlm-list'); if(!list) return; list.innerHTML = '';
   // add a sticky header row: left = 機台名稱, right = 過去30天銷售 + sort controls
   const header = document.createElement('div'); header.className = 'mlm-row mlm-header-row';
   const htop = document.createElement('div'); htop.className = 'mlm-top';

@@ -209,6 +209,11 @@ body{font-family: 'Microsoft JhengHei',sans-serif; background:#eef6ff; margin:0;
 .carousel-open-btn{background:transparent;border:0;padding:6px 8px;border-radius:6px;cursor:pointer;font-weight:700}
 .carousel-open-btn:hover{background:rgba(0,0,0,0.03)}
 
+/* stm-based equivalent for module-expand-modal.machine-list to match mlm styles */
+/* Keep only list layout for machine-list; modal sizing/positioning should follow generic .module-expand-modal rules */
+.module-expand-modal.module-machine-list .stm-list{display:flex; flex-direction:column; gap:8px}
+
+
 /* generic module expand button (three-dots) - visually aligned with carousel button */
 .module-expand-btn{background:transparent;border:0;padding:6px 8px;border-radius:6px;cursor:pointer;font-weight:700;margin-left:6px}
 .module-expand-btn:hover{background:rgba(0,0,0,0.03)}
@@ -246,6 +251,19 @@ body{font-family: 'Microsoft JhengHei',sans-serif; background:#eef6ff; margin:0;
 .module-expand-modal.module-sales-trend .mlm-overlay{position:absolute; inset:0; background:rgba(0,0,0,0.45)}
   .module-expand-modal .mlm-overlay{position:absolute; inset:0; background:rgba(0,0,0,0.45)}
   .module-expand-modal .stm-dialog{position:relative; width:100%; height:100%; max-height:100%; background:#fff; border-radius:12px 12px 0 0; overflow:hidden; box-shadow:0 -10px 40px rgba(0,0,0,0.3); z-index:2; display:flex; flex-direction:column}
+
+  /* Ensure machine-list when created as module-expand-modal uses the same container positioning
+     and open behaviour as other module-expand-modal instances. This overrides legacy
+     .machine-list-modal positioning rules so the modal looks identical. */
+  .module-expand-modal.module-machine-list{
+    position:fixed;
+    inset:0;
+    display:none;
+    align-items:flex-end;
+    justify-content:center;
+    z-index:16000;
+  }
+  .module-expand-modal.module-machine-list.open{display:flex}
 .module-expand-modal.module-sales-trend .stm-dialog{overflow:visible}
 
 /* ensure datepicker appears above overlays */
