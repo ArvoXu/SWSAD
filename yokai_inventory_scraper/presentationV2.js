@@ -62,6 +62,59 @@
     return { map: out, matchedCount };
   }
 
+  // aggregate a single group into payment_type -> total map (for m-pay-share)
+  function aggregateByGroupToPaymentTotals(group, fullData){
+    const out = {};
+    let matchedCount = 0;
+    if(!group || !Array.isArray(fullData)) return { map: out, matchedCount: 0 };
+    const start = group.range && group.range.start ? new Date(group.range.start) : null;
+    const end = group.range && group.range.end ? new Date(group.range.end) : null;
+    const startBound = start ? new Date(start) : null; if(startBound) startBound.setHours(0,0,0,0);
+    const endBound = end ? new Date(end) : null; if(endBound) endBound.setHours(23,59,59,999);
+
+    fullData.forEach(t=>{
+      try{
+        let d = null;
+        if(t.jsDate && t.jsDate instanceof Date) d = t.jsDate;
+        else if(t.transaction_time) d = new Date(t.transaction_time);
+        else if(t.date) d = new Date(t.date);
+        else if(t.created_at) d = new Date(t.created_at);
+        if(!d || isNaN(d.getTime())) return;
+        if(startBound && d < startBound) return; if(endBound && d > endBound) return;
+
+        // branch filter (reuse same logic as store totals)
+        if((group.branchKeys && group.branchKeys.length>0) || (group.branches && group.branches.length>0)){
+          const hasAll = (group.branchKeys && group.branchKeys.includes('所有分店')) || (group.branches && group.branches.includes('所有分店'));
+          if(!hasAll){
+            const canonical = t.store_key || t.storeKey || t.store || t.shopId || t.shopKey || null;
+            if(group.branchKeys && group.branchKeys.length>0){
+              if(canonical){ if(!group.branchKeys.includes(String(canonical).trim())) return; }
+              else { const s = t.shopName || t.store_name || t.store || t.shop || t.shopName; if(!s) return; if(!group.branchKeys.includes(String(s).trim())) return; }
+            } else { const s = t.shopName || t.store_name || t.store || t.shop || t.shopName; if(!s) return; if(!group.branches.includes(String(s).trim())) return; }
+          }
+        }
+
+        // payment filter (if user selected payment types via selector)
+        if((group.paymentKeys && group.paymentKeys.length>0) || (group.payments && group.payments.length>0)){
+          const hasAllP = (group.paymentKeys && group.paymentKeys.includes('所有支付方式')) || (group.payments && group.payments.includes('所有支付方式'));
+          if(!hasAllP){
+            const canonicalP = t.payment_type || t.payType || t.paymentType || t.payment_method || t.method || null;
+            if(group.paymentKeys && group.paymentKeys.length>0){
+              if(canonicalP){ if(!group.paymentKeys.includes(String(canonicalP).trim())) return; }
+              else { const p = t.payment_type || t.payType || t.paymentType || t.payment_method || t.method; if(!p) return; if(!group.paymentKeys.includes(String(p).trim())) return; }
+            } else { const p = t.payment_type || t.payType || t.paymentType || t.payment_method || t.method; if(!p) return; if(!group.payments.includes(String(p).trim())) return; }
+          }
+        }
+
+        const payLabel = (t.payment_type || t.payType || t.paymentType || t.payment_method || t.method) ? String(t.payment_type || t.payType || t.paymentType || t.payment_method || t.method).trim() : 'Unknown';
+        const amt = Number(t.amount || t.total || t.total_amount || t.value || 0) || 0;
+        out[payLabel] = (out[payLabel] || 0) + amt;
+        matchedCount++;
+      }catch(e){}
+    });
+    return { map: out, matchedCount };
+  }
+
   // build product-share chart: donut when only main group, 100% stacked bar when compares exist
   function buildProductShareChart(modalRoot, groups){
     try{
@@ -242,6 +295,146 @@
       });
 
     }catch(e){ console.warn('buildProductShareChart failed', e); }
+  }
+
+  // build pay-share chart: mirrors product-share but aggregates by payment_type
+  function buildPayShareChart(modalRoot, groups){
+    try{
+      if(!modalRoot) modalRoot = document.querySelector('.module-expand-modal.module-m-pay-share');
+      if(!modalRoot) return;
+      const canvas = modalRoot.querySelector('canvas'); if(!canvas) return;
+      const ctx = canvas.getContext && canvas.getContext('2d'); if(!ctx) return;
+
+      const source = (window.fullSalesData && Array.isArray(window.fullSalesData)) ? window.fullSalesData : (lastLoadData && Array.isArray(lastLoadData.raw) ? lastLoadData.raw : null);
+      if(!groups){
+        groups = [];
+        const container = modalRoot.querySelector('.stm-groups');
+        if(container){
+          container.querySelectorAll('.stm-group').forEach((g, idx)=>{
+            try{
+              const input = g.querySelector('.stm-date-input'); const rangeText = input ? input.value : '';
+              let range = parseDateRange(rangeText); if(!range) range = robustParseRangeFromString(rangeText);
+              const branchBtn = g.querySelector('.stm-multi-btn[data-selector="branch"]');
+              const paymentBtn = g.querySelector('.stm-multi-btn[data-selector="payment"]');
+              const labelEl = g.querySelector('.stm-group-label'); const labelText = labelEl ? (labelEl.textContent||'').trim() : '';
+              const gid = g.dataset.groupId || ('g' + idx);
+              const branches = branchBtn && branchBtn.dataset.selected ? JSON.parse(branchBtn.dataset.selected) : [];
+              const payments = paymentBtn && paymentBtn.dataset.selected ? JSON.parse(paymentBtn.dataset.selected) : [];
+              const branchKeys = branchBtn && branchBtn.dataset.selectedKeys ? JSON.parse(branchBtn.dataset.selectedKeys) : [];
+              const paymentKeys = paymentBtn && paymentBtn.dataset.selectedKeys ? JSON.parse(paymentBtn.dataset.selectedKeys) : [];
+              const alignToMain = (idx>0);
+              groups.push({ id: gid, range, rangeText, label: labelText || (gid), alignToMain, branches, payments, branchKeys, paymentKeys });
+            }catch(e){}
+          });
+        }
+      }
+
+      if(!source || !Array.isArray(source)){
+        if(modalRoot._payChart && modalRoot._payChart.destroy) try{ modalRoot._payChart.destroy(); }catch(e){}
+        modalRoot._payChart = null; return;
+      }
+
+      const groupMaps = groups.map(g=> aggregateByGroupToPaymentTotals(g, source).map || {});
+
+      // single group -> doughnut (top10 + other)
+      if(groups.length <= 1){
+        const map = groupMaps[0] || {};
+        const entries = Object.entries(map).sort((a,b)=> (b[1]||0) - (a[1]||0));
+        const top = entries.slice(0,10);
+        const other = entries.slice(10).reduce((s,[k,v])=> s + (v||0), 0);
+        const labels = top.map(e=> e[0]).concat(other>0 ? ['其他'] : []);
+        const data = top.map(e=> e[1]||0).concat(other>0 ? [other] : []);
+        const palette = ['#8AC926','#FF9F40','#9966FF','#36A2EB','#FF6384','#FFCE56','#4BC0C0','#9C27B0','#4CAF50','#7ED321'];
+        if(modalRoot._payChart && modalRoot._payChart.destroy) try{ modalRoot._payChart.destroy(); }catch(e){}
+        const bgColors = labels.map((_,i)=> palette[i%palette.length]);
+        if(labels.indexOf('其他') !== -1){ const idx = labels.indexOf('其他'); bgColors[idx] = '#9B9B9B'; }
+        const cfg = {
+          type: 'doughnut',
+          data: {
+            labels: labels,
+            datasets: [{ data: data, backgroundColor: bgColors }]
+          },
+          options: {
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { position: 'right' },
+              tooltip: {
+                callbacks: {
+                  label: function(ctx){
+                    const val = ctx.raw || 0;
+                    const ds = ctx.dataset || {};
+                    const total = (ds.data || []).reduce((a,b)=> a + (Number(b)||0), 0);
+                    const pct = total ? Math.round((Number(val||0) / total) * 10000) / 100 : 0;
+                    return (ctx.label || '') + ': ' + (typeof val === 'number' ? val.toLocaleString() : val) + ' , ' + pct + '%';
+                  }
+                }
+              }
+            }
+          }
+        };
+        modalRoot._payChart = new Chart(ctx, cfg);
+        return;
+      }
+
+      // multiple groups -> 100% stacked bar across payment types
+      const globalTotals = {};
+      groupMaps.forEach(m=> { Object.keys(m).forEach(p=> { globalTotals[p] = (globalTotals[p]||0) + (m[p]||0); }); });
+      const sortedGlobal = Object.entries(globalTotals).sort((a,b)=> (b[1]||0) - (a[1]||0));
+      const topTypes = sortedGlobal.slice(0,10).map(e=> e[0]);
+      const othersSet = new Set(sortedGlobal.slice(10).map(e=> e[0]));
+      const labels = topTypes.concat(sortedGlobal.length > 10 ? ['其他'] : []);
+      const palette = ['#8AC926','#FF9F40','#9966FF','#36A2EB','#FF6384','#FFCE56','#4BC0C0','#9C27B0','#4CAF50','#7ED321','#9B9B9B'];
+
+      const rawPerGroup = groups.map((g, gi)=>{
+        const m = groupMaps[gi] || {};
+        const obj = {};
+        let otherSum = 0;
+        Object.keys(m).forEach(p=>{ if(topTypes.includes(p)) obj[p] = m[p] || 0; else otherSum += m[p] || 0; });
+        if(othersSet.size > 0) obj['其他'] = otherSum;
+        return obj;
+      });
+
+      const datasets = labels.map((typ, pi)=>{
+        const data = rawPerGroup.map(gmap=>{ const sum = Object.values(gmap).reduce((s,v)=> s + (v||0), 0); if(sum === 0) return 0; const v = gmap[typ] || 0; return Math.round((v / sum) * 10000) / 100; });
+        return { label: typ, data, backgroundColor: palette[pi % palette.length] };
+      });
+
+      const groupNames = groups.map((g,gi)=> g.label || ('群組 ' + (gi+1)));
+      if(modalRoot._payChart && modalRoot._payChart.destroy) try{ modalRoot._payChart.destroy(); }catch(e){}
+      const stackedCfg = {
+        type: 'bar',
+        data: { labels: groupNames, datasets: datasets },
+        options: {
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'top' },
+            tooltip: {
+              callbacks: {
+                label: function(ctx){
+                  const dataset = ctx.dataset || {};
+                  const label = dataset.label || '';
+                  const pct = ctx.parsed && ctx.parsed.y !== undefined ? ctx.parsed.y : ctx.raw;
+                  let rawAmt = null;
+                  try{
+                    const gIndex = ctx.dataIndex;
+                    const prod = label;
+                    if(modalRoot && typeof aggregateByGroupToPaymentTotals === 'function'){
+                      const map = aggregateByGroupToPaymentTotals(groups[gIndex] || {}, source || []).map || {};
+                      rawAmt = map[prod] || map['其他'] || 0;
+                    }
+                  }catch(e){}
+                  const rawStr = (typeof rawAmt === 'number' && rawAmt !== null) ? (rawAmt.toLocaleString() + ' , ') : '';
+                  return (ctx.dataset.label || '') + ': ' + rawStr + pct + '%';
+                }
+              }
+            }
+          },
+          scales: { x: { stacked: true }, y: { stacked: true, ticks: { callback: function(v){ return (typeof v === 'number') ? v + '%' : v; } }, max: 100 } }
+        }
+      };
+      modalRoot._payChart = new Chart(ctx, stackedCfg);
+      return;
+    }catch(e){ console.warn('buildPayShareChart failed', e); }
   }
 
   let cols = 9, rows = 5;
@@ -611,10 +804,33 @@
                 try{
                   if(key === 'sales-trend'){ const gs = (typeof collectGroups === 'function') ? collectGroups() : []; if(typeof updateSalesTrendChart === 'function') updateSalesTrendChart(gs || []); }
                   else if(key === 'm-store-sales'){ try{ buildStoreSalesBarChart(modalHtml); }catch(e){} }
+                  else if(key === 'm-product-share'){ try{ if(typeof buildProductShareChart === 'function') buildProductShareChart(modalHtml); }catch(e){} }
+                  else if(key === 'm-pay-share'){ try{ if(typeof buildPayShareChart === 'function') buildPayShareChart(modalHtml); }catch(e){} }
                   else { /* fallback: try updateSalesTrendChart if available */ try{ const gs = (typeof collectGroups === 'function') ? collectGroups() : []; if(typeof updateSalesTrendChart === 'function') updateSalesTrendChart(gs || []); }catch(e){} }
                 }catch(e){}
               }catch(e){}
             });
+
+            // Listen for focusout on any group labels inside this modal (bubbles) so compare labels also trigger rebuild
+            try{
+              modalHtml.addEventListener('focusout', (ev)=>{
+                try{
+                  const tgt = ev.target;
+                  if(!tgt || !tgt.classList) return;
+                  if(!tgt.classList.contains('stm-group-label')) return;
+                  const txt = (tgt.textContent||'').trim();
+                  const grp = tgt.closest('.stm-group');
+                  if(grp){ if(txt) grp.dataset.customLabel = txt; else delete grp.dataset.customLabel; }
+                  // rebuild charts according to modal key
+                  try{
+                    if(key === 'm-product-share'){ if(typeof buildProductShareChart === 'function') buildProductShareChart(modalHtml); }
+                    else if(key === 'm-pay-share'){ if(typeof buildPayShareChart === 'function') buildPayShareChart(modalHtml); }
+                    else if(key === 'sales-trend'){ const gs = (typeof collectGroups === 'function') ? collectGroups() : []; if(typeof updateSalesTrendChart === 'function') updateSalesTrendChart(gs || []); }
+                    else if(key === 'm-store-sales'){ if(typeof buildStoreSalesBarChart === 'function') buildStoreSalesBarChart(modalHtml); }
+                  }catch(e){}
+                }catch(e){}
+              });
+            }catch(e){}
           }
         }catch(e){}
         // basic wiring: overlay and close button should close this modal
@@ -652,21 +868,64 @@
       const modalHtml = (window.presentationV2 && window.presentationV2.ensureStmModal) ? window.presentationV2.ensureStmModal('sales-trend', { ariaLabel: '銷售趨勢', title: '銷售趨勢', canvasId: 'sales-trend-modal-canvas', mainDateInputId: 'sales-trend-date-input-main' }) : document.querySelector('.module-expand-modal.module-sales-trend');
     }catch(e){}
 
-    // Demonstration: register a small init/teardown for pay-share modules so devs can follow pattern
+    // register m-pay-share: 支付方式佔比 (mirrors product-share but aggregates by payment_type)
     try{
-      const regKey = 'm-pay-share';
-      if(window.presentationV2 && window.presentationV2.modalRegistry && !window.presentationV2.modalRegistry.get(regKey)){
-        window.presentationV2.modalRegistry.register(regKey, {
+      const keyPay = 'm-pay-share';
+      if(window.presentationV2 && window.presentationV2.ensureStmModal){
+        window.presentationV2.ensureStmModal(keyPay, { ariaLabel: '支付方式佔比', title: '支付方式佔比', canvasId: keyPay + '-modal-canvas', mainDateInputId: keyPay + '-date-input-main' });
+      }
+      if(window.presentationV2 && window.presentationV2.modalRegistry && !window.presentationV2.modalRegistry.get(keyPay)){
+        window.presentationV2.modalRegistry.register(keyPay, {
           init: (modalRoot, triggerModule)=>{
-            // example: inject a specific container and wire any event handlers scoped to modalRoot
             try{
-              const c = modalRoot.querySelector('.mlm-content'); if(!c) return; const div = document.createElement('div'); div.className = 'pay-share-extended'; div.innerHTML = '<div style="font-weight:600">pay-share 擴展示例</div><div>可在此注入互動元件</div>'; c.appendChild(div);
-              // store a reference for teardown
-              modalRoot._payShareExample = div;
-            }catch(e){}
+              if(!modalRoot) modalRoot = document.querySelector('.module-expand-modal.module-' + keyPay);
+              if(!modalRoot) return;
+              const canvas = modalRoot.querySelector('canvas'); if(!canvas) return;
+              function build(){ try{ buildPayShareChart(modalRoot); }catch(e){ console.warn('m-pay-share build failed', e); } }
+              function destroy(){ try{ if(modalRoot._payChart && modalRoot._payChart.destroy) modalRoot._payChart.destroy(); }catch(e){} modalRoot._payChart = null; }
+              if(modalRoot._payShareObserver) modalRoot._payShareObserver.disconnect();
+              const mo = new MutationObserver((mut)=>{ try{ const isOpen = modalRoot.classList && modalRoot.classList.contains('open'); if(isOpen) build(); else destroy(); }catch(e){} });
+              mo.observe(modalRoot, { attributes:true, attributeFilter:['class'] }); modalRoot._payShareObserver = mo;
+              if(modalRoot.classList && modalRoot.classList.contains('open')) build();
+              // wire litepicker on main input
+              try{ const mainInput = modalRoot.querySelector('.stm-date-input'); if(mainInput) initLitepickerForInput(mainInput, ()=>{ try{ buildPayShareChart(modalRoot); }catch(e){} }); }catch(e){}
+              // wire compare add behaviour scoped to this modal (payment selector instead of product)
+              try{
+                const groupsContainer = modalRoot.querySelector('.stm-groups'); if(!groupsContainer) return;
+                let localCompareCount = modalRoot._compareCount || 0;
+                function localAddCompareGroup(){
+                  if(!groupsContainer) return; if(localCompareCount >= 4) return; localCompareCount++; modalRoot._compareCount = localCompareCount;
+                  const gid = 'compare-' + localCompareCount; const div = document.createElement('div'); div.className='stm-group'; div.dataset.groupId = gid;
+                  const inputId = `${keyPay}-date-input-${gid}`;
+                  div.innerHTML = `<div class="stm-group-header"><div class="stm-group-label" contenteditable="true">對比${localCompareCount} 設定</div><button class="stm-remove-group">移除</button></div>
+                        <div class="stm-date-wrap"><input class="stm-date-input" id="${inputId}" placeholder="點擊選擇日期範圍" readonly></div>
+                        <div class="stm-group-controls" style="margin-top:8px">
+                          <button class="stm-multi-btn" data-selector="branch">分店: 所有分店</button>
+                          <button class="stm-multi-btn" data-selector="payment">支付方式: 所有支付方式</button>
+                        </div>`;
+                  groupsContainer.appendChild(div);
+                  try{ if(typeof wireMultiBtns === 'function') wireMultiBtns(div); }catch(e){}
+                  // wire editable label to commit on Enter and trigger pay-share rebuild
+                  try{
+                    const labelEl = div.querySelector('.stm-group-label');
+                    if(labelEl){
+                      labelEl.addEventListener('keydown', (ev)=>{ if(ev.key === 'Enter'){ ev.preventDefault(); labelEl.blur(); } });
+                      labelEl.addEventListener('blur', ()=>{ try{ const txt = (labelEl.textContent||'').trim(); if(div){ if(txt) div.dataset.customLabel = txt; else delete div.dataset.customLabel; } try{ buildPayShareChart(modalRoot); }catch(e){} }catch(e){} });
+                    }
+                  }catch(e){}
+                  try{ const input = div.querySelector('.stm-date-input'); if(input) initLitepickerForInput(input, ()=>{ try{ buildPayShareChart(modalRoot); }catch(e){} }); }catch(e){}
+                  const rem = div.querySelector('.stm-remove-group'); if(rem) rem.addEventListener('click', ()=>{ div.remove(); localCompareCount--; modalRoot._compareCount = Math.max(0, localCompareCount); const addBtn = modalRoot.querySelector('.stm-add-compare'); if(addBtn) addBtn.removeAttribute('disabled'); try{ setTimeout(()=>{ buildPayShareChart(modalRoot); },20); }catch(e){} });
+                  if(localCompareCount >= 4){ const addBtn = modalRoot.querySelector('.stm-add-compare'); if(addBtn) addBtn.setAttribute('disabled',''); }
+                  try{ setTimeout(()=>{ buildPayShareChart(modalRoot); },20); }catch(e){}
+                }
+                try{ const addBtn = modalRoot.querySelector('.stm-add-compare'); if(addBtn && !addBtn._wired){ addBtn.addEventListener('click', localAddCompareGroup); addBtn._wired = true; } }catch(e){}
+              }catch(e){}
+              // wire multi-select buttons at modal level (main group) so branch/payment selectors are usable
+              try{ if(typeof wireMultiBtns === 'function') wireMultiBtns(modalRoot); }catch(e){}
+            }catch(e){ console.warn('m-pay-share init failed', e); }
           },
           teardown: (modalRoot)=>{
-            try{ if(modalRoot && modalRoot._payShareExample){ modalRoot._payShareExample.remove(); delete modalRoot._payShareExample; } }catch(e){}
+            try{ if(modalRoot && modalRoot._payShareObserver){ modalRoot._payShareObserver.disconnect(); delete modalRoot._payShareObserver; } if(modalRoot && modalRoot._payChart){ try{ modalRoot._payChart.destroy(); }catch(e){} modalRoot._payChart = null; } }catch(e){}
           }
         });
       }
@@ -708,10 +967,18 @@
                           <button class="stm-multi-btn" data-selector="product">產品: 所有產品</button>
                         </div>`;
                   groupsContainer.appendChild(div);
-                  // inherit main group's branch selection and disable branch button to avoid conflict
-                  // note: m-product-share should NOT inherit/lock branch selection — allow independent branch selection
-                  // wire multi buttons and litepicker for this group's inputs
-                  try{ if(typeof wireMultiBtns === 'function') wireMultiBtns(div); }catch(e){}
+                    // inherit main group's branch selection and disable branch button to avoid conflict
+                    // note: m-product-share should NOT inherit/lock branch selection — allow independent branch selection
+                    // wire multi buttons and litepicker for this group's inputs
+                    try{ if(typeof wireMultiBtns === 'function') wireMultiBtns(div); }catch(e){}
+                    // wire editable label to commit on Enter and trigger product-share rebuild
+                    try{
+                      const labelEl = div.querySelector('.stm-group-label');
+                      if(labelEl){
+                        labelEl.addEventListener('keydown', (ev)=>{ if(ev.key === 'Enter'){ ev.preventDefault(); labelEl.blur(); } });
+                        labelEl.addEventListener('blur', ()=>{ try{ const txt = (labelEl.textContent||'').trim(); if(div){ if(txt) div.dataset.customLabel = txt; else delete div.dataset.customLabel; } try{ buildProductShareChart(modalRoot); }catch(e){} }catch(e){} });
+                      }
+                    }catch(e){}
                   try{ const input = div.querySelector('.stm-date-input'); if(input) initLitepickerForInput(input, ()=>{ try{ buildProductShareChart(modalRoot); }catch(e){} }); }catch(e){}
                   // wire remove
                   const rem = div.querySelector('.stm-remove-group'); if(rem) rem.addEventListener('click', ()=>{ div.remove(); localCompareCount--; modalRoot._compareCount = Math.max(0, localCompareCount); const addBtn = modalRoot.querySelector('.stm-add-compare'); if(addBtn) addBtn.removeAttribute('disabled'); try{ setTimeout(()=>{ buildProductShareChart(modalRoot); },20); }catch(e){} });
@@ -1020,6 +1287,7 @@
 
     const branchModal = createSelectorModal('selector-branch','選擇分店', sampleBranches);
     const productModal = createSelectorModal('selector-product','選擇產品', sampleProducts);
+  const paymentModal = createSelectorModal('selector-payment','選擇支付方式', ['所有支付方式','信用卡','現金','Line Pay','Apple Pay','Google Pay']);
 
     // helper to open selector modal and return selected items (persist selection in dataset)
     function openSelector(modalEl, triggerBtn){
@@ -1053,6 +1321,17 @@
           }
           const items = [['所有產品','所有產品'], ...Array.from(map.entries()).sort((a,b)=> a[1].localeCompare(b[1]))];
           items.forEach(([val,label])=>{ const el = document.createElement('div'); el.className='sel-item'; el.dataset.key = val; el.dataset.value = label; el.innerHTML = `<div>${label}</div><div class="sel-check">✓</div>`; body.appendChild(el); });
+        } else if(modalEl.id === 'selector-payment'){
+          // build payment types from data (payment_type field) or fallback to sample list
+          const map = new Map();
+          if(window && Array.isArray(window.fullSalesData)){
+            window.fullSalesData.forEach(it=>{
+              const key = (it.payment_type || it.payType || it.paymentType || it.payment_method || it.method) ? String(it.payment_type || it.payType || it.paymentType || it.payment_method || it.method).trim() : null;
+              if(key) map.set(key, key);
+            });
+          }
+          const items = [['所有支付方式','所有支付方式'], ...Array.from(map.keys()).sort().map(k=>[k,k])];
+          items.forEach(([val,label])=>{ const el = document.createElement('div'); el.className='sel-item'; el.dataset.key = val; el.dataset.value = label; el.innerHTML = `<div>${label}</div><div class="sel-check">✓</div>`; body.appendChild(el); });
         }
       }catch(e){ /* ignore populate errors and keep existing items */ }
 
@@ -1083,6 +1362,8 @@
               setTimeout(()=>{ try{ buildProductShareChart(triggerRoot); }catch(e){} }, 10);
             } else if(triggerRoot.classList.contains('module-m-store-sales')){
               setTimeout(()=>{ try{ buildStoreSalesBarChart(triggerRoot); }catch(e){} }, 10);
+            } else if(triggerRoot.classList.contains('module-m-pay-share')){
+              setTimeout(()=>{ try{ buildPayShareChart(triggerRoot); }catch(e){} }, 10);
             } else if(triggerRoot.classList.contains('module-sales-trend')){
               setTimeout(()=>{ try{ const gs = collectGroups(); if(gs && gs.length>0) updateSalesTrendChart(gs); }catch(e){} }, 10);
             }
@@ -1115,8 +1396,9 @@
         if(btn._wired) return; btn._wired = true;
         btn.addEventListener('click', ()=>{
           const which = btn.dataset.selector;
-          if(which === 'branch') openSelector(branchModal, btn);
-          else if(which === 'product') openSelector(productModal, btn);
+            if(which === 'branch') openSelector(branchModal, btn);
+            else if(which === 'product') openSelector(productModal, btn);
+            else if(which === 'payment') openSelector(paymentModal, btn);
         });
       });
     }
