@@ -303,6 +303,35 @@ body{font-family: 'Microsoft JhengHei',sans-serif; background:#eef6ff; margin:0;
 .module-expand-modal .stm-controls:hover{--stm-scroll-opacity:1}
 .module-expand-modal .stm-controls::-webkit-scrollbar-thumb{background:rgba(0,0,0,calc(var(--stm-scroll-opacity) * 0.08));}
 
+/* Force all module-expand-modal dialogs to occupy the full viewport at all sizes
+   so they match the machine-list modal which is fullscreen regardless of width. */
+.module-expand-modal{
+  align-items:center !important;
+  justify-content:center !important;
+}
+.module-expand-modal .mlm-dialog,
+.module-expand-modal .stm-dialog{
+  position:relative;
+  width:100% !important;
+  max-width:100% !important;
+  height:100% !important;
+  max-height:100% !important;
+  border-radius:12px 12px 0 0 !important;
+  margin:0 !important;
+  box-shadow:0 -10px 40px rgba(0,0,0,0.28);
+}
+
+/* Ensure the module-expand-modal container itself spans the full viewport
+   and is not inset by the media-query rules that use page-wrap padding. */
+.module-expand-modal{
+  position: fixed !important;
+  inset: 0 !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+}
+
 /* groups: main + compare groups */
 .stm-groups{display:flex; flex-direction:column; gap:12px}
 .stm-group{background:#fff; padding:10px;border-radius:10px; box-shadow:0 6px 18px rgba(10,30,60,0.04)}
