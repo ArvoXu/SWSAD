@@ -1,0 +1,556 @@
+/* Mid-Autumn limited-time theme for presentation.html
+     - Scoped under .midautumn-theme (body class)
+     - Warm glassmorphism: soft oranges, deep maroons, gold accents
+     - Easy to remove by deleting this file or removing body.midautumn-theme
+*/
+
+/* color variables are nested under the theme scope to avoid global leakage */
+.midautumn-theme {
+    --ma-bg: linear-gradient(180deg, rgba(255,244,230,0.98), rgba(255,238,220,0.95));
+    --ma-card-bg: rgba(255, 243, 230, 0.62);
+    --ma-card-border: rgba(180, 100, 30, 0.12);
+    --ma-accent: #d97706; /* amber */
+    --ma-accent-2: #7c2d12; /* deep maroon */
+    --ma-text: #3b2b2a;
+    --ma-muted: rgba(59,43,42,0.68);
+    --ma-glow: 0 12px 36px rgba(217,119,6,0.08);
+}
+
+/* page background and base text */
+.midautumn-theme body {
+    background: var(--ma-bg);
+    color: var(--ma-text);
+}
+
+/* Header */
+.midautumn-theme .dashboard-header {
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:6px;
+    padding:20px 14px;
+    background: linear-gradient(90deg, rgba(255,247,236,0.1), rgba(255,241,230,0.83));
+    border-bottom: 1px solid rgba(180,100,30,0.06);
+}
+.midautumn-theme .dashboard-header h1 {
+    margin:0;
+    /* restore original size/weight to avoid layout changes */
+    font-size: 2.5rem;
+    font-weight: 800;
+    letter-spacing: 2px;
+    color: var(--ma-accent-2);
+}
+
+/* Decorative warm gradient text for the main header (fallback to solid color) */
+.midautumn-theme .dashboard-header h1 {
+    background: linear-gradient(90deg, var(--ma-accent-2) 0%, var(--ma-accent) 60%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    color: var(--ma-accent-2); /* fallback */
+    text-shadow: 0 2px 8px rgba(217,119,6,0.08);
+}
+/* greeting removed per user request (was .midautumn-greeting) */
+
+/* header center title wrapper to keep title centered while greeting sits right */
+.midautumn-theme .dashboard-header h1 { margin:0 }
+.midautumn-theme .dashboard-subtitle { color:var(--ma-muted); }
+
+/* Tab navigation */
+.midautumn-theme .tab-nav {
+    display:flex;
+    gap:8px;
+    padding:12px;
+    justify-content:center;
+    background: transparent;
+}
+.midautumn-theme .tab-nav .tab-link {
+    color: var(--ma-accent-2);
+    background: rgba(255,245,235,0.6);
+    border: 1px solid rgba(180,100,30,0.06);
+    padding:8px 12px;
+    border-radius:10px;
+}
+.midautumn-theme .tab-nav .tab-link.active {
+    background: linear-gradient(90deg, rgba(255,233,205,0.95), rgba(255,220,180,0.95));
+    box-shadow: 0 8px 22px rgba(217,119,6,0.06);
+}
+
+/* Make all main content panels warm glass */
+.midautumn-theme .tab-content,
+.midautumn-theme .glass-card,
+.midautumn-theme .kpi-card,
+.midautumn-theme .main-chart-container,
+.midautumn-theme .replenishment-container,
+.midautumn-theme .tutorial,
+.midautumn-theme #chartContainer,
+.midautumn-theme .chart-card,
+.midautumn-theme .modal-content,
+.midautumn-theme .report-header {
+    background: var(--ma-card-bg);
+    border: 1px solid var(--ma-card-border);
+    border-radius: 12px;
+    box-shadow: var(--ma-glow);
+}
+
+/* Tutorial block */
+.midautumn-theme .tutorial { padding:12px; }
+.midautumn-theme .tutorial-header { display:flex; justify-content:space-between; align-items:center; }
+.midautumn-theme .tutorial-title { color:var(--ma-accent-2); font-weight:700 }
+.midautumn-theme .tutorial-content h3 { color:var(--ma-accent-2); }
+.midautumn-theme .tutorial-content li { color:var(--ma-text); }
+
+/* Summary info */
+.midautumn-theme .summary-info { display:flex; flex-direction:column; gap:6px; padding:12px; }
+.midautumn-theme #summaryText { color:var(--ma-accent-2); font-weight:700 }
+.midautumn-theme #salesSummaryText { color: #a64f1a; }
+
+/* Toolbar and buttons */
+.midautumn-theme .toolbar { padding:10px 12px; display:flex; justify-content:space-between; align-items:center; }
+.midautumn-theme .toolbar-section { display:flex; gap:8px; align-items:center }
+.midautumn-theme .toolbar-button {
+    background: linear-gradient(180deg, rgba(255,245,236,0.86), rgba(255,235,220,0.8));
+    color: var(--ma-accent-2);
+    border: 1px solid rgba(180,100,30,0.08);
+    padding:8px 10px;
+    border-radius:8px;
+    box-shadow: 0 6px 18px rgba(124,45,18,0.04);
+}
+.midautumn-theme .toolbar-button .tooltip { color: var(--ma-accent-2); }
+.midautumn-theme .search-input-presentation { background: rgba(255,250,245,0.78); border:1px solid rgba(180,100,30,0.06); color:var(--ma-text); padding:8px; border-radius:8px }
+
+/* Chart container / chart card */
+.midautumn-theme #chartContainer { padding:18px; border-radius:12px }
+.midautumn-theme .chart-card { padding:12px; border-radius:12px }
+.midautumn-theme .main-chart-container { padding:14px; }
+.midautumn-theme canvas { background: transparent !important }
+
+/* Chart switcher & legend */
+.midautumn-theme .chart-switcher { display:flex; gap:8px; justify-content:center; padding:8px }
+.midautumn-theme .chart-switch-btn { background: rgba(255,245,236,0.6); color:var(--ma-accent-2); border-radius:8px; border:1px solid rgba(180,100,30,0.06); padding:8px 10px }
+.midautumn-theme .chart-switch-btn.active { background: linear-gradient(90deg, rgba(255,233,205,0.95), rgba(255,220,180,0.95)); box-shadow: 0 8px 22px rgba(217,119,6,0.06) }
+.midautumn-theme .line-legend .legend-item { background: linear-gradient(90deg, rgba(217,119,6,0.12), rgba(124,45,18,0.06)); color:var(--ma-accent-2); padding:6px 8px; border-radius:8px }
+
+/* Sales tab specific */
+.midautumn-theme #sales-tab .report-header { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px }
+.midautumn-theme #sales-tab .kpi-card { background: linear-gradient(180deg, rgba(255,246,235,0.8), rgba(255,239,225,0.75)); }
+
+/* Center the editable sales report title and make it visible in the warm theme */
+.midautumn-theme #salesReportTitle {
+    width:100%;
+    text-align:center !important;
+    margin: 0 auto !important;
+    display:block;
+    color: var(--ma-accent-2) !important;
+    font-weight:700;
+}
+
+/* Replenishment tab specific */
+.midautumn-theme #replenishment-tab h3 { color:var(--ma-accent-2); }
+.midautumn-theme .strategy-card { background: linear-gradient(180deg, rgba(255,245,235,0.75), rgba(255,238,226,0.7)); border:1px solid rgba(180,100,30,0.06); color:var(--ma-accent-2); }
+
+/* Modal / multi-select */
+.midautumn-theme .modal-overlay { background: rgba(120,50,20,0.06); }
+.midautumn-theme .modal-content { padding:12px }
+
+/* Inputs, selects and multi-select */
+.midautumn-theme input, .midautumn-theme select, .midautumn-theme .multi-select-input { background: rgba(255,248,240,0.9); color:var(--ma-text); border:1px solid rgba(180,100,30,0.06); border-radius:8px }
+
+/* Footer */
+.midautumn-theme footer { color:var(--ma-muted); padding:12px; text-align:center }
+
+/* subtle decorative moon */
+.midautumn-theme::before { content: ""; position: fixed; right: 22px; top: 74px; width: 92px; height: 92px; border-radius:50%; background: radial-gradient(circle at 30% 30%, #fff7de 0%, #ffd59a 35%, #f7c06a 60%, rgba(255,200,90,0.95) 100%); box-shadow: 0 10px 44px rgba(217,119,6,0.12); pointer-events:none; mix-blend-mode: screen }
+
+/* responsive tweaks */
+@media (max-width: 720px) {
+    .midautumn-theme .dashboard-header h1 { font-size:1.2rem }
+    .midautumn-theme .midautumn-greeting { font-size:0.9rem; padding:5px 8px }
+}
+
+/* tutorial header & header controls */
+.midautumn-theme .tutorial-header {
+    background: linear-gradient(90deg, rgba(255,246,235,0.6), rgba(255,240,225,0.5)) !important;
+    border: 1px solid rgba(180,100,30,0.06) !important;
+    padding: 8px 10px !important;
+    border-radius: 10px !important;
+}
+.midautumn-theme .tutorial-header i, .midautumn-theme .tutorial-title { color: var(--ma-accent-2) !important }
+
+/* toolbar hover / active / selected states */
+.midautumn-theme .toolbar-button:hover, .midautumn-theme .btn:hover, .midautumn-theme button:hover {
+    background: linear-gradient(180deg, #ffdba8, #ffb44a) !important;
+    color: #3b1f12 !important;
+    transform: translateY(-2px);
+    box-shadow: 0 12px 30px rgba(217,119,6,0.14) !important;
+}
+.midautumn-theme .toolbar-button:active, .midautumn-theme .btn:active {
+    transform: translateY(0) scale(0.995);
+}
+
+/* explicit selected/active state (some controls use data-active or .active) */
+.midautumn-theme .toolbar-button[data-active="true"],
+.midautumn-theme .toolbar-button.active,
+.midautumn-theme .tab-link.active,
+.midautumn-theme .chart-switch-btn.active {
+    background: linear-gradient(90deg, #ffdcb2, #ffb86a) !important;
+    border: 1px solid rgba(180,100,30,0.12) !important;
+    color: var(--ma-accent-2) !important;
+    box-shadow: 0 10px 28px rgba(217,119,6,0.10) !important;
+}
+
+/* focus outlines for keyboard users */
+.midautumn-theme .toolbar-button:focus, .midautumn-theme button:focus, .midautumn-theme .tab-link:focus {
+    outline: 3px solid rgba(217,119,6,0.14) !important;
+    outline-offset: 2px;
+}
+
+/* Warehouse grid should not scroll; individual previews scroll if content overflows */
+#warehouseList {
+    padding: 0; /* keep grid layout intact */
+    background: transparent !important;
+}
+.midautumn-theme .warehouse-preview {
+    max-height: 260px;
+    overflow: auto;
+    padding: 8px;
+    background: rgba(255,244,235,0.6) !important;
+    border-radius: 10px;
+    border: 1px solid rgba(180,100,30,0.06);
+}
+
+/* Webkit scrollbar */
+.midautumn-theme #warehouseList::-webkit-scrollbar, .midautumn-theme .warehouse-preview::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+}
+.midautumn-theme #warehouseList::-webkit-scrollbar-track, .midautumn-theme .warehouse-preview::-webkit-scrollbar-track {
+    background: rgba(255,244,235,0.6);
+    border-radius: 10px;
+}
+.midautumn-theme #warehouseList::-webkit-scrollbar-thumb, .midautumn-theme .warehouse-preview::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #ffb86a, #d97706);
+    border-radius: 10px;
+    border: 3px solid rgba(255,244,235,0.5);
+}
+
+/* Firefox scrollbar */
+.midautumn-theme #warehouseList, .midautumn-theme .warehouse-preview { scrollbar-color: #d97706 rgba(255,244,235,0.6); scrollbar-width: thin }
+
+/* warehouse item warm accents (if items have .warehouse-item) */
+.midautumn-theme .warehouse-item, .midautumn-theme .warehouse-grid .item {
+    background: rgba(255,246,235,0.8) !important;
+    border: 1px solid rgba(180,100,30,0.06) !important;
+    color: var(--ma-text) !important;
+    padding:8px; margin-bottom:8px; border-radius:8px;
+}
+
+/* ensure any hover on warehouse items follows theme */
+.midautumn-theme .warehouse-item:hover { background: linear-gradient(180deg,#fff0d9,#ffd9a8) !important; transform: translateY(-2px) }
+
+/* Strong overrides for any remaining blue/white elements in other CSS files
+     We try to keep selectors scoped to .midautumn-theme to avoid global side-effects
+*/
+
+/* Ensure entire page background is warm (override other styles) */
+.midautumn-theme, .midautumn-theme html, .midautumn-theme body {
+    background: linear-gradient(180deg, #fff6eb 0%, #ffe9d1 100%) !important;
+    color: var(--ma-text) !important;
+}
+
+/* Generic override for common glass/white panels from other styles */
+.midautumn-theme .glass, .midautumn-theme .glass-card, .midautumn-theme .panel, .midautumn-theme .card {
+    background: var(--ma-card-bg) !important;
+    border-color: var(--ma-card-border) !important;
+    color: var(--ma-text) !important;
+    box-shadow: var(--ma-glow) !important;
+}
+
+/* Override explicit white backgrounds */
+.midautumn-theme .white, .midautumn-theme .bg-white, .midautumn-theme .card-body, .midautumn-theme .panel-body {
+    background: rgba(255,243,230,0.92) !important;
+    color: var(--ma-text) !important;
+}
+
+/* Buttons and interactive controls */
+.midautumn-theme button, .midautumn-theme .btn, .midautumn-theme .toolbar-button {
+    background: linear-gradient(180deg, rgba(255,246,236,0.95), rgba(255,236,220,0.9)) !important;
+    color: var(--ma-accent-2) !important;
+    border-color: rgba(180,100,30,0.08) !important;
+}
+
+/* Inputs, selects, pickers */
+.midautumn-theme input, .midautumn-theme textarea, .midautumn-theme select, .midautumn-theme .litepicker, .midautumn-theme .multi-select-input {
+    background: rgba(255,248,240,0.98) !important;
+    color: var(--ma-text) !important;
+    border: 1px solid rgba(180,100,30,0.06) !important;
+}
+
+/* Tabs, navs, and switchers */
+.midautumn-theme .tab-link, .midautumn-theme .tab-nav .tab-link {
+    background: rgba(255,245,236,0.85) !important;
+    color: var(--ma-accent-2) !important;
+    border-color: rgba(180,100,30,0.06) !important;
+}
+
+/* Charts and chart containers - ensure legends and badges are warm */
+.midautumn-theme .main-chart-container, .midautumn-theme #mainSalesChart, .midautumn-theme canvas, .midautumn-theme .chartjs-render-monitor {
+    background: transparent !important;
+}
+.midautumn-theme .line-legend, .midautumn-theme .line-legend .legend-item { background: linear-gradient(90deg, rgba(217,119,6,0.12), rgba(124,45,18,0.06)) !important; color:var(--ma-accent-2) !important }
+
+/* Modal overlays and dialogs */
+.midautumn-theme .modal-overlay { background: rgba(124,45,18,0.06) !important }
+.midautumn-theme .modal-content { background: var(--ma-card-bg) !important; color:var(--ma-text) !important }
+
+/* KPI cards, info boxes */
+.midautumn-theme .kpi-card, .midautumn-theme .kpi-value-container, .midautumn-theme .summary-info {
+    background: linear-gradient(180deg, rgba(255,246,235,0.85), rgba(255,239,225,0.8)) !important;
+    color: var(--ma-text) !important;
+}
+
+/* Strategy cards, replenishment, compare lines */
+.midautumn-theme .strategy-card, .midautumn-theme .replenishment-result, .midautumn-theme .compare-row, .midautumn-theme .machine-selection {
+    background: linear-gradient(180deg, rgba(255,245,236,0.82), rgba(255,238,226,0.78)) !important;
+    border: 1px solid rgba(180,100,30,0.06) !important;
+}
+
+/* Force color for icons/text that might be blue */
+.midautumn-theme i, .midautumn-theme .fas, .midautumn-theme .fa { color: var(--ma-accent-2) !important }
+
+/* Ensure any explicit purple/blue text gets overridden where possible */
+.midautumn-theme .text-primary, .midautumn-theme .text-blue, .midautumn-theme .purple, .midautumn-theme .accent {
+    color: var(--ma-accent-2) !important;
+}
+
+/* final safety: any CSS variable used for primary/secondary in other sheets try to remap via fallback */
+.midautumn-theme [style*="--primary-color"], .midautumn-theme [style*="--accent"] {
+    color: var(--ma-accent-2) !important;
+}
+
+/* Override common primary-color variable used in presentation.css without editing that file */
+.midautumn-theme * {
+    --primary-color: var(--ma-accent) !important;
+}
+
+/* Specific overrides for selectors that may reference literal blue (#2196F3) in other files */
+.midautumn-theme .stm-add-compare .plus { background: linear-gradient(180deg, #fff6f0, #fff0e6) !important; color: var(--ma-accent-2) !important }
+.midautumn-theme .stm-btn, .midautumn-theme .sel-btn-apply { background: linear-gradient(90deg,#ffb86a,#d97706) !important; color:#fff !important }
+
+/* Force any remaining literal blue text to ma-accent-2 */
+.midautumn-theme *[style*="#2196F3"] { color: var(--ma-accent-2) !important; }
+
+
+/* Strong overrides for selected/active card states that were using blue variables */
+.midautumn-theme .machine-card,
+.midautumn-theme .warehouse-card,
+.midautumn-theme .strategy-card {
+    background: linear-gradient(180deg, rgba(255,245,235,0.88), rgba(255,238,226,0.84)) !important;
+    border-color: rgba(180,100,30,0.06) !important;
+    color: var(--ma-text) !important;
+    box-shadow: 0 8px 24px rgba(217,119,6,0.06) !important;
+}
+
+/* selected/active visual */
+.midautumn-theme .machine-card.selected,
+.midautumn-theme .warehouse-card.selected,
+.midautumn-theme .strategy-card.selected,
+.midautumn-theme .machine-card[data-selected="true"],
+.midautumn-theme .warehouse-card[data-selected="true"],
+.midautumn-theme .strategy-card[data-selected="true"] {
+    background: linear-gradient(90deg, #ffdcb2, #ffb86a) !important;
+    border: 2px solid rgba(217,119,6,0.18) !important;
+    box-shadow: 0 12px 34px rgba(217,119,6,0.14) !important;
+    transform: translateY(-4px) !important;
+    color: var(--ma-accent-2) !important;
+}
+
+/* toolbar background override (some other stylesheet likely sets a blue bg) */
+.midautumn-theme .toolbar,
+.midautumn-theme .toolbar-section {
+    background: linear-gradient(90deg, rgba(255,247,236,0.95), rgba(255,241,230,0.92)) !important;
+    border: 1px solid rgba(180,100,30,0.04) !important;
+}
+
+/* headings and key labels */
+.midautumn-theme h1,
+.midautumn-theme .compare-line-name,
+.midautumn-theme .block-title,
+.midautumn-theme .machine-name,
+.midautumn-theme .warehouse-name {
+    color: var(--ma-accent-2) !important;
+}
+
+/* generate-button and action primary buttons (override bluish styles) */
+.midautumn-theme .generate-button,
+.midautumn-theme .action-buttons .btn-primary,
+.midautumn-theme .btn-primary {
+    background: linear-gradient(90deg,#ffb86a,#d97706) !important;
+    color: #fff !important;
+    border: 1px solid rgba(200,110,30,0.12) !important;
+    box-shadow: 0 8px 24px rgba(217,119,6,0.12) !important;
+}
+.midautumn-theme .generate-button:hover,
+.midautumn-theme .action-buttons .btn-primary:hover,
+.midautumn-theme .btn-primary:hover {
+    background: linear-gradient(90deg,#ffdba8,#ffb44a) !important;
+    transform: translateY(-3px) !important;
+}
+
+/* ensure strategy icons match theme */
+.midautumn-theme .strategy-card i { color: var(--ma-accent) !important }
+
+/* force compare-line-name color (higher specificity) */
+.midautumn-theme .compare-line-name { font-weight:700; color: var(--ma-accent-2) !important }
+
+/* --- Decorative Mid-Autumn elements (pure CSS, non-invasive) --- */
+/* placed using pseudo-elements of existing containers so no HTML edits needed */
+
+/* ensure header can host decorations positioned relative to it */
+.midautumn-theme .dashboard-header { position: relative; z-index: 1; }
+
+/* floating rabbit near the header (emoji-based for lightweight vector look) */
+.midautumn-theme .dashboard-header::after {
+    content: "🐇";
+    position: absolute;
+    right: 18px;
+    top: 10px;
+    font-size: 46px;
+    line-height: 1;
+    transform-origin: 50% 50%;
+    filter: drop-shadow(0 6px 14px rgba(124,45,18,0.12));
+    opacity: 0.95;
+    pointer-events: none;
+    animation: ma-float 5.6s ease-in-out infinite;
+    mix-blend-mode: screen;
+    z-index: 2; /* above header background but below H1 text */
+}
+
+/* small accent moon behind header (subtle, behind content) */
+.midautumn-theme .dashboard-header::before {
+    content: "";
+    position: absolute;
+    left: 18px;
+    top: -14px;
+    width: 92px;
+    height: 92px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #fff9e6 0%, #ffe3a8 40%, #f7c06a 70%, #f0a63f 100%);
+    box-shadow: 0 10px 44px rgba(217,119,6,0.10);
+    opacity: 0.95;
+    pointer-events: none;
+    z-index: 2; /* above header background but below H1 text */
+    transform: translateZ(0);
+    animation: ma-moon-pulse 10s ease-in-out infinite;
+    mix-blend-mode: screen;
+}
+
+/* ensure the header text sits above decorations */
+.midautumn-theme .dashboard-header h1 { position: relative; z-index: 3; }
+
+/* add small subtitle under H1 */
+.midautumn-theme .dashboard-header h1::after { content: none; }
+
+/* subtitle element placed under the H1; uses a dedicated class so it's easy to remove */
+.midautumn-theme .ma-subtitle {
+    margin-top: 6px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: rgba(124,45,18,0.92);
+    letter-spacing: 0.6px;
+    opacity: 0.95;
+    position: relative;
+    z-index: 3; /* ensure it sits above decorative pseudo-elements */
+}
+
+/* clouds over the main chart area (two layers) */
+.midautumn-theme .main-chart-container { position: relative; z-index: 2; }
+.midautumn-theme .main-chart-container::before,
+.midautumn-theme .main-chart-container::after {
+    content: "";
+    position: absolute;
+    left: -6%;
+    top: -24px;
+    width: 46%;
+    height: 72px;
+    background: radial-gradient(closest-side, rgba(255,255,255,0.95) 10%, rgba(255,250,240,0.7) 55%, rgba(255,245,230,0.4) 100%);
+    border-radius: 60px;
+    filter: blur(6px);
+    opacity: 0.48;
+    pointer-events: none;
+    transform: translate3d(0,0,0);
+    animation: ma-cloud-drift 36s linear infinite;
+    mix-blend-mode: screen;
+}
+.midautumn-theme .main-chart-container::after {
+    left: auto;
+    right: -8%;
+    top: 6px;
+    width: 50%;
+    height: 56px;
+    opacity: 0.42;
+    animation-duration: 48s;
+}
+
+
+/* subtle star/twinkle near the moon (using psuedo on body) */
+.midautumn-theme::after {
+    content: "";
+    position: fixed;
+    right: 130px;
+    top: 40px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 40% 40%, #fff 0%, #ffe7b8 35%, transparent 70%);
+    opacity: 0.0;
+    pointer-events: none;
+    animation: ma-twinkle 4.6s linear infinite;
+    z-index: 5;
+    mix-blend-mode: screen;
+}
+
+/* animations */
+@keyframes ma-float {
+    0% { transform: translateY(0) rotate(-2deg); }
+    50% { transform: translateY(-8px) rotate(3deg); }
+    100% { transform: translateY(0) rotate(-2deg); }
+}
+@keyframes ma-moon-pulse {
+    0% { transform: scale(1); opacity:0.96 }
+    50% { transform: scale(1.03); opacity:0.98 }
+    100% { transform: scale(1); opacity:0.96 }
+}
+@keyframes ma-cloud-drift {
+    0% { transform: translateX(0); }
+    50% { transform: translateX(6%); }
+    100% { transform: translateX(0); }
+}
+@keyframes ma-ribbon-sway {
+    0% { transform: skewX(-12deg) translateY(0); }
+    50% { transform: skewX(-10deg) translateY(-4px); }
+    100% { transform: skewX(-12deg) translateY(0); }
+}
+@keyframes ma-twinkle {
+    0% { opacity: 0; transform: scale(0.9); }
+    40% { opacity: 1; transform: scale(1.15); }
+    70% { opacity: 0.3; transform: scale(1); }
+    100% { opacity: 0; transform: scale(0.9); }
+}
+
+/* accessibility: ensure decorations do not capture focus */
+.midautumn-theme .dashboard-header::after,
+.midautumn-theme .dashboard-header::before,
+.midautumn-theme .main-chart-container::before,
+.midautumn-theme .main-chart-container::after,
+.midautumn-theme .tab-nav::before,
+.midautumn-theme::after { outline: none !important; }
+
+/* small-screen adjustments: reduce sizes to avoid overlap */
+@media (max-width: 720px) {
+    .midautumn-theme .dashboard-header::after { font-size: 32px; right: 12px; top: 8px }
+    .midautumn-theme .dashboard-header::before { width: 64px; height:64px; left: 8px; top: -8px }
+    .midautumn-theme .main-chart-container::before, .midautumn-theme .main-chart-container::after { display: none }
+    .midautumn-theme .tab-nav::before { display: none }
+}
+

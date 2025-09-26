@@ -204,30 +204,30 @@
             }
         }
         
-        // 生成一致的顏色
+        // 生成一致的顏色（中秋暖色版）
         function generateConsistentColors(productNames) {
             const colors = [];
-            
-            // 預定義的顏色列表（明亮的顏色）
+
+            // 中秋暖色調 palette（琥珀 / 金 / 酒紅 / 橘）
             const predefinedColors = [
-                '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', 
-                '#FF9F40', '#8AC926', '#FF595E', '#1982C4', '#6A4C93',
-                '#F94144', '#F3722C', '#F8961E', '#F9C74F', '#90BE6D',
-                '#43AA8B', '#577590', '#277DA1', '#EF476F', '#FFD166'
+                '#D97706', '#FFB84D', '#FF9F40', '#D65A37', '#7C2D12',
+                '#FF7A18', '#F59E0B', '#C05621', '#B45309', '#F97316',
+                '#F87171', '#Fca311', '#E85D04', '#A04000', '#D6863B',
+                '#FFDD99', '#C77D33', '#8B2E00', '#B45F06', '#FFD6A5'
             ];
-            
+
             // 使用全局映射而非局部變量
             let colorIndex = Object.keys(globalProductColorMap).length;
-            
+
             productNames.forEach(name => {
                 if (!globalProductColorMap[name]) {
                     globalProductColorMap[name] = predefinedColors[colorIndex % predefinedColors.length];
                     colorIndex++;
                 }
-                
+
                 colors.push(globalProductColorMap[name]);
             });
-            
+
             return colors;
         }
         
@@ -1105,12 +1105,12 @@
                     {
                         label: mainLine.title || '主線',
                         data: [...mainAgg.values, ...Array(maxLen-mainAgg.values.length).fill(0)],
-                        borderColor: 'rgba(54, 162, 235, 1)',
-                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                        borderColor: '#D96A20',
+                        backgroundColor: 'rgba(217,106,32,0.12)',
                         fill: false,
                         tension: 0.2,
                         borderWidth: 2,
-                        pointBackgroundColor: 'rgba(54, 162, 235, 1)',
+                        pointBackgroundColor: '#D96A20',
                         pointRadius: 3,
                         pointHoverRadius: 5
                     }
@@ -1119,9 +1119,9 @@
                     // 對比線顏色列表
                     const compareColors = [
                         'rgba(170, 170, 170, 1)',   // 灰色
-                        'rgba(255, 99, 132, 1)',    // 紅色
-                        'rgba(75, 192, 192, 1)',    // 綠色
-                        'rgba(153, 102, 255, 1)'    // 紫色
+                        '#FF8A65',    // coral-ish
+                        '#E07A3F',    // terracotta
+                        '#7C2D12'     // deep maroon
                     ];
 
                     // 添加每條對比線的數據
@@ -1651,12 +1651,12 @@
             const datasets = [{
                 label: primaryLabel,
                 data: primaryDataset,
-                borderColor: 'rgba(54, 162, 235, 1)',
-                backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                borderColor: '#D96A20',
+                backgroundColor: 'rgba(217,106,32,0.12)',
                 fill: true,
                 tension: 0.2, // 讓線圖平滑
                 borderWidth: 2,
-                pointBackgroundColor: 'rgba(54, 162, 235, 1)',
+                pointBackgroundColor: '#D96A20',
                 pointRadius: 3,
                 pointHoverRadius: 5
             }];
