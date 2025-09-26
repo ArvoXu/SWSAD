@@ -464,6 +464,7 @@
     try{
       const modals = document.querySelectorAll('.module-expand-modal');
       modals.forEach(m=>{
+        // Apply fullscreen-mode to all module expand modals (machine-list included)
         if(enable) m.classList.add('fullscreen-mode'); else m.classList.remove('fullscreen-mode');
       });
     }catch(e){/* ignore */}
@@ -2790,10 +2791,15 @@
         modal = document.createElement('div'); modal.className = 'module-expand-modal module-machine-list machine-list-modal';
   modal.innerHTML = '\n          <div class="mlm-overlay"></div>\n          <div class="stm-dialog" role="dialog" aria-modal="true" aria-label="機台清單">\n            <div class="stm-header">機台清單 <button class="stm-close" title="關閉">✕</button></div>\n            <div class="stm-chart-wrap" style="display:none"></div>\n            <div class="stm-controls"><div class="stm-list"></div></div>\n          </div>';
     document.body.appendChild(modal);
-  try{ setModalFullscreenMode((cols === 4 && rows === 6)); }catch(e){}
+  // ensure machine-list modal matches current dashboard orientation: fullscreen when compact portrait grid
+  try{ if(getOrientation() === 'portrait') modal.classList.add('fullscreen-mode'); else modal.classList.remove('fullscreen-mode'); }catch(e){}
   // wire close handlers (support both mlm- and stm- prefixed elements for compatibility)
   try{ const closeBtn = modal.querySelector('.stm-close') || modal.querySelector('.mlm-close'); if(closeBtn) closeBtn.addEventListener('click', ()=>closeMachineListModal()); }catch(e){}
   try{ const overlay = modal.querySelector('.mlm-overlay') || modal.querySelector('.stm-overlay'); if(overlay) overlay.addEventListener('click', ()=>closeMachineListModal()); }catch(e){}
+      }
+      else {
+  // if modal already exists, make sure its fullscreen-mode matches the current layout
+  try{ if(getOrientation() === 'portrait') modal.classList.add('fullscreen-mode'); else modal.classList.remove('fullscreen-mode'); }catch(e){}
       }
       renderMachineList(modal, data);
       modal.classList.add('open');

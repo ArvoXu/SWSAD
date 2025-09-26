@@ -256,12 +256,9 @@ body{font-family: 'Microsoft JhengHei',sans-serif; background:#eef6ff; margin:0;
      and open behaviour as other module-expand-modal instances. This overrides legacy
      .machine-list-modal positioning rules so the modal looks identical. */
   .module-expand-modal.module-machine-list{
-    position:fixed;
-    inset:0;
+    /* Do not force full-viewport here. Let machine-list inherit the generic
+       .module-expand-modal insets so it wraps inside the page on wider screens. */
     display:none;
-    align-items:flex-end;
-    justify-content:center;
-    z-index:16000;
   }
   .module-expand-modal.module-machine-list.open{display:flex}
 .module-expand-modal.module-sales-trend .stm-dialog{overflow:visible}
