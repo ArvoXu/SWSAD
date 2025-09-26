@@ -305,12 +305,12 @@ body{font-family: 'Microsoft JhengHei',sans-serif; background:#eef6ff; margin:0;
 
 /* Force all module-expand-modal dialogs to occupy the full viewport at all sizes
    so they match the machine-list modal which is fullscreen regardless of width. */
-.module-expand-modal{
+.module-expand-modal.fullscreen-mode{
   align-items:center !important;
   justify-content:center !important;
 }
-.module-expand-modal .mlm-dialog,
-.module-expand-modal .stm-dialog{
+.module-expand-modal.fullscreen-mode .mlm-dialog,
+.module-expand-modal.fullscreen-mode .stm-dialog{
   position:relative;
   width:100% !important;
   max-width:100% !important;
@@ -323,7 +323,7 @@ body{font-family: 'Microsoft JhengHei',sans-serif; background:#eef6ff; margin:0;
 
 /* Ensure the module-expand-modal container itself spans the full viewport
    and is not inset by the media-query rules that use page-wrap padding. */
-.module-expand-modal{
+.module-expand-modal.fullscreen-mode{
   position: fixed !important;
   inset: 0 !important;
   top: 0 !important;

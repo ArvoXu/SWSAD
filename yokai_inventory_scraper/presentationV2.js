@@ -454,6 +454,19 @@
     document.documentElement.style.setProperty('--grid-rows', String(rows));
     overlay.innerHTML = '';
     for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){ const d=document.createElement('div'); d.className='cell'; d.dataset.col=c; d.dataset.row=r; overlay.appendChild(d); }
+    // Toggle modal fullscreen mode to match dashboard layout density: when dashboard uses
+    // the compact portrait grid (4x6) we enable fullscreen modals; when it's the wide
+    // desktop grid (9x5) we disable fullscreen so modals follow centered dialog styles.
+    try{ setModalFullscreenMode((cols === 4 && rows === 6)); }catch(e){}
+  }
+
+  function setModalFullscreenMode(enable){
+    try{
+      const modals = document.querySelectorAll('.module-expand-modal');
+      modals.forEach(m=>{
+        if(enable) m.classList.add('fullscreen-mode'); else m.classList.remove('fullscreen-mode');
+      });
+    }catch(e){/* ignore */}
   }
 
   function fitDashboardToViewport(){
@@ -788,7 +801,8 @@
             </div>
           </div>
         `;
-        document.body.appendChild(modalHtml);
+  document.body.appendChild(modalHtml);
+  try{ setModalFullscreenMode((cols === 4 && rows === 6)); }catch(e){}
         // wire main group's editable label so Enter commits and blur triggers chart update
         try{
           const mainLabel = modalHtml.querySelector('.stm-group[data-group-id="main"] .stm-group-label');
@@ -2775,7 +2789,8 @@
         // keep legacy 'machine-list-modal' class for any stylesheet compatibility
         modal = document.createElement('div'); modal.className = 'module-expand-modal module-machine-list machine-list-modal';
   modal.innerHTML = '\n          <div class="mlm-overlay"></div>\n          <div class="stm-dialog" role="dialog" aria-modal="true" aria-label="機台清單">\n            <div class="stm-header">機台清單 <button class="stm-close" title="關閉">✕</button></div>\n            <div class="stm-chart-wrap" style="display:none"></div>\n            <div class="stm-controls"><div class="stm-list"></div></div>\n          </div>';
-        document.body.appendChild(modal);
+    document.body.appendChild(modal);
+  try{ setModalFullscreenMode((cols === 4 && rows === 6)); }catch(e){}
   // wire close handlers (support both mlm- and stm- prefixed elements for compatibility)
   try{ const closeBtn = modal.querySelector('.stm-close') || modal.querySelector('.mlm-close'); if(closeBtn) closeBtn.addEventListener('click', ()=>closeMachineListModal()); }catch(e){}
   try{ const overlay = modal.querySelector('.mlm-overlay') || modal.querySelector('.stm-overlay'); if(overlay) overlay.addEventListener('click', ()=>closeMachineListModal()); }catch(e){}
