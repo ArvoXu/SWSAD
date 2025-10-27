@@ -21,8 +21,7 @@ import pytz
 from openpyxl import load_workbook, Workbook
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
-import smtplib
-from email.message import EmailMessage
+import requests
 
 
 # --- Custom Imports ---
@@ -1034,47 +1033,57 @@ def api_user_change_password():
 
 
 def send_email_if_configured(to_email, subject, body, html_content=False):
-    smtp_server = os.getenv('SMTP_SERVER')
-    smtp_port = int(os.getenv('SMTP_PORT', '587'))
-    smtp_user = os.getenv('SMTP_USER')
-    smtp_pass = os.getenv('SMTP_PASS')
-    from_email = os.getenv('FROM_EMAIL') or smtp_user
-    if not smtp_server or not to_email or not from_email:
-        logging.warning(f"Email not sent (missing config): smtp={smtp_server} to={to_email} from={from_email}")
-        return {'ok': False, 'error': 'SMTP or from/to address missing'}
-    try:
-        msg = EmailMessage()
-        msg['Subject'] = subject
-        msg['From'] = from_email
-        msg['To'] = to_email
-        # Support HTML content when requested. Provide a plain-text fallback.
-        if html_content:
-            # Simple plain-text fallback; avoid stripping HTML aggressively here.
-            fallback = '此郵件包含 HTML 內容，請使用支援 HTML 的郵件客戶端查看。'
-            msg.set_content(fallback)
-            msg.add_alternative(body, subtype='html')
-        else:
-            msg.set_content(body)
+    """Send email via SendGrid REST API (HTTPS).
 
-        # Connect and send via TLS (SendGrid uses TLS on 587)
-        with smtplib.SMTP(smtp_server, smtp_port, timeout=10) as s:
-            s.ehlo()
-            try:
-                s.starttls()
-                s.ehlo()
-            except Exception:
-                logging.debug('starttls not supported or failed, continuing without it')
-            if smtp_user and smtp_pass:
-                try:
-                    s.login(smtp_user, smtp_pass)
-                except Exception as e:
-                    logging.error(f"SMTP login failed for {smtp_user}: {e}")
-                    return {'ok': False, 'error': f'SMTP login failed: {e}'}
-            s.send_message(msg)
-        logging.info(f"Sent email to {to_email} from {from_email} via {smtp_server}:{smtp_port}")
-        return {'ok': True}
+    Environment variables used (backwards-compatible):
+    - SENDGRID_API_KEY (preferred) or SMTP_PASS (SendGrid API key when using smtp auth)
+    - FROM_EMAIL or SMTP_USER (fallback)
+
+    Returns dict: {'ok': True} or {'ok': False, 'error': '...'}
+    """
+    sendgrid_api_key = os.getenv('SENDGRID_API_KEY') or os.getenv('SMTP_PASS')
+    from_email = os.getenv('FROM_EMAIL') or os.getenv('SMTP_USER')
+    if not sendgrid_api_key or not to_email or not from_email:
+        logging.warning(f"Email not sent (missing config): sendgrid_key_set={bool(sendgrid_api_key)} to={to_email} from={from_email}")
+        return {'ok': False, 'error': 'SendGrid API key or from/to address missing'}
+
+    url = 'https://api.sendgrid.com/v3/mail/send'
+    headers = {
+        'Authorization': f'Bearer {sendgrid_api_key}',
+        'Content-Type': 'application/json'
+    }
+
+    # Build content: always include plain text; add HTML part when requested
+    if html_content:
+        plain = '此郵件包含 HTML 內容，請使用支援 HTML 的郵件客戶端查看。'
+        content = [
+            {'type': 'text/plain', 'value': plain},
+            {'type': 'text/html', 'value': body}
+        ]
+    else:
+        content = [{'type': 'text/plain', 'value': body}]
+
+    payload = {
+        'personalizations': [
+            {
+                'to': [{'email': to_email}],
+            }
+        ],
+        'from': {'email': from_email},
+        'subject': subject,
+        'content': content
+    }
+
+    try:
+        resp = requests.post(url, json=payload, headers=headers, timeout=10)
+        if 200 <= resp.status_code < 300:
+            logging.info(f"Sent email to {to_email} from {from_email} via SendGrid API")
+            return {'ok': True}
+        else:
+            logging.error(f"SendGrid API returned {resp.status_code}: {resp.text}")
+            return {'ok': False, 'error': f'SendGrid API error {resp.status_code}: {resp.text}'}
     except Exception as e:
-        logging.error(f"Failed to send email to {to_email}: {e}", exc_info=True)
+        logging.error(f"Failed to send email to {to_email} via SendGrid: {e}", exc_info=True)
         return {'ok': False, 'error': str(e)}
 
 
