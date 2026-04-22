@@ -29,6 +29,7 @@ from database import init_db, get_db, Inventory, Store, Transaction, UpdateLog, 
 from scraper import run_scraper as run_inventory_scraper_function, parse_inventory_from_text, save_to_database, save_to_json
 from salesscraper import run_sales_scraper
 from warehousescraper import run_warehouse_scraper
+from vendor_astra import fetch_astra_sales, build_transactions_from_astra_rows
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -423,6 +424,114 @@ def run_warehouse_scraper_background():
         # 記錄更新到資料庫
         log_db_update(scraper_type='warehouse', status=status, details=output)
 
+
+# --- Astra Vendor Sales Background Function ---
+def run_astra_sales_background(start_date=None, end_date=None):
+    """Fetches sales from Astra API and writes transactions to DB in a background thread."""
+    global sales_scraper_state
+
+    with sales_state_lock:
+        if sales_scraper_state['status'] == 'running':
+            logging.warning(f"[{datetime.now()}] Astra sales start requested, but a job is already in progress. Aborting.")
+            return
+        sales_scraper_state['status'] = 'running'
+        sales_scraper_state['last_run_output'] = ''
+        logging.info(f"[{datetime.now()}] Astra sales status set to 'running'. Starting job.")
+
+    try:
+        # Default to last 7 days if not provided
+        if not end_date:
+            end_date = datetime.now().strftime('%Y-%m-%d')
+        if not start_date:
+            start_date = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
+
+        # Fetch rows from Astra
+        logging.info(f"Fetching Astra sales between {start_date} and {end_date}")
+        rows = fetch_astra_sales(start_date=start_date, end_date=end_date)
+        transactions_data = build_transactions_from_astra_rows(rows, store_key=os.getenv('ASTRA_STORE_KEY', 'ASTRA-provisional'))
+
+        if not transactions_data:
+            output = 'Astra API returned no rows.'
+            status = 'error'
+            logging.warning(output)
+        else:
+            # Insert transactions into DB (clear and replace similar to other flows)
+            max_retries = 3
+            retry_delay_seconds = 5
+            for attempt in range(max_retries):
+                db: Session = next(get_db())
+                try:
+                    db.query(Transaction).delete()
+
+                    all_stores = db.query(Store).all()
+                    store_name_map = {}
+                    for s in all_stores:
+                        name_parts = s.store_key.rsplit('-', 1)
+                        name = name_parts[0]
+                        if name not in store_name_map:
+                            store_name_map[name] = s
+
+                    new_transactions = []
+                    for item in transactions_data:
+                        shop_name_raw = item.get('shopName')
+                        if not shop_name_raw or not item.get('date'):
+                            continue
+
+                        shop_name = str(shop_name_raw).strip()
+                        store = store_name_map.get(shop_name)
+                        if not store:
+                            new_store_key = f"{shop_name}-provisional_sales"
+                            store = db.query(Store).filter(Store.store_key == new_store_key).first()
+                            if not store:
+                                store = Store(store_key=new_store_key)
+                                db.add(store)
+                                db.flush()
+                            store_name_map[shop_name] = store
+
+                        new_transactions.append(Transaction(
+                            store_key=store.store_key,
+                            transaction_time=pd.to_datetime(item.get('date')),
+                            amount=int(float(item.get('amount', 0))),
+                            product_name=str(item.get('product')),
+                            payment_type=str(item.get('payType'))
+                        ))
+
+                    if new_transactions:
+                        db.bulk_save_objects(new_transactions)
+
+                    db.commit()
+                    processed_count = len(new_transactions)
+                    output = f"Astra sales fetch finished successfully. Processed {processed_count} transactions."
+                    status = 'success'
+                    logging.info(output)
+                    db.close()
+                    break
+
+                except OperationalError as e:
+                    db.rollback()
+                    db.close()
+                    logging.error(f"Astra DB error (Attempt {attempt + 1}/{max_retries}): {e}")
+                    if attempt + 1 >= max_retries:
+                        output = f"Astra sales fetch failed after {max_retries} attempts: {e}"
+                        status = 'error'
+                        raise
+                    logging.info(f"Retrying in {retry_delay_seconds} seconds...")
+                    time.sleep(retry_delay_seconds)
+                finally:
+                    if 'db' in locals() and db.is_active:
+                        db.close()
+
+    except Exception as e:
+        output = f"An error occurred in Astra sales background job: {str(e)}"
+        status = 'error'
+        logging.error(output, exc_info=True)
+    finally:
+        with sales_state_lock:
+            sales_scraper_state['status'] = status
+            sales_scraper_state['last_run_output'] = output
+
+        log_db_update(scraper_type='astra_sales', status=status, details=output)
+
 # --- API Endpoints ---
 @app.route('/run-scraper', methods=['POST'])
 def trigger_scraper():
@@ -440,6 +549,26 @@ def trigger_scraper():
     thread.start()
     
     return jsonify({'success': True, 'message': 'Scraper job started in the background.'}), 202
+
+
+@app.route('/run-astra-sales', methods=['POST'])
+def trigger_astra_sales():
+    """Triggers Astra vendor sales fetch in background.
+
+    Accepts optional JSON body: {"start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD"}
+    """
+    data = request.get_json(silent=True) or {}
+    start_date = data.get('start_date')
+    end_date = data.get('end_date')
+
+    with sales_state_lock:
+        if sales_scraper_state['status'] == 'running':
+            return jsonify({'success': False, 'message': 'Sales job is already running.'}), 409
+
+    logging.info(f"Received request to fetch Astra sales: {start_date} -> {end_date}")
+    thread = threading.Thread(target=run_astra_sales_background, args=(start_date, end_date))
+    thread.start()
+    return jsonify({'success': True, 'message': 'Astra sales job started in the background.'}), 202
 
 @app.route('/upload-inventory-file', methods=['POST'])
 def upload_inventory_file():
